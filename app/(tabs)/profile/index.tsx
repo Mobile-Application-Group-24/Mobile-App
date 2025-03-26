@@ -79,7 +79,7 @@ export default function ProfileScreen() {
         
         <TouchableOpacity 
           style={styles.editButton}
-          //onPress={() => router.push('/profile/settings')}
+          onPress={() => router.push('/profile/settings')}
         >
           <Settings size={20} color="#007AFF" />
           <Text style={styles.editButtonText}>Edit Profile</Text>
