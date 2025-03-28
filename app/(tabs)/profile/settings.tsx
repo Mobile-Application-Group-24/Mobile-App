@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Image, Switch, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Image, Switch, Alert, ActivityIndicator, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Camera, Bell, Lock, LogOut, Trash2 } from 'lucide-react-native';
 import { useAuth } from '@/providers/AuthProvider';
 import { getProfile, updateProfile, type Profile } from '@/utils/supabase';
 import { supabase } from '@/utils/supabase';
+import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system';
+import { Buffer } from 'buffer';
 
 export default function ProfileSettingsScreen() {
   const router = useRouter();
@@ -111,6 +114,98 @@ export default function ProfileSettingsScreen() {
     );
   };
 
+  const handleChangeAvatar = async () => {
+    if (!session?.user?.id) return;
+
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Denied', 'We need access to your photo library to update your profile picture.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled) {
+        const { uri } = result.assets[0];
+        const fileName = `${session.user.id}-${Date.now()}.jpg`;
+
+        // Read file as Base64
+        const base64 = await FileSystem.readAsStringAsync(uri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+
+        // Convert Base64 string to Uint8Array
+        const arrayBuffer = _base64ToArrayBuffer(base64);
+
+        // Upload the file to Supabase
+        const { data, error: uploadError } = await supabase.storage
+          .from('avatars')
+          .upload(fileName, arrayBuffer, {
+            contentType: 'image/jpeg',
+            upsert: true,
+          });
+
+        if (uploadError) {
+          console.error('Upload error:', uploadError);
+          throw uploadError;
+        }
+
+        // Get the public URL of the uploaded file
+        const { data: urlData } = supabase.storage
+          .from('avatars')
+          .getPublicUrl(fileName);
+
+        const avatarUrl = urlData.publicUrl;
+
+        // Update the user's profile with the new avatar URL
+        const { error: updateError } = await supabase
+          .from('profiles')
+          .update({ avatar_url: avatarUrl })
+          .eq('id', session.user.id);
+
+        if (updateError) {
+          console.error('Profile update error:', updateError);
+          throw updateError;
+        }
+
+        setProfile((prev) => (prev ? { ...prev, avatar_url: avatarUrl } : null));
+        Alert.alert('Success', 'Profile picture updated successfully');
+      }
+    } catch (error) {
+      console.error('Error updating avatar:', error);
+
+      // Display detailed error message
+      if (typeof error === 'object' && error !== null && 'message' in error) {
+        Alert.alert('Error', `Failed to update profile picture: ${(error as any).message}`);
+      } else {
+        Alert.alert('Error', 'Failed to update profile picture');
+      }
+      console.log(session.user.id);
+    }
+  };
+
+  // Helper function to convert Base64 to ArrayBuffer
+  function _base64ToArrayBuffer(base64: string) {
+    const binary_string = atob(base64);
+    const len = binary_string.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+      bytes[i] = binary_string.charCodeAt(i);
+    }
+    return bytes;
+  }
+
+  // Helper function for Base64 decoding
+  function atob(data: string) {
+    return Buffer.from(data, 'base64').toString('binary');
+  }
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -128,7 +223,7 @@ export default function ProfileSettingsScreen() {
           }} 
           style={styles.avatar} 
         />
-        <TouchableOpacity style={styles.changeAvatarButton}>
+        <TouchableOpacity style={styles.changeAvatarButton} onPress={handleChangeAvatar}>
           <Camera size={24} color="#FFFFFF" />
           <Text style={styles.changeAvatarText}>Change Photo</Text>
         </TouchableOpacity>
