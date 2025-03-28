@@ -133,7 +133,8 @@ export default function ProfileSettingsScreen() {
 
       if (!result.canceled) {
         const { uri } = result.assets[0];
-        const fileName = `${session.user.id}-${Date.now()}.jpg`;
+        // Create a file path that includes the user ID as a folder name to comply with RLS policy
+        const fileName = `${session.user.id}/${Date.now()}.jpg`;
 
         // Read file as Base64
         const base64 = await FileSystem.readAsStringAsync(uri, {
