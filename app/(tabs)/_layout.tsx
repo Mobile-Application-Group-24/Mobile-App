@@ -41,14 +41,14 @@ export default function TabLayout() {
           title: 'Nutrition',
           tabBarIcon: ({ color, size }) => <Apple size={size} color={color} />,
         }}
-      />
+      />*/
       <Tabs.Screen
         name="profile"
         options={{
           title: 'Profile',
           tabBarIcon: ({ color, size }) => <User size={size} color={color} />,
         }}
-      />*/}
+      />}
     </Tabs>
   );
 }
