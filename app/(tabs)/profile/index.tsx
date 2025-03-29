@@ -70,9 +70,17 @@ export default function ProfileScreen() {
       <View style={styles.header}>
         <Image
           source={{ 
-            uri: profile.avatar_url || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d'
+            uri: profile.avatar_url || 'https://images.unsplash.com/photo-1511367461989-f85a21fda167?q=80&w=3131&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D'
           }}
           style={styles.profileImage}
+          onError={(e) => {
+            console.log("Fehler beim Laden des Profilbilds:", profile.avatar_url);
+            // If image failed to load, try to use default image
+            if (e.nativeEvent.error && profile.avatar_url) {
+              // Update the component state to use default image
+              setProfile(prev => prev ? {...prev, avatar_url: null} : null);
+            }
+          }}
         />
         <Text style={styles.name}>{profile.full_name || 'Anonymous User'}</Text>
         <Text style={styles.bio}>{profile.bio || 'No bio yet'}</Text>
