@@ -28,7 +28,7 @@ export default function TabLayout() {
           tabBarIcon: ({ color, size }) => <Users size={size} color={color} />,
         }}
       />
-      {/*<Tabs.Screen
+      <Tabs.Screen
         name="ai"
         options={{
           title: 'AI Coach',
@@ -41,7 +41,7 @@ export default function TabLayout() {
           title: 'Nutrition',
           tabBarIcon: ({ color, size }) => <Apple size={size} color={color} />,
         }}
-      />*/}
+      />
       <Tabs.Screen
         name="profile"
         options={{
