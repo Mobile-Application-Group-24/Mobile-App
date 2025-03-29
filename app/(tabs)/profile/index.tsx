@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, ActivityIndicator, StatusBar, SafeAreaView, Platform } from 'react-native';
 import { Settings, Award, Calendar, ChartBar as BarChart } from 'lucide-react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/providers/AuthProvider';
@@ -65,92 +65,95 @@ export default function ProfileScreen() {
   }
 
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.safeArea} />
-      <View style={styles.header}>
-        <Image
-          source={{ 
-            uri: profile.avatar_url || 'https://images.unsplash.com/photo-1511367461989-f85a21fda167?q=80&w=3131&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D'
-          }}
-          style={styles.profileImage}
-          onError={(e) => {
-            console.log("Fehler beim Laden des Profilbilds:", profile.avatar_url);
-            // If image failed to load, try to use default image
-            if (e.nativeEvent.error && profile.avatar_url) {
-              // Update the component state to use default image
-              setProfile(prev => prev ? {...prev, avatar_url: null} : null);
-            }
-          }}
-        />
-        <Text style={styles.name}>{profile.full_name || 'Anonymous User'}</Text>
-        <Text style={styles.bio}>{profile.bio || 'No bio yet'}</Text>
-        
-        <TouchableOpacity 
-          style={styles.editButton}
-          onPress={() => router.push('/profile/settings')}
-        >
-          <Settings size={20} color="#007AFF" />
-          <Text style={styles.editButtonText}>Edit Profile</Text>
-        </TouchableOpacity>
-      </View>
+    <>
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+      <SafeAreaView style={styles.safeAreaTop} />
+      <ScrollView style={styles.container}>
+        <View style={styles.header}>
+          <Image
+            source={{ 
+              uri: profile.avatar_url || 'https://images.unsplash.com/photo-1511367461989-f85a21fda167?q=80&w=3131&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D'
+            }}
+            style={styles.profileImage}
+            onError={(e) => {
+              console.log("Fehler beim Laden des Profilbilds:", profile.avatar_url);
+              // If image failed to load, try to use default image
+              if (e.nativeEvent.error && profile.avatar_url) {
+                // Update the component state to use default image
+                setProfile(prev => prev ? {...prev, avatar_url: null} : null);
+              }
+            }}
+          />
+          <Text style={styles.name}>{profile.full_name || 'Anonymous User'}</Text>
+          <Text style={styles.bio}>{profile.bio || 'No bio yet'}</Text>
+          
+          <TouchableOpacity 
+            style={styles.editButton}
+            onPress={() => router.push('/profile/settings')}
+          >
+            <Settings size={20} color="#007AFF" />
+            <Text style={styles.editButtonText}>Edit Profile</Text>
+          </TouchableOpacity>
+        </View>
 
-      <View style={styles.statsContainer}>
-        <View style={styles.statItem}>
-          <Text style={styles.statValue}>{profile.stats?.workouts || 0}</Text>
-          <Text style={styles.statLabel}>Workouts</Text>
-        </View>
-        <View style={styles.statItem}>
-          <Text style={styles.statValue}>{profile.stats?.hours || 0}</Text>
-          <Text style={styles.statLabel}>Hours</Text>
-        </View>
-        <View style={styles.statItem}>
-          <Text style={styles.statValue}>
-            {((profile.stats?.volume || 0) / 1000).toFixed(1)}k
-          </Text>
-          <Text style={styles.statLabel}>Volume</Text>
-        </View>
-      </View>
-
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <Award size={24} color="#007AFF" />
-          <Text style={styles.sectionTitle}>Achievements</Text>
-        </View>
-        {!profile.achievements?.length ? (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyStateText}>No achievements yet</Text>
-            <Text style={styles.emptyStateSubtext}>
-              Complete workouts to earn achievements
-            </Text>
+        <View style={styles.statsContainer}>
+          <View style={styles.statItem}>
+            <Text style={styles.statValue}>{profile.stats?.workouts || 0}</Text>
+            <Text style={styles.statLabel}>Workouts</Text>
           </View>
-        ) : (
-          profile.achievements.map((achievement, index) => (
-            <View key={index} style={styles.achievementCard}>
-              <Text style={styles.achievementTitle}>{achievement.title}</Text>
-              <Text style={styles.achievementDescription}>
-                {achievement.description}
-              </Text>
-              {achievement.date_earned && (
-                <Text style={styles.achievementDate}>
-                  Earned on {new Date(achievement.date_earned).toLocaleDateString()}
-                </Text>
-              )}
-            </View>
-          ))
-        )}
-      </View>
+          <View style={styles.statItem}>
+            <Text style={styles.statValue}>{profile.stats?.hours || 0}</Text>
+            <Text style={styles.statLabel}>Hours</Text>
+          </View>
+          <View style={styles.statItem}>
+            <Text style={styles.statValue}>
+              {((profile.stats?.volume || 0) / 1000).toFixed(1)}k
+            </Text>
+            <Text style={styles.statLabel}>Volume</Text>
+          </View>
+        </View>
 
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <Calendar size={24} color="#007AFF" />
-          <Text style={styles.sectionTitle}>Recent Activity</Text>
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Award size={24} color="#007AFF" />
+            <Text style={styles.sectionTitle}>Achievements</Text>
+          </View>
+          {!profile.achievements?.length ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyStateText}>No achievements yet</Text>
+              <Text style={styles.emptyStateSubtext}>
+                Complete workouts to earn achievements
+              </Text>
+            </View>
+          ) : (
+            profile.achievements.map((achievement, index) => (
+              <View key={index} style={styles.achievementCard}>
+                <Text style={styles.achievementTitle}>{achievement.title}</Text>
+                <Text style={styles.achievementDescription}>
+                  {achievement.description}
+                </Text>
+                {achievement.date_earned && (
+                  <Text style={styles.achievementDate}>
+                    Earned on {new Date(achievement.date_earned).toLocaleDateString()}
+                  </Text>
+                )}
+              </View>
+            ))
+          )}
         </View>
-        <View style={styles.activityChart}>
-          <BarChart size={24} color="#8E8E93" />
-          <Text style={styles.chartLabel}>Activity data visualization would go here</Text>
+
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Calendar size={24} color="#007AFF" />
+            <Text style={styles.sectionTitle}>Recent Activity</Text>
+          </View>
+          <View style={styles.activityChart}>
+            <BarChart size={24} color="#8E8E93" />
+            <Text style={styles.chartLabel}>Activity data visualization would go here</Text>
+          </View>
         </View>
-      </View>
-    </ScrollView>
+      </ScrollView>
+    </>
   );
 }
 
@@ -158,6 +161,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F2F2F7',
+  },
+  safeAreaTop: {
+    flex: 0,
+    backgroundColor: '#FFFFFF',
   },
   loadingContainer: {
     flex: 1,
@@ -188,10 +195,6 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
-  },
-  safeArea: {
-    height: 44,
-    backgroundColor: '#FFFFFF',
   },
   header: {
     backgroundColor: '#FFFFFF',
