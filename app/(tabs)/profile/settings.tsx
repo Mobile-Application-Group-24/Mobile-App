@@ -133,7 +133,21 @@ export default function ProfileSettingsScreen() {
 
       if (!result.canceled) {
         const { uri } = result.assets[0];
-        // Create a file path that includes the user ID as a folder name to comply with RLS policy
+        
+        // Create the bucket if it doesn't exist (this is actually handled on server side)
+        try {
+          // Check if bucket exists first (optional)
+          const { data: buckets } = await supabase.storage.listBuckets();
+          const bucketExists = buckets?.some(bucket => bucket.name === 'avatars');
+          
+          if (!bucketExists) {
+            console.log('Bucket does not exist, it will be created automatically on upload');
+          }
+        } catch (err) {
+          console.log('Error checking buckets:', err);
+        }
+        
+        // Create a file path that includes the user ID as a folder name
         const fileName = `${session.user.id}/${Date.now()}.jpg`;
 
         // Read file as Base64
@@ -158,11 +172,18 @@ export default function ProfileSettingsScreen() {
         }
 
         // Get the public URL of the uploaded file
-        const { data: urlData } = supabase.storage
+        // Instead of getPublicUrl, use createSignedUrl for longer-lived tokens
+        const { data: signedUrlData, error: signedUrlError } = await supabase.storage
           .from('avatars')
-          .getPublicUrl(fileName);
+          .createSignedUrl(fileName, 60 * 60 * 24 * 365); // 1 year expiration
 
-        const avatarUrl = urlData.publicUrl;
+        if (signedUrlError) {
+          console.error('Error creating signed URL:', signedUrlError);
+          throw signedUrlError;
+        }
+
+        const avatarUrl = signedUrlData.signedUrl;
+        console.log('Avatar URL:', avatarUrl); // For debugging
 
         // Update the user's profile with the new avatar URL
         const { error: updateError } = await supabase
@@ -175,8 +196,12 @@ export default function ProfileSettingsScreen() {
           throw updateError;
         }
 
+        // Update local state and notify user
         setProfile((prev) => (prev ? { ...prev, avatar_url: avatarUrl } : null));
         Alert.alert('Success', 'Profile picture updated successfully');
+
+        // Reload profile to ensure we have the latest data
+        loadProfile();
       }
     } catch (error) {
       console.error('Error updating avatar:', error);
@@ -187,7 +212,6 @@ export default function ProfileSettingsScreen() {
       } else {
         Alert.alert('Error', 'Failed to update profile picture');
       }
-      console.log(session.user.id);
     }
   };
 
