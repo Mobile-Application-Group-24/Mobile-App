@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, TextInput, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, TextInput, ActivityIndicator, StatusBar, SafeAreaView } from 'react-native';
 import { Search, Users, Plus } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { getGroups, type Group } from '@/utils/supabase';
@@ -36,91 +36,103 @@ export default function GroupsScreen() {
 
   if (error) {
     return (
-      <View style={styles.container}>
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={loadGroups}>
-            <Text style={styles.retryButtonText}>Retry</Text>
-          </TouchableOpacity>
+      <>
+        <StatusBar barStyle="dark-content" backgroundColor="#F2F2F7" />
+        <SafeAreaView style={styles.safeAreaTop} />
+        <View style={styles.container}>
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorText}>{error}</Text>
+            <TouchableOpacity style={styles.retryButton} onPress={loadGroups}>
+              <Text style={styles.retryButtonText}>Retry</Text>
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
+      </>
     );
   }
 
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.safeArea} />
-      <View style={styles.header}>
-        <View style={styles.searchContainer}>
-          <View style={styles.searchBar}>
-            <Search size={20} color="#8E8E93" />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search groups..."
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-            />
+    <>
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+      <SafeAreaView style={styles.safeAreaTop} />
+      <ScrollView style={styles.container}>
+        <View style={styles.header}>
+          <View style={styles.searchContainer}>
+            <View style={styles.searchBar}>
+              <Search size={20} color="#8E8E93" />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search groups..."
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+              />
+            </View>
+            <TouchableOpacity
+              style={styles.createButton}
+              onPress={() => router.push('/groups/new')}>
+              <Plus size={20} color="#FFFFFF" />
+            </TouchableOpacity>
           </View>
           <TouchableOpacity
-            style={styles.createButton}
-            onPress={() => router.push('/groups/new')}>
-            <Plus size={20} color="#FFFFFF" />
+            style={[styles.filterButton, showOwned && styles.filterButtonActive]}
+            onPress={() => setShowOwned(!showOwned)}>
+            <Text style={[styles.filterButtonText, showOwned && styles.filterButtonTextActive]}>
+              My Groups Only
+            </Text>
           </TouchableOpacity>
         </View>
-        <TouchableOpacity
-          style={[styles.filterButton, showOwned && styles.filterButtonActive]}
-          onPress={() => setShowOwned(!showOwned)}>
-          <Text style={[styles.filterButtonText, showOwned && styles.filterButtonTextActive]}>
-            My Groups Only
-          </Text>
-        </TouchableOpacity>
-      </View>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Your Groups</Text>
-        
-        {loading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#007AFF" />
-          </View>
-        ) : filteredGroups.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Users size={48} color="#8E8E93" />
-            <Text style={styles.emptyStateText}>No groups found</Text>
-            <Text style={styles.emptyStateSubtext}>
-              {showOwned 
-                ? "You haven't created any groups yet"
-                : "No groups match your search"}
-            </Text>
-          </View>
-        ) : (
-          filteredGroups.map((group) => (
-            <TouchableOpacity 
-              key={group.id} 
-              style={styles.groupCard}
-              onPress={() => router.push(`/groups/${group.id}`)}
-            >
-              <Image 
-                source={{ uri: group.cover_image || 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48' }} 
-                style={styles.groupImage}
-              />
-              <View style={styles.groupInfo}>
-                <Text style={styles.groupName}>{group.name}</Text>
-                <View style={styles.groupStats}>
-                  <Users size={16} color="#8E8E93" />
-                  <Text style={styles.groupMembers}>{group.member_count} members</Text>
-                  {group.owner_id === (group as any).currentUserId && (
-                    <View style={styles.ownerBadge}>
-                      <Text style={styles.ownerText}>Owner</Text>
-                    </View>
-                  )}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Your Groups</Text>
+          
+          {loading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#007AFF" />
+            </View>
+          ) : filteredGroups.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Users size={48} color="#8E8E93" />
+              <Text style={styles.emptyStateText}>No groups found</Text>
+              <Text style={styles.emptyStateSubtext}>
+                {showOwned 
+                  ? "You haven't created any groups yet"
+                  : "No groups match your search"}
+              </Text>
+            </View>
+          ) : (
+            filteredGroups.map((group) => (
+              <TouchableOpacity 
+                key={group.id} 
+                style={styles.groupCard}
+                onPress={() => router.push(`/groups/${group.id}`)}
+              >
+                <Image 
+                  source={{ uri: group.cover_image || 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48' }} 
+                  style={styles.groupImage}
+                  onError={() => {
+                    console.log("Fehler beim Laden des Gruppenbilds:", group.cover_image);
+                    // If image loading fails, we could update the state to use a default image,
+                    // but that would require adding a state management for each group
+                  }}
+                />
+                <View style={styles.groupInfo}>
+                  <Text style={styles.groupName}>{group.name}</Text>
+                  <View style={styles.groupStats}>
+                    <Users size={16} color="#8E8E93" />
+                    <Text style={styles.groupMembers}>{group.member_count} members</Text>
+                    {group.owner_id === (group as any).currentUserId && (
+                      <View style={styles.ownerBadge}>
+                        <Text style={styles.ownerText}>Owner</Text>
+                      </View>
+                    )}
+                  </View>
                 </View>
-              </View>
-            </TouchableOpacity>
-          ))
-        )}
-      </View>
-    </ScrollView>
+              </TouchableOpacity>
+            ))
+          )}
+        </View>
+      </ScrollView>
+    </>
   );
 }
 
@@ -129,8 +141,8 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F2F2F7',
   },
-  safeArea: {
-    height: 44,
+  safeAreaTop: {
+    flex: 0,
     backgroundColor: '#FFFFFF',
   },
   header: {

@@ -166,6 +166,10 @@ export async function getGroupDetails(groupId: string) {
 }
 
 export async function getGroupMembers(groupId: string): Promise<GroupMember[]> {
+  const { data: userData } = await supabase.auth.getUser();
+  if (!userData.user) throw new Error('User not authenticated');
+
+  // Using a join query approach instead of foreign key relationship
   const { data, error } = await supabase
     .from('group_members')
     .select(`
@@ -173,16 +177,32 @@ export async function getGroupMembers(groupId: string): Promise<GroupMember[]> {
       group_id,
       user_id,
       role,
-      joined_at,
-      profile:profiles!user_id(
-        full_name,
-        avatar_url
-      )
+      joined_at
     `)
     .eq('group_id', groupId);
 
   if (error) throw error;
-  return data;
+
+  // Get all profile data in a separate query
+  const userIds = data.map(member => member.user_id);
+  const { data: profilesData, error: profilesError } = await supabase
+    .from('profiles')
+    .select('id, full_name, avatar_url')
+    .in('id', userIds);
+
+  if (profilesError) throw profilesError;
+
+  // Map profiles to members
+  return data.map(member => {
+    const profile = profilesData.find(p => p.id === member.user_id) || { full_name: null, avatar_url: null };
+    return {
+      ...member,
+      profile: {
+        full_name: profile.full_name,
+        avatar_url: profile.avatar_url
+      }
+    };
+  });
 }
 
 export async function joinGroup(groupId: string) {
