@@ -16,7 +16,6 @@ const coverImages = [
   'https://images.unsplash.com/photo-1574680096145-d05b474e2155',
 ];
 
-// Nutze den vorhandenen 'avatars'-Bucket für alle Bilder
 const STORAGE_BUCKET = 'groups';
 
 export default function CreateGroupScreen() {
@@ -69,7 +68,6 @@ export default function CreateGroupScreen() {
 
       console.log(`Trying to upload to ${STORAGE_BUCKET} bucket with filename: ${fileName}`);
 
-      // Überprüfe, ob der Bucket existiert
       try {
         const { data: bucketData, error: bucketError } = await supabase.storage.getBucket(STORAGE_BUCKET);
         if (bucketError) {
@@ -94,13 +92,11 @@ export default function CreateGroupScreen() {
         throw uploadError;
       }
 
-      // Verwende die korrekte URL-Struktur
       console.log('File uploaded successfully, creating signed URL');
       
-      // Erstelle eine signierte URL mit langer Gültigkeit
       const { data: urlData, error: signUrlError } = await supabase.storage
         .from(STORAGE_BUCKET)
-        .createSignedUrl(fileName, 60 * 60 * 24 * 365); // 1 Jahr
+        .createSignedUrl(fileName, 60 * 60 * 24 * 365); // 1 year
 
       if (signUrlError) {
         console.error('Error creating signed URL:', JSON.stringify(signUrlError));
@@ -121,7 +117,6 @@ export default function CreateGroupScreen() {
         setGroupData(prev => ({ ...prev, cover_image: urlData.signedUrl }));
         setIsCustomImage(true);
       } else {
-        // Fallback auf getPublicUrl
         console.warn('Creating signed URL failed, falling back to public URL');
         const { data: publicUrlData } = supabase.storage
           .from(STORAGE_BUCKET)
@@ -175,7 +170,10 @@ export default function CreateGroupScreen() {
         is_private: groupData.is_private,
         max_members: parseInt(groupData.max_members),
       });
-      router.back();
+      router.push({
+        pathname: '/groups',
+        params: { refresh: Date.now().toString() }
+      });
     } catch (error) {
       console.error('Error creating group:', error);
       Alert.alert(
