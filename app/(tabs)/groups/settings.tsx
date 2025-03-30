@@ -8,8 +8,8 @@ import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
 import { Buffer } from 'buffer';
 
-// Nutze den vorhandenen 'avatars'-Bucket für alle Bilder
-const STORAGE_BUCKET = 'avatars';
+// Nutze den 'groups'-Bucket für alle Bilder
+const STORAGE_BUCKET = 'groups';
 
 export default function GroupSettingsScreen() {
   const { groupId } = useLocalSearchParams();
@@ -21,7 +21,7 @@ export default function GroupSettingsScreen() {
     name: 'Morning Warriors',
     description: 'Early birds catching those gains! Join us for morning workouts and motivation.',
     cover_image: 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48',
-    privacy: 'public',
+    is_private: false, // Änderung von privacy zu is_private
     notifications: true,
     owner_id: ''
   });
@@ -48,7 +48,7 @@ export default function GroupSettingsScreen() {
           name: data.name || '',
           description: data.description || '',
           cover_image: data.cover_image || 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48',
-          privacy: data.privacy || 'public',
+          is_private: data.is_private || false, // Änderung von privacy zu is_private
           notifications: true,
           owner_id: data.owner_id || ''
         });
@@ -99,8 +99,10 @@ export default function GroupSettingsScreen() {
 
         if (!result.canceled && result.assets && result.assets.length > 0) {
           const { uri } = result.assets[0];
-          // Ändere den Dateinamen, um den korrekten Bucket zu verwenden
-          const fileName = `group_covers/${groupId}_${Date.now()}.jpg`;
+          
+          // Ändern Sie den Dateinamen, um der RLS-Policy zu entsprechen
+          // Der erste Teil des Pfads muss der user.id sein
+          const fileName = `${session.user.id}/${groupId}_${Date.now()}.jpg`;
 
           console.log("Preparing to upload:", fileName); // Debug log
 
@@ -112,7 +114,7 @@ export default function GroupSettingsScreen() {
           // Convert Base64 string to Uint8Array
           const arrayBuffer = _base64ToArrayBuffer(base64);
 
-          // Lade die Datei in den existierenden 'avatars'-Bucket hoch
+          // Lade die Datei in den 'groups'-Bucket hoch statt 'avatars'
           const { data: uploadData, error: uploadError } = await supabase.storage
             .from(STORAGE_BUCKET)
             .upload(fileName, arrayBuffer, {
@@ -127,7 +129,7 @@ export default function GroupSettingsScreen() {
             throw uploadError;
           }
 
-          // Verwende exakt dieselbe Methode wie im Profile-Settings-Screen
+          // Verwende die richtige Bucket für die signierte URL
           const { data: signedUrlData, error: signedUrlError } = await supabase.storage
             .from(STORAGE_BUCKET)
             .createSignedUrl(fileName, 60 * 60 * 24 * 365); // 1 year expiration
@@ -209,14 +211,19 @@ export default function GroupSettingsScreen() {
         .update({
           name: groupData.name,
           description: groupData.description,
-          privacy: groupData.privacy,
+          is_private: groupData.is_private, // Hier war der Fehler: privacy durch is_private ersetzt
         })
         .eq('id', groupId);
 
       if (error) throw error;
       
       Alert.alert('Success', 'Group settings updated successfully');
-      router.back();
+      
+      // Nach der Hauptseite zurückkehren mit einem Refresh-Parameter
+      router.push({
+        pathname: '/groups',
+        params: { refresh: Date.now().toString() }
+      });
     } catch (error) {
       console.error('Error updating group settings:', error);
       Alert.alert('Error', 'Failed to update group settings');
@@ -251,7 +258,11 @@ export default function GroupSettingsScreen() {
 
               if (error) throw error;
               
-              router.replace('/groups');
+              // Mit Refresh-Parameter zur Hauptseite navigieren
+              router.replace({
+                pathname: '/groups',
+                params: { refresh: Date.now().toString() }
+              });
             } catch (error) {
               console.error('Error deleting group:', error);
               Alert.alert('Error', 'Failed to delete group');
@@ -334,23 +345,23 @@ export default function GroupSettingsScreen() {
             <TouchableOpacity
               style={[
                 styles.optionButton,
-                groupData.privacy === 'public' && styles.optionButtonActive,
+                !groupData.is_private && styles.optionButtonActive, // Änderung der Bedingung
               ]}
-              onPress={() => setGroupData(prev => ({ ...prev, privacy: 'public' }))}>
+              onPress={() => setGroupData(prev => ({ ...prev, is_private: false }))}>
               <Text style={[
                 styles.optionText,
-                groupData.privacy === 'public' && styles.optionTextActive,
+                !groupData.is_private && styles.optionTextActive, // Änderung der Bedingung
               ]}>Public</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[
                 styles.optionButton,
-                groupData.privacy === 'private' && styles.optionButtonActive,
+                groupData.is_private && styles.optionButtonActive, // Änderung der Bedingung
               ]}
-              onPress={() => setGroupData(prev => ({ ...prev, privacy: 'private' }))}>
+              onPress={() => setGroupData(prev => ({ ...prev, is_private: true }))}>
               <Text style={[
                 styles.optionText,
-                groupData.privacy === 'private' && styles.optionTextActive,
+                groupData.is_private && styles.optionTextActive, // Änderung der Bedingung
               ]}>Private</Text>
             </TouchableOpacity>
           </View>

@@ -188,34 +188,22 @@ export default function CreateGroupScreen() {
 
   return (
     <View style={styles.container}>
+      <View style={styles.header}>
+        <TouchableOpacity 
+          style={styles.closeButton}
+          onPress={() => router.back()}
+        >
+          <X size={24} color="#FF3B30" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Create New Group</Text>
+        <View style={styles.placeholderView} />
+      </View>
+
       <ScrollView 
         style={styles.content}
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={styles.scrollContent}
       >
-        <View style={styles.header}>
-          <TouchableOpacity 
-            style={styles.closeButton}
-            onPress={() => router.back()}
-          >
-            <X size={24} color="#FF3B30" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Create New Group</Text>
-          <TouchableOpacity 
-            style={[
-              styles.createButton,
-              (!groupData.name || !groupData.description || isCreating) && styles.createButtonDisabled
-            ]}
-            onPress={handleSave}
-            disabled={!groupData.name || !groupData.description || isCreating}
-          >
-            <Text style={[
-              styles.createButtonText,
-              (!groupData.name || !groupData.description || isCreating) && styles.createButtonTextDisabled
-            ]}>{isCreating ? 'Creating...' : 'Create'}</Text>
-          </TouchableOpacity>
-        </View>
-
         <View style={styles.section}>
           <View style={styles.coverSection}>
             <Image 
@@ -377,6 +365,22 @@ export default function CreateGroupScreen() {
           </View>
         </View>
       </ScrollView>
+
+      <View style={styles.bottomButtonContainer}>
+        <TouchableOpacity 
+          style={[
+            styles.createButton,
+            (!groupData.name || !groupData.description || isCreating) && styles.createButtonDisabled
+          ]}
+          onPress={handleSave}
+          disabled={!groupData.name || !groupData.description || isCreating}
+        >
+          <Text style={[
+            styles.createButtonText,
+            (!groupData.name || !groupData.description || isCreating) && styles.createButtonTextDisabled
+          ]}>{isCreating ? 'Creating...' : 'Create Group'}</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -390,14 +394,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: Platform.OS === 'android' ? 120 : 0,
+    paddingBottom: Platform.OS === 'ios' ? 80 : 100,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'ios' ? 60 : 20,
+    paddingTop: 16, 
     paddingBottom: 16,
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
@@ -413,22 +417,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  createButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    backgroundColor: '#007AFF',
-  },
-  createButtonDisabled: {
-    backgroundColor: '#A2A2A2',
-  },
-  createButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  createButtonTextDisabled: {
-    color: '#FFFFFF',
+  placeholderView: {
+    width: 40,
   },
   section: {
     backgroundColor: '#FFFFFF',
@@ -587,5 +577,39 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: 'rgba(0, 0, 0, 0.3)',
+  },
+  bottomButtonContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#FFFFFF',
+    padding: 16,
+    paddingBottom: 24, // Einheitliches Padding für iOS und Android
+    borderTopWidth: 1,
+    borderTopColor: '#E5E5EA',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  createButton: {
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: '#007AFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  createButtonDisabled: {
+    backgroundColor: '#A2A2A2',
+  },
+  createButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  createButtonTextDisabled: {
+    color: '#FFFFFF',
   },
 });
