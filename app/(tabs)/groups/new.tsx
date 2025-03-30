@@ -17,7 +17,7 @@ const coverImages = [
 ];
 
 // Nutze den vorhandenen 'avatars'-Bucket für alle Bilder
-const STORAGE_BUCKET = 'avatars';
+const STORAGE_BUCKET = 'groups';
 
 export default function CreateGroupScreen() {
   const router = useRouter();
@@ -59,7 +59,7 @@ export default function CreateGroupScreen() {
 
       const { uri } = result.assets[0];
       const timestamp = Date.now();
-      const fileName = `group_covers/${session?.user?.id || 'anonymous'}_temp_${timestamp}.jpg`;
+      const fileName = `${session?.user?.id || 'anonymous'}_temp_${timestamp}.jpg`;
 
       const base64 = await FileSystem.readAsStringAsync(uri, {
         encoding: FileSystem.EncodingType.Base64,
@@ -81,7 +81,7 @@ export default function CreateGroupScreen() {
         console.warn('Error checking bucket:', bucketCheckError);
       }
 
-      // Lade die Datei in den existierenden 'avatars'-Bucket hoch
+      
       const { data, error: uploadError } = await supabase.storage
         .from(STORAGE_BUCKET)
         .upload(fileName, arrayBuffer, {
