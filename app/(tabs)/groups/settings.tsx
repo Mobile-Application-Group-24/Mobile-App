@@ -160,7 +160,18 @@ export default function GroupSettingsScreen() {
 
           // Update local state
           setGroupData(prev => ({ ...prev, cover_image: coverImageUrl }));
-          Alert.alert('Success', 'Cover photo updated successfully');
+          Alert.alert('Success', 'Cover photo updated successfully', [
+            { 
+              text: 'OK', 
+              onPress: () => {
+                // Zurück zur Hauptgruppen-Seite und aktualisieren
+                router.replace({
+                  pathname: '/(tabs)/groups',
+                  params: { refresh: Date.now().toString() }
+                });
+              }
+            }
+          ]);
         }
       } catch (pickerError) {
         console.error("Error in image picker:", pickerError);
@@ -211,19 +222,23 @@ export default function GroupSettingsScreen() {
         .update({
           name: groupData.name,
           description: groupData.description,
-          is_private: groupData.is_private, // Hier war der Fehler: privacy durch is_private ersetzt
+          is_private: groupData.is_private, 
         })
         .eq('id', groupId);
 
       if (error) throw error;
       
-      Alert.alert('Success', 'Group settings updated successfully');
-      
-      // Nach der Hauptseite zurückkehren mit einem Refresh-Parameter
-      router.push({
-        pathname: '/groups',
-        params: { refresh: Date.now().toString() }
-      });
+      Alert.alert('Success', 'Group settings updated successfully', [
+        { 
+          text: 'OK', 
+          onPress: () => {
+            router.replace({
+              pathname: '/(tabs)/groups',
+              params: { refresh: Date.now().toString() }
+            });
+          }
+        }
+      ]);
     } catch (error) {
       console.error('Error updating group settings:', error);
       Alert.alert('Error', 'Failed to update group settings');
@@ -260,7 +275,7 @@ export default function GroupSettingsScreen() {
               
               // Mit Refresh-Parameter zur Hauptseite navigieren
               router.replace({
-                pathname: '/groups',
+                pathname: '/(tabs)/groups',
                 params: { refresh: Date.now().toString() }
               });
             } catch (error) {
