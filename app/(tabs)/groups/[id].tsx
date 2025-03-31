@@ -4,6 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Trophy, Flame, Users, Settings } from 'lucide-react-native';
 import { getGroupDetails, getGroupMembers, type GroupMember } from '@/utils/supabase';
 import { useAuth } from '@/providers/AuthProvider';
+import { DEFAULT_AVATAR } from '@/utils/avatar';
 
 export default function GroupScreen() {
   const { id } = useLocalSearchParams();
@@ -107,8 +108,7 @@ export default function GroupScreen() {
             </View>
             <Image 
               source={{ 
-                uri: member.profile?.avatar_url || 
-                    'https://images.unsplash.com/photo-1494790108377-be9c29b29330'
+                uri: member.profile?.avatar_url || DEFAULT_AVATAR
               }} 
               style={styles.avatar} 
             />

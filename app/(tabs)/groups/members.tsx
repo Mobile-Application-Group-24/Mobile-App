@@ -1,30 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, TextInput, Modal, Alert, Clipboard, ActivityIndicator } from 'react-native';
 import { Search, UserPlus, X, Copy, Check, Clock } from 'lucide-react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Linking from 'expo-linking';
-import { createGroupInvitation } from '../../../utils/supabase';
-
-const members = [
-  {
-    id: 1,
-    name: 'Sarah Johnson',
-    role: 'Owner',
-    avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330',
-  },
-  {
-    id: 2,
-    name: 'Mike Chen',
-    role: 'Member',
-    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d',
-  },
-  {
-    id: 3,
-    name: 'Emily Davis',
-    role: 'Member',
-    avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80',
-  },
-];
+import { createGroupInvitation, getGroupMembers, removeMember, GroupMember } from '../../../utils/supabase';
+import { getAvatarUrl, getDisplayName } from '../../../utils/avatar';
+import { useAuth } from '../../../providers/AuthProvider';
 
 export default function MembersScreen() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -33,17 +14,58 @@ export default function MembersScreen() {
   const [copied, setCopied] = useState(false);
   const [invitationCode, setInvitationCode] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [invitationExpiry, setInvitationExpiry] = useState('24 Stunden');
+  const [members, setMembers] = useState<GroupMember[]>([]);
+  const [loadingMembers, setLoadingMembers] = useState(true);
+  const [invitationExpiry, setInvitationExpiry] = useState('24 hours');
   const { groupId } = useLocalSearchParams();
-  const isOwner = true; 
+  const router = useRouter();
+  const { session } = useAuth();
+  const [isOwner, setIsOwner] = useState(false);
+
+  useEffect(() => {
+    if (groupId) {
+      loadMembers();
+    } else {
+      router.replace('/groups');
+    }
+  }, [groupId]);
+
+  const loadMembers = async () => {
+    try {
+      setLoadingMembers(true);
+      const data = await getGroupMembers(groupId as string);
+      setMembers(data);
+      
+      // Check if current user is owner
+      const currentUserId = session?.user?.id;
+      const currentUserMember = data.find(member => member.user_id === currentUserId);
+      setIsOwner(currentUserMember?.role === 'owner');
+    } catch (error) {
+      console.error('Error loading members:', error);
+      Alert.alert('Error', 'Failed to load group members');
+    } finally {
+      setLoadingMembers(false);
+    }
+  };
 
   const filteredMembers = members.filter(member =>
-    member.name.toLowerCase().includes(searchQuery.toLowerCase())
+    member.profile.full_name?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleRemoveMember = (memberId: number) => {
-    // Handle member removal logic
-    console.log('Remove member:', memberId);
+  const handleRemoveMember = async (userId: string) => {
+    try {
+      if (!groupId) return;
+      
+      await removeMember(groupId as string, userId);
+      
+      // Update members list
+      setMembers(prevMembers => prevMembers.filter(member => member.user_id !== userId));
+      
+      Alert.alert('Success', 'Member removed from the group');
+    } catch (error) {
+      console.error('Error removing member:', error);
+      Alert.alert('Error', 'Failed to remove member from the group');
+    }
   };
 
   const generateInviteLink = async () => {
@@ -113,30 +135,40 @@ export default function MembersScreen() {
         )}
       </View>
 
-      <ScrollView style={styles.membersList}>
-        {filteredMembers.map((member) => (
-          <View key={member.id} style={styles.memberCard}>
-            <View style={styles.memberInfo}>
-              <Image source={{ uri: member.avatar || 'https://images.unsplash.com/photo-1511367461989-f85a21fda167?q=80&w=3131&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D'}} style={styles.avatar} />
-              <View style={styles.textContainer}>
-                <Text style={styles.memberName}>{member.name}</Text>
-                <Text style={[
-                  styles.roleText,
-                  member.role === 'Owner' && styles.ownerText
-                ]}>{member.role}</Text>
+      {loadingMembers ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#007AFF" />
+          <Text style={styles.loadingText}>Loading members...</Text>
+        </View>
+      ) : (
+        <ScrollView style={styles.membersList}>
+          {filteredMembers.map((member) => (
+            <View key={member.id} style={styles.memberCard}>
+              <View style={styles.memberInfo}>
+                <Image 
+                  source={{ uri: getAvatarUrl(member.profile.avatar_url) }} 
+                  style={styles.avatar} 
+                />
+                <View style={styles.textContainer}>
+                  <Text style={styles.memberName}>{getDisplayName(member.profile.full_name)}</Text>
+                  <Text style={[
+                    styles.roleText,
+                    member.role === 'owner' && styles.ownerText
+                  ]}>{member.role}</Text>
+                </View>
               </View>
+              {isOwner && member.role !== 'owner' && (
+                <TouchableOpacity
+                  style={styles.removeButton}
+                  onPress={() => handleRemoveMember(member.user_id)}
+                >
+                  <X size={20} color="#FF3B30" />
+                </TouchableOpacity>
+              )}
             </View>
-            {isOwner && member.role !== 'Owner' && (
-              <TouchableOpacity
-                style={styles.removeButton}
-                onPress={() => handleRemoveMember(member.id)}
-              >
-                <X size={20} color="#FF3B30" />
-              </TouchableOpacity>
-            )}
-          </View>
-        ))}
-      </ScrollView>
+          ))}
+        </ScrollView>
+      )}
 
       {/* Invite Link Modal */}
       <Modal
@@ -148,7 +180,7 @@ export default function MembersScreen() {
         <View style={styles.centeredView}>
           <View style={styles.modalView}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Einladungslink</Text>
+              <Text style={styles.modalTitle}>Invitation Link</Text>
               <TouchableOpacity
                 onPress={() => setInviteModalVisible(false)}
                 style={styles.closeButton}
@@ -386,5 +418,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#8E8E93',
     marginLeft: 6,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#3C3C43',
+    textAlign: 'center',
   },
 });
