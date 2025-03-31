@@ -34,14 +34,14 @@ export default function TabLayout() {
           title: 'AI Coach',
           tabBarIcon: ({ color, size }) => <Brain size={size} color={color} />,
         }}
-      />
+      />*/}
       <Tabs.Screen
         name="nutrition"
         options={{
           title: 'Nutrition',
           tabBarIcon: ({ color, size }) => <Apple size={size} color={color} />,
         }}
-      />*/}
+      />
       <Tabs.Screen
         name="profile"
         options={{
