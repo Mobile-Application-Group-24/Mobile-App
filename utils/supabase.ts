@@ -92,7 +92,7 @@ export interface Meal {
   meal_type: 'breakfast' | 'lunch' | 'dinner' | 'snacks' | 'water';
   consumed_at: string;
   created_at: string;
-
+}
 // Interface for group invitations
 export interface GroupInvitation {
   id: string;
@@ -419,6 +419,7 @@ export async function getWeeklyMeals(): Promise<{ date: string; calories: number
     date,
     calories,
   }));
+}; // Diese schließende Klammer und Semikolon fehlten
 
 // Invitation functions
 export const createGroupInvitation = async (groupId: string, options: { expiresIn?: number, maxUses?: number } = {}) => {
