@@ -244,6 +244,8 @@ export async function leaveGroup(groupId: string) {
     .eq('user_id', userData.user.id);
 
   if (error) throw error;
+  
+  return true;
 }
 
 export async function updateGroup(groupId: string, updates: Partial<Group>) {
