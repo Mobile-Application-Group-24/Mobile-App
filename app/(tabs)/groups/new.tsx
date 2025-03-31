@@ -170,10 +170,9 @@ export default function CreateGroupScreen() {
         is_private: groupData.is_private,
         max_members: parseInt(groupData.max_members),
       });
-      router.push({
-        pathname: '/groups',
-        params: { refresh: Date.now().toString() }
-      });
+      
+      // Ersetzen des aktuellen Screens durch den Groups-Tab
+      router.replace('/groups');
     } catch (error) {
       console.error('Error creating group:', error);
       Alert.alert(
