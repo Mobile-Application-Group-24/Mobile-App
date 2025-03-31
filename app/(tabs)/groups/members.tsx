@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, TextInput, Modal, Alert, Clipboard, ActivityIndicator } from 'react-native';
-import { Search, UserPlus, X, Copy, Check, Clock } from 'lucide-react-native';
+import { Search, UserPlus, X, Copy, Check, Clock, ArrowLeft, LogOut } from 'lucide-react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Linking from 'expo-linking';
-import { createGroupInvitation, getGroupMembers, removeMember, GroupMember } from '../../../utils/supabase';
+import { createGroupInvitation, getGroupMembers, removeMember, GroupMember, leaveGroup } from '../../../utils/supabase';
 import { getAvatarUrl, getDisplayName } from '../../../utils/avatar';
 import { useAuth } from '../../../providers/AuthProvider';
 
@@ -21,6 +21,7 @@ export default function MembersScreen() {
   const router = useRouter();
   const { session } = useAuth();
   const [isOwner, setIsOwner] = useState(false);
+  const [currentUserRole, setCurrentUserRole] = useState<string>('');
 
   useEffect(() => {
     if (groupId) {
@@ -40,6 +41,7 @@ export default function MembersScreen() {
       const currentUserId = session?.user?.id;
       const currentUserMember = data.find(member => member.user_id === currentUserId);
       setIsOwner(currentUserMember?.role === 'owner');
+      setCurrentUserRole(currentUserMember?.role || '');
     } catch (error) {
       console.error('Error loading members:', error);
       Alert.alert('Error', 'Failed to load group members');
@@ -68,6 +70,40 @@ export default function MembersScreen() {
     }
   };
 
+  const handleLeaveGroup = async () => {
+    try {
+      if (!groupId) return;
+
+      Alert.alert(
+        'Leave Group',
+        'Are you sure you want to leave this group?',
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel'
+          },
+          {
+            text: 'Leave',
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                await leaveGroup(groupId as string);
+                Alert.alert('Success', 'You have left the group');
+                router.replace('/groups');
+              } catch (error) {
+                console.error('Error leaving group:', error);
+                Alert.alert('Error', 'Failed to leave the group');
+              }
+            }
+          }
+        ]
+      );
+    } catch (error) {
+      console.error('Error leaving group:', error);
+      Alert.alert('Error', 'Failed to leave the group');
+    }
+  };
+
   const generateInviteLink = async () => {
     setIsLoading(true);
 
@@ -78,7 +114,7 @@ export default function MembersScreen() {
 
       const invitation = await createGroupInvitation(groupId as string);
 
-      const deepLink = Linking.createURL(`groups/join-group`, {
+      const deepLink = Linking.createURL(`groups/joingroup`, {
         queryParams: { code: invitation.code, groupId: groupId as string }
       });
 
@@ -105,8 +141,32 @@ export default function MembersScreen() {
     }, 3000);
   };
 
+  const handleGoBack = () => {
+    router.back();
+  };
+
   return (
     <View style={styles.container}>
+      <View style={styles.headerContainer}>
+        <TouchableOpacity 
+          style={styles.backButton} 
+          onPress={handleGoBack}
+        >
+          <ArrowLeft size={24} color="#007AFF" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Group Members</Text>
+        
+        {/* Leave Group Button for non-owners */}
+        {!isOwner && currentUserRole && (
+          <TouchableOpacity 
+            style={styles.leaveButton} 
+            onPress={handleLeaveGroup}
+          >
+            <LogOut size={20} color="#FF3B30" />
+          </TouchableOpacity>
+        )}
+      </View>
+      
       <View style={styles.header}>
         <View style={styles.searchBar}>
           <Search size={20} color="#8E8E93" />
@@ -240,6 +300,28 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F2F2F7',
+  },
+  headerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E5EA',
+    justifyContent: 'space-between',
+  },
+  backButton: {
+    padding: 8,
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    flex: 1,
+    textAlign: 'center',
+  },
+  leaveButton: {
+    padding: 8,
   },
   header: {
     backgroundColor: '#FFFFFF',

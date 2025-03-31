@@ -110,10 +110,8 @@ export default function JoinGroupScreen() {
         throw new Error('No group found to join');
       }
       
-      setStatus('success');
-      setTimeout(() => {
-        router.replace(`/groups/${groupToJoin}`);
-      }, 1500);
+      // Immediately redirect to the group screen without delay
+      router.replace(`/groups/${groupToJoin}`);
     } catch (error) {
       console.error('Error joining group:', error);
       setStatus('error');
