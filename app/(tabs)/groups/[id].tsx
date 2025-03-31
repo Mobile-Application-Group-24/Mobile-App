@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Trophy, Flame, Users, Settings } from 'lucide-react-native';
+import { Trophy, Flame, Users, Settings, ArrowLeft } from 'lucide-react-native';
 import { getGroupDetails, getGroupMembers, type GroupMember } from '@/utils/supabase';
 import { useAuth } from '@/providers/AuthProvider';
+import { DEFAULT_AVATAR } from '@/utils/avatar';
 
 export default function GroupScreen() {
   const { id } = useLocalSearchParams();
@@ -63,68 +64,80 @@ export default function GroupScreen() {
   const isOwner = session?.user?.id === group.owner_id;
 
   return (
-    <ScrollView style={styles.container}>
-      <Image 
-        source={{ uri: group.cover_image || 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48' }} 
-        style={styles.coverImage} 
-      />
-      
-      <View style={styles.header}>
-        <View style={styles.headerContent}>
-          <Text style={styles.groupName}>{group.name}</Text>
-          <Text style={styles.description}>{group.description}</Text>
-          
-          <TouchableOpacity 
-            style={styles.stats}
-            onPress={() => router.push({ pathname: '/groups/members', params: { groupId: id } })}
-          >
-            <View style={styles.stat}>
-              <Users size={20} color="#007AFF" />
-              <Text style={styles.statText}>{group.member_count} members</Text>
-            </View>
-          </TouchableOpacity>
-        </View>
-        
-        {isOwner && (
-          <TouchableOpacity 
-            style={styles.settingsButton}
-            onPress={() => router.push({ pathname: '/groups/settings', params: { groupId: id } })}
-          >
-            <Settings size={20} color="#007AFF" />
-          </TouchableOpacity>
-        )}
+    <View style={styles.container}>
+      {/* Header with back button */}
+      <View style={styles.navigationHeader}>
+        <TouchableOpacity 
+          style={styles.backButton}
+          onPress={() => router.replace('/groups')}
+        >
+          <ArrowLeft size={24} color="#007AFF" />
+        </TouchableOpacity>
+        <Text style={styles.navTitle}>{group.name}</Text>
+        <View style={styles.placeholder} />
       </View>
+      
+      <ScrollView style={styles.scrollContent}>
+        <Image 
+          source={{ uri: group.cover_image || 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48' }} 
+          style={styles.coverImage} 
+        />
+        
+        <View style={styles.header}>
+          <View style={styles.headerContent}>
+            <Text style={styles.description}>{group.description}</Text>
+            
+            <TouchableOpacity 
+              style={styles.stats}
+              onPress={() => router.push({ pathname: '/groups/members', params: { groupId: id } })}
+            >
+              <View style={styles.stat}>
+                <Users size={20} color="#007AFF" />
+                <Text style={styles.statText}>{group.member_count} members</Text>
+              </View>
+            </TouchableOpacity>
+          </View>
+          
+          {isOwner && (
+            <TouchableOpacity 
+              style={styles.settingsButton}
+              onPress={() => router.push({ pathname: '/groups/settings', params: { groupId: id } })}
+            >
+              <Settings size={20} color="#007AFF" />
+            </TouchableOpacity>
+          )}
+        </View>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Leaderboard</Text>
-        {members.map((member, index) => (
-          <View key={member.id} style={styles.userCard}>
-            <View style={styles.rankContainer}>
-              {index === 0 && <Trophy size={24} color="#FFD700" />}
-              {index === 1 && <Trophy size={24} color="#C0C0C0" />}
-              {index === 2 && <Trophy size={24} color="#CD7F32" />}
-              {index > 2 && <Text style={styles.rank}>#{index + 1}</Text>}
-            </View>
-            <Image 
-              source={{ 
-                uri: member.profile?.avatar_url || 
-                    'https://images.unsplash.com/photo-1494790108377-be9c29b29330'
-              }} 
-              style={styles.avatar} 
-            />
-            <View style={styles.userInfo}>
-              <Text style={styles.userName}>
-                {member.profile?.full_name || 'Anonymous User'}
-              </Text>
-              <View style={styles.pointsContainer}>
-                <Flame size={16} color="#FF9500" />
-                <Text style={styles.points}>0 pts</Text>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Leaderboard</Text>
+          {members.map((member, index) => (
+            <View key={member.id} style={styles.userCard}>
+              <View style={styles.rankContainer}>
+                {index === 0 && <Trophy size={24} color="#FFD700" />}
+                {index === 1 && <Trophy size={24} color="#C0C0C0" />}
+                {index === 2 && <Trophy size={24} color="#CD7F32" />}
+                {index > 2 && <Text style={styles.rank}>#{index + 1}</Text>}
+              </View>
+              <Image 
+                source={{ 
+                  uri: member.profile?.avatar_url || DEFAULT_AVATAR
+                }} 
+                style={styles.avatar} 
+              />
+              <View style={styles.userInfo}>
+                <Text style={styles.userName}>
+                  {member.profile?.full_name || 'Anonymous User'}
+                </Text>
+                <View style={styles.pointsContainer}>
+                  <Flame size={16} color="#FF9500" />
+                  <Text style={styles.points}>0 pts</Text>
+                </View>
               </View>
             </View>
-          </View>
-        ))}
-      </View>
-    </ScrollView>
+          ))}
+        </View>
+      </ScrollView>
+    </View>
   );
 }
 
@@ -132,6 +145,29 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F2F2F7',
+  },
+  navigationHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E5EA',
+  },
+  backButton: {
+    padding: 8,
+  },
+  navTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  placeholder: {
+    width: 40, // Same width as backButton for symmetry
+  },
+  scrollContent: {
+    flex: 1,
   },
   loadingContainer: {
     flex: 1,

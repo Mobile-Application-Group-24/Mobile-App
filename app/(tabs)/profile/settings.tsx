@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Image, Switch, Alert, ActivityIndicator, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Image, Switch, Alert, ActivityIndicator, Platform, StatusBar, SafeAreaView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Camera, Bell, Lock, LogOut, Trash2 } from 'lucide-react-native';
 import { useAuth } from '@/providers/AuthProvider';
@@ -233,119 +233,127 @@ export default function ProfileSettingsScreen() {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#007AFF" />
-      </View>
+      <>
+        <StatusBar barStyle="dark-content" backgroundColor="#F2F2F7" />
+        <SafeAreaView style={styles.safeAreaTop} />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#007AFF" />
+        </View>
+      </>
     );
   }
 
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.avatarSection}>
-        <Image 
-          source={{ 
-            uri: profile?.avatar_url || 'https://images.unsplash.com/photo-1511367461989-f85a21fda167?q=80&w=3131&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D'
-          }} 
-          style={styles.avatar} 
-        />
-        <TouchableOpacity style={styles.changeAvatarButton} onPress={handleChangeAvatar}>
-          <Camera size={24} color="#FFFFFF" />
-          <Text style={styles.changeAvatarText}>Change Photo</Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Personal Information</Text>
-        <View style={styles.inputContainer}>
-          <Text style={styles.label}>Name</Text>
-          <TextInput
-            style={styles.input}
-            value={formData.full_name}
-            onChangeText={(text) => setFormData(prev => ({ ...prev, full_name: text }))}
-            placeholder="Enter your name"
+    <>
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+      <SafeAreaView style={styles.safeAreaTop} />
+      <ScrollView style={styles.container}>
+        <View style={styles.avatarSection}>
+          <Image 
+            source={{ 
+              uri: profile?.avatar_url || 'https://images.unsplash.com/photo-1511367461989-f85a21fda167?q=80&w=3131&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D'
+            }} 
+            style={styles.avatar} 
           />
+          <TouchableOpacity style={styles.changeAvatarButton} onPress={handleChangeAvatar}>
+            <Camera size={24} color="#FFFFFF" />
+            <Text style={styles.changeAvatarText}>Change Photo</Text>
+          </TouchableOpacity>
         </View>
 
-        <View style={styles.inputContainer}>
-          <Text style={styles.label}>Email</Text>
-          <TextInput
-            style={[styles.input, styles.inputDisabled]}
-            value={session?.user?.email || ''}
-            editable={false}
-            placeholder="Email address"
-          />
-        </View>
-
-        <View style={styles.inputContainer}>
-          <Text style={styles.label}>Bio</Text>
-          <TextInput
-            style={[styles.input, styles.textArea]}
-            value={formData.bio}
-            onChangeText={(text) => setFormData(prev => ({ ...prev, bio: text }))}
-            placeholder="Tell us about yourself"
-            multiline
-            numberOfLines={4}
-          />
-        </View>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Preferences</Text>
-        
-        <View style={styles.preference}>
-          <View style={styles.preferenceInfo}>
-            <Bell size={24} color="#007AFF" />
-            <Text style={styles.preferenceText}>Push Notifications</Text>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Personal Information</Text>
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>Name</Text>
+            <TextInput
+              style={styles.input}
+              value={formData.full_name}
+              onChangeText={(text) => setFormData(prev => ({ ...prev, full_name: text }))}
+              placeholder="Enter your name"
+            />
           </View>
-          <Switch
-            value={formData.notifications}
-            onValueChange={(value) => setFormData(prev => ({ ...prev, notifications: value }))}
-            trackColor={{ false: '#E5E5EA', true: '#34C759' }}
-            thumbColor="#FFFFFF"
-          />
-        </View>
 
-        <View style={styles.preference}>
-          <View style={styles.preferenceInfo}>
-            <Lock size={24} color="#007AFF" />
-            <Text style={styles.preferenceText}>Private Profile</Text>
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>Email</Text>
+            <TextInput
+              style={[styles.input, styles.inputDisabled]}
+              value={session?.user?.email || ''}
+              editable={false}
+              placeholder="Email address"
+            />
           </View>
-          <Switch
-            value={formData.privateProfile}
-            onValueChange={(value) => setFormData(prev => ({ ...prev, privateProfile: value }))}
-            trackColor={{ false: '#E5E5EA', true: '#34C759' }}
-            thumbColor="#FFFFFF"
-          />
+
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>Bio</Text>
+            <TextInput
+              style={[styles.input, styles.textArea]}
+              value={formData.bio}
+              onChangeText={(text) => setFormData(prev => ({ ...prev, bio: text }))}
+              placeholder="Tell us about yourself"
+              multiline
+              numberOfLines={4}
+            />
+          </View>
         </View>
-      </View>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Account Actions</Text>
-        
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Preferences</Text>
+          
+          <View style={styles.preference}>
+            <View style={styles.preferenceInfo}>
+              <Bell size={24} color="#007AFF" />
+              <Text style={styles.preferenceText}>Push Notifications</Text>
+            </View>
+            <Switch
+              value={formData.notifications}
+              onValueChange={(value) => setFormData(prev => ({ ...prev, notifications: value }))}
+              trackColor={{ false: '#E5E5EA', true: '#34C759' }}
+              thumbColor="#FFFFFF"
+            />
+          </View>
+
+          <View style={styles.preference}>
+            <View style={styles.preferenceInfo}>
+              <Lock size={24} color="#007AFF" />
+              <Text style={styles.preferenceText}>Private Profile</Text>
+            </View>
+            <Switch
+              value={formData.privateProfile}
+              onValueChange={(value) => setFormData(prev => ({ ...prev, privateProfile: value }))}
+              trackColor={{ false: '#E5E5EA', true: '#34C759' }}
+              thumbColor="#FFFFFF"
+            />
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Account Actions</Text>
+          
+          <TouchableOpacity
+            style={styles.logoutButton}
+            onPress={handleLogout}>
+            <LogOut size={20} color="#FF3B30" />
+            <Text style={styles.logoutButtonText}>Log Out</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.deleteAccountButton}
+            onPress={handleDeleteAccount}>
+            <Trash2 size={20} color="#FFFFFF" />
+            <Text style={styles.deleteAccountButtonText}>Delete Account</Text>
+          </TouchableOpacity>
+        </View>
+
         <TouchableOpacity
-          style={styles.logoutButton}
-          onPress={handleLogout}>
-          <LogOut size={20} color="#FF3B30" />
-          <Text style={styles.logoutButtonText}>Log Out</Text>
+          style={[styles.saveButton, saving && styles.saveButtonDisabled]}
+          onPress={handleSave}
+          disabled={saving}>
+          <Text style={styles.saveButtonText}>
+            {saving ? 'Saving...' : 'Save Changes'}
+          </Text>
         </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.deleteAccountButton}
-          onPress={handleDeleteAccount}>
-          <Trash2 size={20} color="#FFFFFF" />
-          <Text style={styles.deleteAccountButtonText}>Delete Account</Text>
-        </TouchableOpacity>
-      </View>
-
-      <TouchableOpacity
-        style={[styles.saveButton, saving && styles.saveButtonDisabled]}
-        onPress={handleSave}
-        disabled={saving}>
-        <Text style={styles.saveButtonText}>
-          {saving ? 'Saving...' : 'Save Changes'}
-        </Text>
-      </TouchableOpacity>
-    </ScrollView>
+      </ScrollView>
+    </>
   );
 }
 
@@ -353,6 +361,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F2F2F7',
+  },
+  safeAreaTop: {
+    flex: 0,
+    backgroundColor: '#FFFFFF',
   },
   loadingContainer: {
     flex: 1,
