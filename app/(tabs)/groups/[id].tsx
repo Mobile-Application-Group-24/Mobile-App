@@ -7,7 +7,7 @@ import { useAuth } from '@/providers/AuthProvider';
 import { DEFAULT_AVATAR } from '@/utils/avatar';
 
 export default function GroupScreen() {
-  const { id } = useLocalSearchParams();
+  const { id, viaLink } = useLocalSearchParams(); // viaLink is either "true" or undefined
   const router = useRouter();
   const { session } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -67,12 +67,14 @@ export default function GroupScreen() {
     <View style={styles.container}>
       {/* Header with back button */}
       <View style={styles.navigationHeader}>
-        <TouchableOpacity 
-          style={styles.backButton}
-          onPress={() => router.replace('/groups')}
-        >
-          <ArrowLeft size={24} color="#007AFF" />
-        </TouchableOpacity>
+        {viaLink === "true" && (
+          <TouchableOpacity 
+            style={styles.backButton}
+            onPress={() => router.push('/groups')}
+          >
+            <ArrowLeft size={24} color="#007AFF" />
+          </TouchableOpacity>
+        )}
         <Text style={styles.navTitle}>{group.name}</Text>
         <View style={styles.placeholder} />
       </View>
