@@ -22,6 +22,7 @@ export default function MembersScreen() {
   const { session } = useAuth();
   const [isOwner, setIsOwner] = useState(false);
   const [currentUserRole, setCurrentUserRole] = useState<string>('');
+  const [codeCopied, setCodeCopied] = useState(false);
 
   useEffect(() => {
     if (groupId) {
@@ -141,6 +142,15 @@ export default function MembersScreen() {
     }, 3000);
   };
 
+  const copyCodeToClipboard = () => {
+    Clipboard.setString(invitationCode);
+    setCodeCopied(true);
+
+    setTimeout(() => {
+      setCodeCopied(false);
+    }, 3000);
+  };
+
   const handleGoBack = () => {
     router.back();
   };
@@ -251,7 +261,19 @@ export default function MembersScreen() {
 
             <View style={styles.inviteCodeContainer}>
               <Text style={styles.inviteCodeLabel}>Invitation code:</Text>
-              <Text style={styles.inviteCode}>{invitationCode}</Text>
+              <View style={styles.codeRow}>
+                <Text style={styles.inviteCode}>{invitationCode}</Text>
+                <TouchableOpacity
+                  style={styles.codeCopyButton}
+                  onPress={copyCodeToClipboard}
+                >
+                  {codeCopied ? (
+                    <Check size={20} color="#34C759" />
+                  ) : (
+                    <Copy size={20} color="#007AFF" />
+                  )}
+                </TouchableOpacity>
+              </View>
             </View>
 
             <View style={styles.expiryContainer}>
@@ -485,11 +507,22 @@ const styles = StyleSheet.create({
     color: '#8E8E93',
     marginBottom: 4,
   },
+  codeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   inviteCode: {
     fontSize: 24,
     fontWeight: 'bold',
     letterSpacing: 2,
     color: '#007AFF',
+    marginRight: 8,
+  },
+  codeCopyButton: {
+    padding: 8,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
   },
   expiryContainer: {
     flexDirection: 'row',
