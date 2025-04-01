@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, TextInput, ActivityIndicator, StatusBar, SafeAreaView } from 'react-native';
-import { Search, Users, Plus } from 'lucide-react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, TextInput, ActivityIndicator, StatusBar, SafeAreaView, Modal, Alert } from 'react-native';
+import { Search, Users, Plus, KeyRound, X } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
-import { getGroups, type Group } from '@/utils/supabase';
+import { getGroups, type Group, joinGroupWithCode } from '@/utils/supabase';
 
 export default function GroupsScreen() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -10,6 +10,9 @@ export default function GroupsScreen() {
   const [groups, setGroups] = useState<Group[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [joinModalVisible, setJoinModalVisible] = useState(false);
+  const [inviteCode, setInviteCode] = useState('');
+  const [joiningGroup, setJoiningGroup] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -27,6 +30,54 @@ export default function GroupsScreen() {
       console.error('Error loading groups:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleJoinWithCode = async () => {
+    if (!inviteCode.trim()) {
+      Alert.alert('Error', 'Please enter an invitation code');
+      return;
+    }
+
+    try {
+      setJoiningGroup(true);
+      const result = await joinGroupWithCode(inviteCode.trim());
+      
+      if (result) {
+        setJoinModalVisible(false);
+        setInviteCode('');
+        
+        if (result.redirectToJoin) {
+          // If we should redirect to the join screen
+          if (result.groupId) {
+            router.push({
+              pathname: '/groups/joingroup',
+              params: { groupId: result.groupId, code: result.code || inviteCode.trim() }
+            });
+          } else if (result.code) {
+            router.push({
+              pathname: '/groups/joingroup',
+              params: { code: result.code }
+            });
+          }
+        } else if (result.groupId) {
+          // Direct join (legacy behavior)
+          Alert.alert('Success', 'You have joined the group!', [
+            { 
+              text: 'OK', 
+              onPress: () => {
+                loadGroups(); // Reload groups to show the newly joined one
+                router.push(`/groups/${result.groupId}`);
+              }
+            }
+          ]);
+        }
+      }
+    } catch (err) {
+      console.error('Error joining group:', err);
+      Alert.alert('Error', 'Failed to join group. The code may be invalid or expired.');
+    } finally {
+      setJoiningGroup(false);
     }
   };
 
@@ -67,6 +118,11 @@ export default function GroupsScreen() {
                 onChangeText={setSearchQuery}
               />
             </View>
+            <TouchableOpacity
+              style={styles.joinButton}
+              onPress={() => setJoinModalVisible(true)}>
+              <KeyRound size={20} color="#FFFFFF" />
+            </TouchableOpacity>
             <TouchableOpacity
               style={styles.createButton}
               onPress={() => router.push('/groups/new')}>
@@ -131,6 +187,56 @@ export default function GroupsScreen() {
             ))
           )}
         </View>
+
+        {/* Join Group Modal */}
+        <Modal
+          animationType="slide"
+          transparent={true}
+          visible={joinModalVisible}
+          onRequestClose={() => setJoinModalVisible(false)}
+        >
+          <View style={styles.centeredView}>
+            <View style={styles.modalView}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Join Group</Text>
+                <TouchableOpacity
+                  onPress={() => {
+                    setJoinModalVisible(false);
+                    setInviteCode('');
+                  }}
+                  style={styles.closeButton}
+                >
+                  <X size={24} color="#8E8E93" />
+                </TouchableOpacity>
+              </View>
+              
+              <Text style={styles.modalText}>
+                Enter the invitation code to join a group
+              </Text>
+              
+              <TextInput
+                style={styles.codeInput}
+                placeholder="Enter invitation code"
+                value={inviteCode}
+                onChangeText={setInviteCode}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              
+              <TouchableOpacity
+                style={styles.joinGroupButton}
+                onPress={handleJoinWithCode}
+                disabled={joiningGroup}
+              >
+                {joiningGroup ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.joinGroupButtonText}>Join Group</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
       </ScrollView>
     </>
   );
@@ -176,6 +282,14 @@ const styles = StyleSheet.create({
     height: 44,
     borderRadius: 12,
     backgroundColor: '#007AFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  joinButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#34C759',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -287,5 +401,62 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
+  },
+  centeredView: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  modalView: {
+    margin: 20,
+    backgroundColor: 'white',
+    borderRadius: 20,
+    width: '90%',
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  closeButton: {
+    padding: 4,
+  },
+  modalText: {
+    marginBottom: 16,
+    fontSize: 16,
+    color: '#3C3C43',
+  },
+  codeInput: {
+    backgroundColor: '#F2F2F7',
+    borderRadius: 12,
+    padding: 16,
+    fontSize: 16,
+    marginBottom: 20,
+  },
+  joinGroupButton: {
+    backgroundColor: '#007AFF',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+  },
+  joinGroupButtonText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+    fontSize: 16,
   },
 });

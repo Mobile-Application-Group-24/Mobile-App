@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { getGroupInvitation, useGroupInvitation, getGroupDetails, joinGroup } from '../../../utils/supabase';
+import { getGroupInvitation, useGroupInvitation, getGroupDetails, joinGroup, getGroups } from '../../../utils/supabase';
 import { Users, AlertCircle } from 'lucide-react-native';
 
 export default function JoinGroupScreen() {
@@ -21,43 +21,28 @@ export default function JoinGroupScreen() {
 
     const fetchInvitation = async () => {
       try {
+        // Case 1: We have both code and groupId
         if (code && groupId) {
-          const groupDetails = await getGroupDetails(groupId as string);
-          setGroupName(groupDetails.name);
-          setMemberCount(groupDetails.member_count || 0);
-          setStatus('success');
-          return;
-        }
-        
-        if (code) {
-          try {
-            const invitation = await getGroupInvitation(code as string);
-            setGroupName(invitation.group?.name || 'Group');
-            
-            if (invitation.group?.id && !groupId) {
-              router.setParams({ groupId: invitation.group.id });
-              
-              try {
-                const groupDetails = await getGroupDetails(invitation.group.id);
-                setMemberCount(groupDetails.member_count || 0);
-              } catch (error) {
-                console.error('Error fetching group details:', error);
-                setMemberCount(0); // Fallback
-              }
-            } else {
-              setMemberCount(0); 
-            }
-          } catch (error) {
-            console.error('Error with invitation code:', error);
-            setStatus('error');
-            setMessage('Invitation code invalid or expired');
-            return;
-          }
-        } else if (groupId) {
           try {
             const groupDetails = await getGroupDetails(groupId as string);
             setGroupName(groupDetails.name);
             setMemberCount(groupDetails.member_count || 0);
+            setStatus('success');
+            return;
+          } catch (error) {
+            console.error('Error fetching group details:', error);
+            // Continue to other cases if this fails
+          }
+        }
+        
+        // Case 2: We have a groupId
+        if (groupId) {
+          try {
+            const groupDetails = await getGroupDetails(groupId as string);
+            setGroupName(groupDetails.name);
+            setMemberCount(groupDetails.member_count || 0);
+            setStatus('success');
+            return;
           } catch (error) {
             console.error('Error fetching group details:', error);
             setStatus('error');
@@ -66,7 +51,37 @@ export default function JoinGroupScreen() {
           }
         }
         
-        setStatus('success');
+        // Case 3: We only have a code
+        if (code) {
+          // For invitation codes without a group ID, we'll use a best-effort approach
+          // Try to find groups that match the code prefix
+          try {
+            const groups = await getGroups(false);
+            const matchingGroup = groups.find(group => 
+              group.id.toLowerCase().startsWith((code as string).toLowerCase())
+            );
+            
+            if (matchingGroup) {
+              router.setParams({ groupId: matchingGroup.id });
+              setGroupName(matchingGroup.name);
+              setMemberCount(matchingGroup.member_count || 0);
+              setStatus('success');
+              return;
+            }
+          } catch (error) {
+            console.error('Error finding matching group:', error);
+          }
+          
+          // If we couldn't find a matching group, show a generic message
+          setGroupName('Group');
+          setMemberCount(0);
+          setStatus('success');
+          return;
+        }
+        
+        // If we got here, we couldn't determine the group
+        setStatus('error');
+        setMessage('Could not find group information');
       } catch (error) {
         console.error('Error in invitation flow:', error);
         setStatus('error');
@@ -81,37 +96,60 @@ export default function JoinGroupScreen() {
     setStatus('loading');
     
     try {
-      let groupToJoin = groupId as string;
-      
+      // Case 1: Direct join with groupId
       if (groupId) {
         try {
           await joinGroup(groupId as string);
-          groupToJoin = groupId as string;
+          router.replace(`/groups/${groupId}`);
+          return;
         } catch (error) {
-          console.error('Could not join with groupId, trying code:', error);
-          // If joining with ID fails, try with the code
-          if (code) {
-            const group = await useGroupInvitation(code as string);
-            groupToJoin = group.id;
-          } else {
-            throw error; 
-          }
+          console.error('Error joining with group ID:', error);
+          // Continue to try with code if this fails
         }
-      } 
-      else if (code) {
-        try {
-          const group = await useGroupInvitation(code as string);
-          groupToJoin = group.id;
-        } catch (error) {
-          console.error('Error using invitation code:', error);
-          throw error;
-        }
-      } else {
-        throw new Error('No group found to join');
       }
       
-      // Immediately redirect to the group screen without delay
-      router.replace(`/groups/${groupToJoin}`);
+      // Case 2: Join with code
+      if (code) {
+        try {
+          // First try normal group ID format if code looks like UUID
+          if ((code as string).includes('-') && (code as string).length >= 32) {
+            try {
+              await joinGroup(code as string);
+              router.replace(`/groups/${code}`);
+              return;
+            } catch (codeIdError) {
+              console.error('Error joining with code as ID:', codeIdError);
+              // Continue to try other methods
+            }
+          }
+          
+          // Next try finding a group with matching ID prefix
+          try {
+            const groups = await getGroups(false);
+            const matchingGroup = groups.find(group => 
+              group.id.toLowerCase().startsWith((code as string).toLowerCase())
+            );
+            
+            if (matchingGroup) {
+              await joinGroup(matchingGroup.id);
+              router.replace(`/groups/${matchingGroup.id}`);
+              return;
+            }
+          } catch (findError) {
+            console.error('Error finding matching group:', findError);
+          }
+          
+          // As a last resort, try via useGroupInvitation
+          const group = await useGroupInvitation(code as string);
+          router.replace(`/groups/${group.id}`);
+          return;
+        } catch (error) {
+          console.error('Error joining with code:', error);
+          throw error;
+        }
+      }
+      
+      throw new Error('No valid group ID or invitation code provided');
     } catch (error) {
       console.error('Error joining group:', error);
       setStatus('error');
