@@ -93,7 +93,6 @@ export interface Meal {
   consumed_at: string;
   created_at: string;
 }
-// Interface for group invitations
 export interface GroupInvitation {
   id: string;
   group_id: string;
@@ -105,6 +104,10 @@ export interface GroupInvitation {
   uses_left: number | null; // null means unlimited uses
   group?: Group;
 }
+
+// Store invitation codes in memory since database operations are failing
+// This is a temporary solution until database issues are resolved
+const invitationCodeMap = new Map<string, string>();
 
 // Profile functions
 export async function getProfile(userId: string): Promise<Profile> {
@@ -133,7 +136,6 @@ export async function updateProfile(userId: string, updates: Partial<Profile>) {
   return data;
 }
 
-// Group functions
 export async function createGroup(groupData: Omit<Group, 'id' | 'created_at' | 'owner_id'>) {
   const { data: userData, error: userError } = await supabase.auth.getUser();
   if (userError || !userData.user) throw new Error('User not authenticated');
@@ -436,8 +438,11 @@ export const createGroupInvitation = async (groupId: string, options: { expiresI
 
     const invitationCode = generateCode();
     
-    // Simplified response without database interaction
-    // Can be extended later if needed
+    // Store the mapping in memory since database operations are failing
+    invitationCodeMap.set(invitationCode, groupId);
+    
+    console.log(`Created invitation code ${invitationCode} for group ${groupId}`);
+    
     return {
       code: invitationCode,
       group: { id: groupId }
@@ -448,20 +453,32 @@ export const createGroupInvitation = async (groupId: string, options: { expiresI
   }
 };
 
-// Simplified version of getGroupInvitation
 export async function getGroupInvitation(code: string): Promise<any> {
   try {
-    // This function should check the code in the database
-    // For now, we assume the code is valid and return basic group information
+    // First check our in-memory map
+    const groupId = invitationCodeMap.get(code);
     
-    // Extract the group ID from the code - in a real app this would be looked up in the DB
-    // This is a workaround for demonstration
-    const groupId = code.slice(0, 4); // Dummy implementation
+    if (groupId) {
+      // If we found a mapping, try to get the group details
+      try {
+        const groupDetails = await getGroupDetails(groupId);
+        return {
+          code: code,
+          group: {
+            id: groupId,
+            name: groupDetails.name
+          }
+        };
+      } catch (err) {
+        console.log('Group not found for code', code);
+      }
+    }
     
+    // Fallback legacy implementation
     return {
       code: code,
       group: {
-        id: groupId,
+        id: code,
         name: "Your Group"
       }
     };
@@ -476,29 +493,45 @@ export async function useGroupInvitation(code: string): Promise<Group> {
     const { data: userData, error: userError } = await supabase.auth.getUser();
     if (userError || !userData.user) throw new Error('User not authenticated');
     
+    // First check our in-memory map
+    let groupId = invitationCodeMap.get(code.trim());
     
-    let groupId = code.slice(0, 4); // Standard fallback
-    
-    if (code.includes('-') || code.length > 10) {
+    // If not found in our map, check if it's a direct UUID
+    if (!groupId && code.includes('-') && code.length >= 32) {
       groupId = code;
     }
     
+    // Final fallback - if the code looks like a prefix of a UUID, try to find a match
+    if (!groupId) {
+      try {
+        const groups = await getGroups(false);
+        const matchingGroup = groups.find(group => 
+          group.id.toLowerCase().startsWith(code.toLowerCase())
+        );
+        
+        if (matchingGroup) {
+          groupId = matchingGroup.id;
+        }
+      } catch (err) {
+        console.error('Error finding group by prefix:', err);
+      }
+    }
+    
+    // If we still don't have a valid group ID, throw an error
+    if (!groupId) {
+      throw new Error('Invalid invitation code');
+    }
+    
     // Check if the user is already a member
-    try {
-      const { data: existingMember } = await supabase
-        .from('group_members')
-        .select('*')
-        .eq('group_id', groupId)
-        .eq('user_id', userData.user.id)
-        .maybeSingle();
-      
-      if (existingMember) {
-        throw new Error('You are already a member of this group');
-      }
-    } catch (error) {
-      if (error instanceof Error && error.message === 'You are already a member of this group') {
-        throw error;
-      }
+    const { data: existingMember } = await supabase
+      .from('group_members')
+      .select('*')
+      .eq('group_id', groupId)
+      .eq('user_id', userData.user.id)
+      .maybeSingle();
+    
+    if (existingMember) {
+      throw new Error('You are already a member of this group');
     }
     
     // Add the user to the group
@@ -511,20 +544,15 @@ export async function useGroupInvitation(code: string): Promise<Group> {
   } catch (error) {
     console.error('Error in useGroupInvitation:', error);
     
-    // For errors during joining, we try directly with the group ID (if available)
-    if (error instanceof Error && code.includes('-')) {
-      try {
-        await joinGroup(code);
-        const groupDetails = await getGroupDetails(code);
-        return groupDetails;
-      } catch (joinError) {
-        console.error('Failed fallback join attempt:', joinError);
+    // Improve error message for database errors
+    if (error instanceof Error) {
+      if (error.message.includes('syntax for type uuid')) {
+        throw new Error('Invalid invitation code format');
       }
+      throw error;
     }
     
-    throw error instanceof Error 
-      ? error 
-      : new Error('Invitation invalid or expired');
+    throw new Error('Invitation invalid or expired');
   }
 }
 
@@ -573,4 +601,54 @@ export async function getActiveGroupInvitations(groupId: string): Promise<GroupI
   
   if (error) throw error;
   return data;
+}
+
+export async function joinGroupWithCode(code: string) {
+  if (!code || code.trim() === '') {
+    throw new Error('Invalid invitation code');
+  }
+  
+  try {
+    const cleanCode = code.trim();
+    
+    // First check our in-memory map for this exact code
+    const groupIdFromMap = invitationCodeMap.get(cleanCode);
+    if (groupIdFromMap) {
+      console.log(`Found group ID ${groupIdFromMap} for code ${cleanCode}`);
+      // Redirect to join page with both code and groupId
+      return {
+        success: true,
+        groupId: groupIdFromMap,
+        code: cleanCode,
+        redirectToJoin: true
+      };
+    }
+    
+    // Check if it's a UUID format (direct group ID)
+    if (cleanCode.includes('-') && cleanCode.length >= 32) {
+      try {
+        const groupDetails = await getGroupDetails(cleanCode);
+        return {
+          success: true,
+          groupId: groupDetails.id,
+          groupName: groupDetails.name,
+          redirectToJoin: true
+        };
+      } catch (error) {
+        console.error('Invalid group ID:', error);
+        throw new Error('Invalid group ID');
+      }
+    }
+    
+    // For all other codes, redirect to join screen with just the code
+    // The join screen will handle finding the right group
+    return {
+      success: true,
+      code: cleanCode,
+      redirectToJoin: true
+    };
+  } catch (error) {
+    console.error('Error joining group with code:', error);
+    throw error instanceof Error ? error : new Error('Failed to join group with this code');
+  }
 }
