@@ -28,13 +28,13 @@ export default function TabLayout() {
           tabBarIcon: ({ color, size }) => <Users size={size} color={color} />,
         }}
       />
-      {/*<Tabs.Screen
+      {<Tabs.Screen
         name="ai"
         options={{
           title: 'AI Coach',
           tabBarIcon: ({ color, size }) => <Brain size={size} color={color} />,
         }}
-      />*/}
+      />}
       <Tabs.Screen
         name="nutrition"
         options={{
