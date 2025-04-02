@@ -113,7 +113,14 @@ export default function GroupScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Leaderboard</Text>
           {members.map((member, index) => (
-            <View key={member.id} style={styles.userCard}>
+            <TouchableOpacity 
+              key={member.id} 
+              style={styles.userCard}
+              onPress={() => router.push({
+                pathname: '/profile/Profileview',
+                params: { userId: member.user_id }
+              })}
+            >
               <View style={styles.rankContainer}>
                 {index === 0 && <Trophy size={24} color="#FFD700" />}
                 {index === 1 && <Trophy size={24} color="#C0C0C0" />}
@@ -135,7 +142,7 @@ export default function GroupScreen() {
                   <Text style={styles.points}>0 pts</Text>
                 </View>
               </View>
-            </View>
+            </TouchableOpacity>
           ))}
         </View>
       </ScrollView>
