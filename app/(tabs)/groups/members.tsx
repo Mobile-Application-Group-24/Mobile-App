@@ -164,7 +164,7 @@ export default function MembersScreen() {
         >
           <ArrowLeft size={24} color="#007AFF" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Group Members</Text>
+        
         
         {/* Leave Group Button for non-owners */}
         {!isOwner && currentUserRole && (
