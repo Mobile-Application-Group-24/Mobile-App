@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, StatusBar, SafeAreaView, Platform } from 'react-native';
 import { Plus, Star, Play } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { getWorkoutPlans, type WorkoutPlan } from '@/utils/storage';
@@ -42,103 +42,109 @@ export default function WorkoutsScreen() {
   };
 
   return (
-    <ScrollView style={styles.container}>
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
       <View style={styles.safeArea} />
-      <View style={styles.todaySection}>
-        <View style={styles.todayHeader}>
-          <Text style={styles.todayTitle}>Today's Workout</Text>
-          <Text style={styles.todayDate}>
-            {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-          </Text>
-        </View>
-        
-        <View style={styles.workoutInfo}>
-          <Text style={styles.workoutName}>
-            {todaysWorkout.isRestDay ? 'Rest Day' : todaysWorkout.name}
-          </Text>
-          {!todaysWorkout.isRestDay && (
-            <Text style={styles.workoutDuration}>{todaysWorkout.duration}</Text>
-          )}
-        </View>
-
-        <TouchableOpacity 
-          style={[
-            styles.startButton,
-            todaysWorkout.isRestDay && styles.startButtonRest
-          ]}
-          onPress={handleStartWorkout}
-        >
-          <Play size={24} color="#FFFFFF" />
-          <Text style={styles.startButtonText}>
-            {todaysWorkout.isRestDay ? 'Start Recovery Session' : 'Start Workout'}
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.streakSection}>
-        <View style={styles.streakHeader}>
-          <Text style={styles.streakTitle}>Current Streak</Text>
-          <Text style={styles.streakCount}>{currentStreak} days</Text>
-        </View>
-        <View style={styles.streakBar}>
-          <View style={[styles.streakProgress, { width: `${(currentStreak / 7) * 100}%` }]} />
-        </View>
-        <Text style={styles.streakMotivation}>
-          {currentStreak === 7 
-            ? "You're on fire! 🔥" 
-            : `${7 - currentStreak} more days until your next achievement!`}
-        </Text>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Workout Plans</Text>
-
-        <View style={styles.buttonContainer}>
-          <TouchableOpacity 
-            style={styles.createButton}
-            onPress={() => router.push('/workouts/create')}
-          >
-            <Plus size={24} color="#FFFFFF" />
-            <Text style={styles.createButtonText}>Create New Plan</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={[styles.filterButton, showOwnWorkouts && styles.filterButtonActive]}
-            onPress={() => setShowOwnWorkouts(!showOwnWorkouts)}
-          >
-            <Star size={24} color={showOwnWorkouts ? "#FFFFFF" : "#007AFF"} />
-          </TouchableOpacity>
-        </View>
-
-        {isLoading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#007AFF" />
-          </View>
-        ) : workoutPlans.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyStateText}>No workout plans yet</Text>
-            <Text style={styles.emptyStateSubtext}>
-              Create your first workout plan to get started!
+      <ScrollView style={styles.container}>
+        <View style={styles.todaySection}>
+          <View style={styles.todayHeader}>
+            <Text style={styles.todayTitle}>Today's Workout</Text>
+            <Text style={styles.todayDate}>
+              {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
             </Text>
           </View>
-        ) : (
-          workoutPlans.map((plan) => (
-            <TouchableOpacity
-              key={plan.id}
-              style={styles.planCard}
-              onPress={() => router.push(`/workouts/${plan.id}`)}
+          
+          <View style={styles.workoutInfo}>
+            <Text style={styles.workoutName}>
+              {todaysWorkout.isRestDay ? 'Rest Day' : todaysWorkout.name}
+            </Text>
+            {!todaysWorkout.isRestDay && (
+              <Text style={styles.workoutDuration}>{todaysWorkout.duration}</Text>
+            )}
+          </View>
+
+          <TouchableOpacity 
+            style={[
+              styles.startButton,
+              todaysWorkout.isRestDay && styles.startButtonRest
+            ]}
+            onPress={handleStartWorkout}
+            activeOpacity={0.7}
+          >
+            <Play size={24} color="#FFFFFF" />
+            <Text style={styles.startButtonText}>
+              {todaysWorkout.isRestDay ? 'Start Recovery Session' : 'Start Workout'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.streakSection}>
+          <View style={styles.streakHeader}>
+            <Text style={styles.streakTitle}>Current Streak</Text>
+            <Text style={styles.streakCount}>{currentStreak} days</Text>
+          </View>
+          <View style={styles.streakBar}>
+            <View style={[styles.streakProgress, { width: `${(currentStreak / 7) * 100}%` }]} />
+          </View>
+          <Text style={styles.streakMotivation}>
+            {currentStreak === 7 
+              ? "You're on fire! 🔥" 
+              : `${7 - currentStreak} more days until your next achievement!`}
+          </Text>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Your Workout Plans</Text>
+
+          <View style={styles.buttonContainer}>
+            <TouchableOpacity 
+              style={styles.createButton}
+              onPress={() => router.push('/workouts/create')}
+              activeOpacity={0.7}
             >
-              <View style={styles.planInfo}>
-                <Text style={styles.planName}>{plan.name}</Text>
-                <Text style={styles.planDetails}>
-                  {plan.exercises.length} exercises
-                </Text>
-              </View>
+              <Plus size={24} color="#FFFFFF" />
+              <Text style={styles.createButtonText}>Create New Plan</Text>
             </TouchableOpacity>
-          ))
-        )}
-      </View>
-    </ScrollView>
+
+            <TouchableOpacity 
+              style={[styles.filterButton, showOwnWorkouts && styles.filterButtonActive]}
+              onPress={() => setShowOwnWorkouts(!showOwnWorkouts)}
+              activeOpacity={0.7}
+            >
+              <Star size={24} color={showOwnWorkouts ? "#FFFFFF" : "#007AFF"} />
+            </TouchableOpacity>
+          </View>
+
+          {isLoading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#007AFF" />
+            </View>
+          ) : workoutPlans.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyStateText}>No workout plans yet</Text>
+              <Text style={styles.emptyStateSubtext}>
+                Create your first workout plan to get started!
+              </Text>
+            </View>
+          ) : (
+            workoutPlans.map((plan) => (
+              <TouchableOpacity
+                key={plan.id}
+                style={styles.planCard}
+                onPress={() => router.push(`/workouts/${plan.id}`)}
+              >
+                <View style={styles.planInfo}>
+                  <Text style={styles.planName}>{plan.name}</Text>
+                  <Text style={styles.planDetails}>
+                    {plan.exercises.length} exercises
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            ))
+          )}
+        </View>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
@@ -148,7 +154,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F2F2F7',
   },
   safeArea: {
-    height: 44,
+    height: Platform.OS === 'android' ? StatusBar.currentHeight : 44,
     backgroundColor: '#FFFFFF',
   },
   todaySection: {
@@ -160,6 +166,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
+    elevation: 2,
   },
   todayHeader: {
     marginBottom: 12,
@@ -193,6 +200,11 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 12,
     gap: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   startButtonRest: {
     backgroundColor: '#34C759',
@@ -266,6 +278,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: 16,
     borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   createButtonText: {
     color: '#FFFFFF',
@@ -280,6 +297,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 1,
   },
   filterButtonActive: {
     backgroundColor: '#007AFF',

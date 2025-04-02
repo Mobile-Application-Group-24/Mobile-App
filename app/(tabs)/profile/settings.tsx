@@ -9,6 +9,8 @@ import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
 import { Buffer } from 'buffer';
 
+const DEFAULT_AVATAR = 'https://images.unsplash.com/photo-1511367461989-f85a21fda167?q=80&w=3131&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D';
+
 export default function ProfileSettingsScreen() {
   const router = useRouter();
   const { session, signOut } = useAuth();
@@ -20,7 +22,9 @@ export default function ProfileSettingsScreen() {
     bio: '',
     notifications: true,
     privateProfile: false,
+    avatar_url: '',
   });
+  const [tempAvatar, setTempAvatar] = useState<string | null>(null);
 
   useEffect(() => {
     loadProfile();
@@ -38,6 +42,7 @@ export default function ProfileSettingsScreen() {
         bio: data.bio || '',
         notifications: true,
         privateProfile: false,
+        avatar_url: data.avatar_url || '',
       });
     } catch (error) {
       console.error('Error loading profile:', error);
@@ -55,6 +60,7 @@ export default function ProfileSettingsScreen() {
       await updateProfile(session.user.id, {
         full_name: formData.full_name,
         bio: formData.bio,
+        avatar_url: formData.avatar_url,
       });
       Alert.alert('Success', 'Profile updated successfully');
       router.back();
@@ -133,32 +139,16 @@ export default function ProfileSettingsScreen() {
 
       if (!result.canceled) {
         const { uri } = result.assets[0];
-        
-        // Create the bucket if it doesn't exist (this is actually handled on server side)
-        try {
-          // Check if bucket exists first (optional)
-          const { data: buckets } = await supabase.storage.listBuckets();
-          const bucketExists = buckets?.some(bucket => bucket.name === 'avatars');
-          
-          if (!bucketExists) {
-            console.log('Bucket does not exist, it will be created automatically on upload');
-          }
-        } catch (err) {
-          console.log('Error checking buckets:', err);
-        }
-        
-        // Create a file path that includes the user ID as a folder name
+        setTempAvatar(uri);
+
         const fileName = `${session.user.id}/${Date.now()}.jpg`;
 
-        // Read file as Base64
         const base64 = await FileSystem.readAsStringAsync(uri, {
           encoding: FileSystem.EncodingType.Base64,
         });
 
-        // Convert Base64 string to Uint8Array
         const arrayBuffer = _base64ToArrayBuffer(base64);
 
-        // Upload the file to Supabase
         const { data, error: uploadError } = await supabase.storage
           .from('avatars')
           .upload(fileName, arrayBuffer, {
@@ -171,11 +161,9 @@ export default function ProfileSettingsScreen() {
           throw uploadError;
         }
 
-        // Get the public URL of the uploaded file
-        // Instead of getPublicUrl, use createSignedUrl for longer-lived tokens
         const { data: signedUrlData, error: signedUrlError } = await supabase.storage
           .from('avatars')
-          .createSignedUrl(fileName, 60 * 60 * 24 * 365); // 1 year expiration
+          .createSignedUrl(fileName, 60 * 60 * 24 * 365);
 
         if (signedUrlError) {
           console.error('Error creating signed URL:', signedUrlError);
@@ -183,9 +171,7 @@ export default function ProfileSettingsScreen() {
         }
 
         const avatarUrl = signedUrlData.signedUrl;
-        console.log('Avatar URL:', avatarUrl); // For debugging
 
-        // Update the user's profile with the new avatar URL
         const { error: updateError } = await supabase
           .from('profiles')
           .update({ avatar_url: avatarUrl })
@@ -196,17 +182,13 @@ export default function ProfileSettingsScreen() {
           throw updateError;
         }
 
-        // Update local state and notify user
-        setProfile((prev) => (prev ? { ...prev, avatar_url: avatarUrl } : null));
+        setFormData((prev) => ({ ...prev, avatar_url: avatarUrl }));
         Alert.alert('Success', 'Profile picture updated successfully');
-
-        // Reload profile to ensure we have the latest data
         loadProfile();
       }
     } catch (error) {
       console.error('Error updating avatar:', error);
 
-      // Display detailed error message
       if (typeof error === 'object' && error !== null && 'message' in error) {
         Alert.alert('Error', `Failed to update profile picture: ${(error as any).message}`);
       } else {
@@ -215,7 +197,6 @@ export default function ProfileSettingsScreen() {
     }
   };
 
-  // Helper function to convert Base64 to ArrayBuffer
   function _base64ToArrayBuffer(base64: string) {
     const binary_string = atob(base64);
     const len = binary_string.length;
@@ -226,7 +207,6 @@ export default function ProfileSettingsScreen() {
     return bytes;
   }
 
-  // Helper function for Base64 decoding
   function atob(data: string) {
     return Buffer.from(data, 'base64').toString('binary');
   }
@@ -251,11 +231,11 @@ export default function ProfileSettingsScreen() {
         <View style={styles.avatarSection}>
           <Image 
             source={{ 
-              uri: profile?.avatar_url || 'https://images.unsplash.com/photo-1511367461989-f85a21fda167?q=80&w=3131&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D'
-            }} 
-            style={styles.avatar} 
+              uri: tempAvatar || formData.avatar_url || DEFAULT_AVATAR 
+            }}
+            style={styles.avatar}
           />
-          <TouchableOpacity style={styles.changeAvatarButton} onPress={handleChangeAvatar}>
+          <TouchableOpacity style={styles.changeAvatarButton} onPress={handleChangeAvatar} activeOpacity={0.7}>
             <Camera size={24} color="#FFFFFF" />
             <Text style={styles.changeAvatarText}>Change Photo</Text>
           </TouchableOpacity>
@@ -327,19 +307,19 @@ export default function ProfileSettingsScreen() {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Account Actions</Text>
-          
           <TouchableOpacity
             style={styles.logoutButton}
-            onPress={handleLogout}>
-            <LogOut size={20} color="#FF3B30" />
+            onPress={handleLogout}
+            activeOpacity={0.7}>
+            <LogOut size={24} color="#FF3B30" />
             <Text style={styles.logoutButtonText}>Log Out</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.deleteAccountButton}
-            onPress={handleDeleteAccount}>
-            <Trash2 size={20} color="#FFFFFF" />
+            onPress={handleDeleteAccount}
+            activeOpacity={0.7}>
+            <Trash2 size={24} color="#FFFFFF" />
             <Text style={styles.deleteAccountButtonText}>Delete Account</Text>
           </TouchableOpacity>
         </View>
@@ -347,7 +327,8 @@ export default function ProfileSettingsScreen() {
         <TouchableOpacity
           style={[styles.saveButton, saving && styles.saveButtonDisabled]}
           onPress={handleSave}
-          disabled={saving}>
+          disabled={saving}
+          activeOpacity={0.7}>
           <Text style={styles.saveButtonText}>
             {saving ? 'Saving...' : 'Save Changes'}
           </Text>
@@ -390,6 +371,11 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 12,
     gap: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   changeAvatarText: {
     color: '#FFFFFF',
@@ -401,6 +387,11 @@ const styles = StyleSheet.create({
     margin: 16,
     padding: 16,
     borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 2,
   },
   sectionTitle: {
     fontSize: 18,
@@ -451,6 +442,11 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     gap: 8,
     marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
   logoutButtonText: {
     color: '#FF3B30',
@@ -465,6 +461,11 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 12,
     gap: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
   },
   deleteAccountButtonText: {
     color: '#FFFFFF',
@@ -477,6 +478,11 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 12,
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   saveButtonDisabled: {
     backgroundColor: '#A2A2A2',

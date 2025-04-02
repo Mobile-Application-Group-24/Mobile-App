@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, TextInput, Modal, Alert, Clipboard, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, TextInput, Modal, Alert, Clipboard, ActivityIndicator, SafeAreaView, StatusBar, Platform } from 'react-native';
 import { Search, UserPlus, X, Copy, Check, Clock, ArrowLeft, LogOut } from 'lucide-react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Linking from 'expo-linking';
@@ -156,12 +156,13 @@ export default function MembersScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
       <View style={styles.headerContainer}>
         <TouchableOpacity 
           style={styles.backButton} 
           onPress={handleGoBack}
-        >
+          activeOpacity={0.7}>
           <ArrowLeft size={24} color="#007AFF" />
         </TouchableOpacity>
         
@@ -171,7 +172,7 @@ export default function MembersScreen() {
           <TouchableOpacity 
             style={styles.leaveButton} 
             onPress={handleLeaveGroup}
-          >
+            activeOpacity={0.7}>
             <LogOut size={20} color="#FF3B30" />
           </TouchableOpacity>
         )}
@@ -192,7 +193,7 @@ export default function MembersScreen() {
             style={styles.inviteButton}
             onPress={generateInviteLink}
             disabled={isLoading}
-          >
+            activeOpacity={0.7}>
             {isLoading ? (
               <ActivityIndicator size="small" color="#FFFFFF" />
             ) : (
@@ -255,8 +256,7 @@ export default function MembersScreen() {
         animationType="slide"
         transparent={true}
         visible={isInviteModalVisible}
-        onRequestClose={() => setInviteModalVisible(false)}
-      >
+        onRequestClose={() => setInviteModalVisible(false)}>
         <View style={styles.centeredView}>
           <View style={styles.modalView}>
             <View style={styles.modalHeader}>
@@ -264,7 +264,7 @@ export default function MembersScreen() {
               <TouchableOpacity
                 onPress={() => setInviteModalVisible(false)}
                 style={styles.closeButton}
-              >
+                activeOpacity={0.7}>
                 <X size={24} color="#8E8E93" />
               </TouchableOpacity>
             </View>
@@ -324,7 +324,7 @@ export default function MembersScreen() {
           </View>
         </View>
       </Modal>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -342,6 +342,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#E5E5EA',
     justifyContent: 'space-between',
+    paddingTop: Platform.OS === 'android' ? 12 + (StatusBar.currentHeight ?? 0) : 12,
   },
   backButton: {
     padding: 8,
@@ -378,12 +379,18 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   inviteButton: {
+    height: 44,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#007AFF',
     paddingHorizontal: 16,
     borderRadius: 12,
     gap: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   inviteButtonText: {
     color: '#FFFFFF',
@@ -402,6 +409,11 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     marginTop: 16,
     borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
   },
   memberInfo: {
     flexDirection: 'row',
@@ -434,6 +446,11 @@ const styles = StyleSheet.create({
     padding: 8,
     backgroundColor: '#FFF2F2',
     borderRadius: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
   centeredView: {
     flex: 1,

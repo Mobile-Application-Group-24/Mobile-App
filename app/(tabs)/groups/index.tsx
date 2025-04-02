@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, TextInput, ActivityIndicator, StatusBar, SafeAreaView, Modal, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, TextInput, ActivityIndicator, StatusBar, SafeAreaView, Modal, Alert, Platform } from 'react-native';
 import { Search, Users, Plus, KeyRound, X } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { getGroups, type Group, joinGroupWithCode } from '@/utils/supabase';
@@ -120,18 +120,21 @@ export default function GroupsScreen() {
             </View>
             <TouchableOpacity
               style={styles.joinButton}
-              onPress={() => setJoinModalVisible(true)}>
+              onPress={() => setJoinModalVisible(true)}
+              activeOpacity={0.7}>
               <KeyRound size={20} color="#FFFFFF" />
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.createButton}
-              onPress={() => router.push('/groups/new')}>
+              onPress={() => router.push('/groups/new')}
+              activeOpacity={0.7}>
               <Plus size={20} color="#FFFFFF" />
             </TouchableOpacity>
           </View>
           <TouchableOpacity
             style={[styles.filterButton, showOwned && styles.filterButtonActive]}
-            onPress={() => setShowOwned(!showOwned)}>
+            onPress={() => setShowOwned(!showOwned)}
+            activeOpacity={0.7}>
             <Text style={[styles.filterButtonText, showOwned && styles.filterButtonTextActive]}>
               My Groups Only
             </Text>
@@ -205,7 +208,7 @@ export default function GroupsScreen() {
                     setInviteCode('');
                   }}
                   style={styles.closeButton}
-                >
+                  activeOpacity={0.7}>
                   <X size={24} color="#8E8E93" />
                 </TouchableOpacity>
               </View>
@@ -227,7 +230,7 @@ export default function GroupsScreen() {
                 style={styles.joinGroupButton}
                 onPress={handleJoinWithCode}
                 disabled={joiningGroup}
-              >
+                activeOpacity={0.7}>
                 {joiningGroup ? (
                   <ActivityIndicator size="small" color="#FFFFFF" />
                 ) : (
@@ -284,6 +287,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#007AFF',
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   joinButton: {
     width: 44,
@@ -292,6 +300,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#34C759',
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   filterButton: {
     backgroundColor: '#F2F2F7',
@@ -324,6 +337,11 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 12,
     overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   groupImage: {
     width: '100%',
@@ -453,6 +471,11 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 16,
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   joinGroupButtonText: {
     color: '#FFFFFF',

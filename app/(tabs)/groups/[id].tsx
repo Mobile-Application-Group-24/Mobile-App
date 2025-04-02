@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, ActivityIndicator, Alert, SafeAreaView, StatusBar, Platform } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Trophy, Flame, Users, Settings, ArrowLeft } from 'lucide-react-native';
 import { getGroupDetails, getGroupMembers, type GroupMember } from '@/utils/supabase';
@@ -64,14 +64,15 @@ export default function GroupScreen() {
   const isOwner = session?.user?.id === group.owner_id;
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
       {/* Header with back button */}
       <View style={styles.navigationHeader}>
         {viaLink === "true" && (
           <TouchableOpacity 
             style={styles.backButton}
             onPress={() => router.push('/groups')}
-          >
+            activeOpacity={0.7}>
             <ArrowLeft size={24} color="#007AFF" />
           </TouchableOpacity>
         )}
@@ -92,7 +93,7 @@ export default function GroupScreen() {
             <TouchableOpacity 
               style={styles.stats}
               onPress={() => router.push({ pathname: '/groups/members', params: { groupId: id } })}
-            >
+              activeOpacity={0.7}>
               <View style={styles.stat}>
                 <Users size={20} color="#007AFF" />
                 <Text style={styles.statText}>{group.member_count} members</Text>
@@ -104,7 +105,7 @@ export default function GroupScreen() {
             <TouchableOpacity 
               style={styles.settingsButton}
               onPress={() => router.push({ pathname: '/groups/settings', params: { groupId: id } })}
-            >
+              activeOpacity={0.7}>
               <Settings size={20} color="#007AFF" />
             </TouchableOpacity>
           )}
@@ -146,7 +147,7 @@ export default function GroupScreen() {
           ))}
         </View>
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -164,6 +165,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: '#E5E5EA',
+    paddingTop: Platform.OS === 'android' ? 12 + (StatusBar.currentHeight || 0) : 12,
   },
   backButton: {
     padding: 8,
@@ -255,6 +257,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#F2F2F7',
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+    elevation: 1,
   },
   section: {
     padding: 16,
@@ -271,6 +278,11 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 12,
     marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   rankContainer: {
     width: 40,

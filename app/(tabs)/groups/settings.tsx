@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Image, Alert, StatusBar, SafeAreaView, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Image, Alert, StatusBar, SafeAreaView, ActivityIndicator, Platform } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Camera, Trash2 } from 'lucide-react-native';
 import { supabase } from '@/utils/supabase';
@@ -303,34 +303,24 @@ export default function GroupSettingsScreen() {
   return (
     <>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+      <SafeAreaView style={styles.safeAreaTop} />
       <ScrollView style={styles.container}>
         <View style={styles.imageSection}>
           <Image 
             source={{ uri: groupData.cover_image }} 
             style={styles.coverImage} 
-            onError={(e) => {
-              console.log("Fehler beim Laden des Gruppenbilds:", groupData.cover_image);
-              setGroupData(prev => ({ 
-                ...prev, 
-                cover_image: 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48' 
-              }));
-            }}
           />
           <TouchableOpacity 
             style={styles.changeImageButton}
-            onPress={() => {
-              console.log("Change cover button pressed");
-              handleChangeCoverPhoto();
-            }}
-            activeOpacity={0.7}
-          >
+            onPress={handleChangeCoverPhoto}
+            activeOpacity={0.7}>
             <Camera size={24} color="#FFFFFF" />
-            <Text style={styles.changeImageText}>Change Cover Photo</Text>
+            <Text style={styles.changeImageText}>Change Image</Text>
           </TouchableOpacity>
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Basic Information</Text>
+          <Text style={styles.sectionTitle}>Group Information</Text>
           <View style={styles.inputContainer}>
             <Text style={styles.label}>Group Name</Text>
             <TextInput
@@ -394,7 +384,8 @@ export default function GroupSettingsScreen() {
         <TouchableOpacity
           style={[styles.saveButton, saving && styles.saveButtonDisabled]}
           onPress={handleSave}
-          disabled={saving}>
+          disabled={saving}
+          activeOpacity={0.7}>
           <Text style={styles.saveButtonText}>
             {saving ? 'Saving...' : 'Save Changes'}
           </Text>
@@ -449,6 +440,11 @@ const styles = StyleSheet.create({
     margin: 16,
     padding: 16,
     borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 2,
   },
   sectionTitle: {
     fontSize: 18,
@@ -483,6 +479,11 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 8,
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
   optionButtonActive: {
     backgroundColor: '#007AFF',
@@ -513,6 +514,11 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 12,
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   saveButtonDisabled: {
     backgroundColor: '#A2A2A2',

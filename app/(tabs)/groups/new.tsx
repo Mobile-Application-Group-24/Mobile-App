@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Image, Switch, Platform, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Image, Switch, Platform, Alert, ActivityIndicator, StatusBar, SafeAreaView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Camera, Users, Lock, Globe as Globe2, X } from 'lucide-react-native';
 import { createGroup } from '@/utils/supabase';
@@ -186,13 +186,14 @@ export default function CreateGroupScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
       <View style={styles.header}>
         <TouchableOpacity 
+          onPress={() => router.back()} 
           style={styles.closeButton}
-          onPress={() => router.back()}
-        >
-          <X size={24} color="#FF3B30" />
+          activeOpacity={0.7}>
+          <X size={24} color="#007AFF" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Create New Group</Text>
         <View style={styles.placeholderView} />
@@ -201,8 +202,7 @@ export default function CreateGroupScreen() {
       <ScrollView 
         style={styles.content}
         keyboardShouldPersistTaps="handled"
-        contentContainerStyle={styles.scrollContent}
-      >
+        contentContainerStyle={styles.scrollContent}>
         <View style={styles.section}>
           <View style={styles.coverSection}>
             <Image 
@@ -239,7 +239,7 @@ export default function CreateGroupScreen() {
               style={styles.changeCoverButton} 
               onPress={pickImage}
               disabled={uploadingImage}
-            >
+              activeOpacity={0.7}>
               <Camera size={20} color="#FFFFFF" />
               <Text style={styles.changeCoverText}>
                 {uploadingImage ? 'Uploading...' : 'Gallery'}
@@ -373,14 +373,14 @@ export default function CreateGroupScreen() {
           ]}
           onPress={handleSave}
           disabled={!groupData.name || !groupData.description || isCreating}
-        >
+          activeOpacity={0.7}>
           <Text style={[
             styles.createButtonText,
             (!groupData.name || !groupData.description || isCreating) && styles.createButtonTextDisabled
           ]}>{isCreating ? 'Creating...' : 'Create Group'}</Text>
         </TouchableOpacity>
       </View>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -400,7 +400,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: 16, 
+    paddingTop: Platform.OS === 'android' && StatusBar.currentHeight ? 16 + StatusBar.currentHeight : 16,
     paddingBottom: 16,
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
@@ -429,6 +429,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
+    elevation: 2,
   },
   coverSection: {
     position: 'relative',
@@ -584,7 +585,7 @@ const styles = StyleSheet.create({
     right: 0,
     backgroundColor: '#FFFFFF',
     padding: 16,
-    paddingBottom: 24, // Einheitliches Padding für iOS und Android
+    paddingBottom: Platform.OS === 'ios' ? 24 + (Platform.OS === 'ios' ? 10 : 0) : 24,
     borderTopWidth: 1,
     borderTopColor: '#E5E5EA',
     shadowColor: '#000',
@@ -599,6 +600,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#007AFF',
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   createButtonDisabled: {
     backgroundColor: '#A2A2A2',

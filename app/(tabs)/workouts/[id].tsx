@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Platform, StatusBar, SafeAreaView } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { X, Clock, ChartBar as BarChart3, Star, Plus, MoveVertical as MoreVertical, CalendarClock, Scale, File as FileEdit, Dumbbell } from 'lucide-react-native';
 import { format } from 'date-fns';
@@ -115,18 +115,19 @@ export default function WorkoutTrackingScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
       <ScrollView style={styles.content}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.closeButton}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.closeButton} activeOpacity={0.7}>
             <X size={24} color="#007AFF" />
           </TouchableOpacity>
           <Text style={styles.date}>{format(new Date(), 'dd. MMMM')}</Text>
           <View style={styles.headerActions}>
-            <TouchableOpacity style={styles.headerButton}>
+            <TouchableOpacity style={styles.headerButton} activeOpacity={0.7}>
               <Clock size={24} color="#007AFF" />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.headerButton}>
+            <TouchableOpacity style={styles.headerButton} activeOpacity={0.7}>
               <MoreVertical size={24} color="#007AFF" />
             </TouchableOpacity>
           </View>
@@ -134,32 +135,7 @@ export default function WorkoutTrackingScreen() {
 
         <View style={styles.workoutInfo}>
           <Text style={styles.workoutName}>{workoutPlan?.name || 'Workout'}</Text>
-          
           <View style={styles.infoGrid}>
-            <View style={styles.infoCard}>
-              <View style={styles.infoIconContainer}>
-                <CalendarClock size={20} color="#007AFF" />
-              </View>
-              <View style={styles.infoContent}>
-                <Text style={styles.infoLabel}>Start Time</Text>
-                <Text style={styles.infoValue}>
-                  {format(startTime, 'HH:mm')}
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.infoCard}>
-              <View style={styles.infoIconContainer}>
-                <Clock size={20} color="#34C759" />
-              </View>
-              <View style={styles.infoContent}>
-                <Text style={styles.infoLabel}>End Time</Text>
-                <Text style={styles.infoValue}>
-                  {endTime ? format(endTime, 'HH:mm') : '--:--'}
-                </Text>
-              </View>
-            </View>
-
             <View style={styles.infoCard}>
               <View style={styles.infoIconContainer}>
                 <Scale size={20} color="#FF9500" />
@@ -188,9 +164,8 @@ export default function WorkoutTrackingScreen() {
                   value={notes}
                   onChangeText={setNotes}
                   placeholder="Add workout notes..."
-                  multiline
-                  numberOfLines={2}
                   placeholderTextColor="#8E8E93"
+                  multiline
                 />
               </View>
             </View>
@@ -206,86 +181,73 @@ export default function WorkoutTrackingScreen() {
             </Text>
           </View>
         ) : (
-          exercises.map((exercise) => (
-            <View key={exercise.id} style={styles.exerciseCard}>
-              <View style={styles.exerciseHeader}>
-                <Text style={styles.exerciseName}>{exercise.name}</Text>
-                <TouchableOpacity>
-                  <MoreVertical size={20} color="#8E8E93" />
-                </TouchableOpacity>
-              </View>
-
-              {exercise.sets.map(set => (
-                <View key={set.id} style={styles.setRow}>
+          exercises.map((exercise, exerciseIndex) => (
+            <View key={exerciseIndex} style={styles.exerciseCard}>
+              <Text style={styles.exerciseName}>{exercise.name}</Text>
+              {exercise.sets.map((set, setIndex) => (
+                <View key={setIndex} style={styles.setContainer}>
                   <View style={styles.setNumber}>
-                    <Text style={styles.setNumberText}>{set.id}</Text>
+                    <Text style={styles.setNumberText}>{setIndex + 1}</Text>
                   </View>
-                  
                   <View style={styles.setInputs}>
                     <View style={styles.inputGroup}>
                       <Text style={styles.inputLabel}>Weight</Text>
                       <TextInput
                         style={styles.input}
-                        value={set.weight}
-                        onChangeText={(value) => updateSet(exercise.id, set.id, 'weight', value)}
                         keyboardType="numeric"
-                        placeholderTextColor="#8E8E93"
+                        value={set.weight}
+                        onChangeText={(text) => updateSet(exercise.id, set.id, 'weight', text)}
+                        placeholder="kg"
                       />
                     </View>
-
                     <View style={styles.inputGroup}>
                       <Text style={styles.inputLabel}>Reps</Text>
                       <TextInput
                         style={styles.input}
-                        value={set.reps}
-                        onChangeText={(value) => updateSet(exercise.id, set.id, 'reps', value)}
                         keyboardType="numeric"
-                        placeholderTextColor="#8E8E93"
+                        value={set.reps}
+                        onChangeText={(text) => updateSet(exercise.id, set.id, 'reps', text)}
+                        placeholder="#"
                       />
                     </View>
-
                     <TouchableOpacity 
-                      style={styles.inputGroup}
-                      onPress={() => toggleSetType(exercise.id, set.id)}
-                    >
-                      <Text style={styles.inputLabel}>Type</Text>
-                      <View style={[
+                      style={[
                         styles.setType,
                         set.type === 'warmup' && styles.warmupType,
                         set.type === 'dropset' && styles.dropsetType,
+                      ]} 
+                      onPress={() => toggleSetType(exercise.id, set.id)}
+                      activeOpacity={0.7}>
+                      <Text style={[
+                        styles.setTypeText,
+                        set.type === 'warmup' && styles.warmupTypeText,
+                        set.type === 'dropset' && styles.dropsetTypeText,
                       ]}>
-                        <Text style={[
-                          styles.setTypeText,
-                          set.type === 'warmup' && styles.warmupTypeText,
-                          set.type === 'dropset' && styles.dropsetTypeText,
-                        ]}>
-                          {set.type === 'normal' ? 'Normal' : 
-                           set.type === 'warmup' ? 'Warm Up' : 
-                           'Drop Set'}
-                        </Text>
-                      </View>
+                        {set.type === 'normal' ? 'Normal' : 
+                         set.type === 'warmup' ? 'Warm-up' : 'Drop Set'}
+                      </Text>
                     </TouchableOpacity>
                   </View>
                 </View>
               ))}
 
               <View style={styles.setActions}>
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={styles.addSetButton}
                   onPress={() => addSet(exercise.id)}
-                >
+                  activeOpacity={0.7}>
                   <Plus size={20} color="#FFFFFF" />
                   <Text style={styles.addSetText}>Add Set</Text>
                 </TouchableOpacity>
 
                 <View style={styles.setActionButtons}>
-                  <TouchableOpacity style={styles.actionButton}>
+                  <TouchableOpacity style={styles.actionButton} activeOpacity={0.7}>
                     <Clock size={20} color="#007AFF" />
                   </TouchableOpacity>
-                  <TouchableOpacity style={styles.actionButton}>
+                  <TouchableOpacity style={styles.actionButton} activeOpacity={0.7}>
                     <BarChart3 size={20} color="#007AFF" />
                   </TouchableOpacity>
-                  <TouchableOpacity style={styles.actionButton}>
+                  <TouchableOpacity style={styles.actionButton} activeOpacity={0.7}>
                     <Star size={20} color="#007AFF" />
                   </TouchableOpacity>
                 </View>
@@ -294,7 +256,7 @@ export default function WorkoutTrackingScreen() {
           ))
         )}
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -311,7 +273,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: 16,
-    paddingTop: 60,
+    paddingTop: Platform.OS === 'android' ? 16 + (StatusBar.currentHeight ?? 0) : 60,
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: '#E5E5EA',
@@ -340,6 +302,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
+    elevation: 2,
   },
   workoutName: {
     fontSize: 24,
@@ -377,6 +340,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 4,
+    elevation: 1,
   },
   infoContent: {
     flex: 1,
@@ -436,6 +400,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
+    elevation: 2,
   },
   exerciseHeader: {
     flexDirection: 'row',
@@ -448,7 +413,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#000000',
   },
-  setRow: {
+  setContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 12,
@@ -524,6 +489,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 1,
   },
   addSetText: {
     color: '#FFFFFF',
@@ -538,5 +508,10 @@ const styles = StyleSheet.create({
     padding: 8,
     backgroundColor: '#F2F2F7',
     borderRadius: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
 });
