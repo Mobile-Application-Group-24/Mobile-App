@@ -164,7 +164,7 @@ export default function MembersScreen() {
         >
           <ArrowLeft size={24} color="#007AFF" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Group Members</Text>
+        
         
         {/* Leave Group Button for non-owners */}
         {!isOwner && currentUserRole && (
@@ -213,7 +213,14 @@ export default function MembersScreen() {
       ) : (
         <ScrollView style={styles.membersList}>
           {filteredMembers.map((member) => (
-            <View key={member.id} style={styles.memberCard}>
+            <TouchableOpacity 
+              key={member.id} 
+              style={styles.memberCard}
+              onPress={() => router.push({
+                pathname: '/profile/Profileview',
+                params: { userId: member.user_id }
+              })}
+            >
               <View style={styles.memberInfo}>
                 <Image 
                   source={{ uri: getAvatarUrl(member.profile.avatar_url) }} 
@@ -230,12 +237,15 @@ export default function MembersScreen() {
               {isOwner && member.role !== 'owner' && (
                 <TouchableOpacity
                   style={styles.removeButton}
-                  onPress={() => handleRemoveMember(member.user_id)}
+                  onPress={(e) => {
+                    e.stopPropagation(); // Prevent triggering the parent onPress
+                    handleRemoveMember(member.user_id);
+                  }}
                 >
                   <X size={20} color="#FF3B30" />
                 </TouchableOpacity>
               )}
-            </View>
+            </TouchableOpacity>
           ))}
         </ScrollView>
       )}
