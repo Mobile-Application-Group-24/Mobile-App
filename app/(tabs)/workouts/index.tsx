@@ -42,9 +42,9 @@ export default function WorkoutsScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, Platform.OS === 'ios' && { paddingTop: 0 }]}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
-      <View style={styles.safeArea} />
+      {Platform.OS === 'android' && <View style={styles.safeArea} />}
       <ScrollView style={styles.container}>
         <View style={styles.todaySection}>
           <View style={styles.todayHeader}>
@@ -154,7 +154,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F2F2F7',
   },
   safeArea: {
-    height: Platform.OS === 'android' ? StatusBar.currentHeight : 44,
+    height: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
     backgroundColor: '#FFFFFF',
   },
   todaySection: {
