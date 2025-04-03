@@ -65,6 +65,9 @@ const getSystemPrompt = async (userId: string) => {
     .order('created_at', { ascending: false })
     .limit(5);
 
+  console.log('Nutrition settings fetched for prompt:', nutritionSettings);
+  console.log('Workout data fetched for prompt:', workoutData);
+
   return `You are an AI fitness coach assistant for a GymApp. 
 You have access to the user's fitness data and can help them with workouts, nutrition advice, and track their progress.
 You can modify their data when they explicitly ask you to update their information or add new entries.
@@ -141,6 +144,8 @@ export const sendMessageToDeepseek = async (
       throw new Error('Deepseek API key is missing. Make sure EXPO_PUBLIC_DEEPSEEK_API_KEY is set in your environment.');
     }
 
+    console.log('Full messages being sent to Deepseek:', JSON.stringify(fullMessages, null, 2));
+
     const response = await fetch(DEEPSEEK_API_URL, {
       method: 'POST',
       headers: {
@@ -161,6 +166,7 @@ export const sendMessageToDeepseek = async (
     }
 
     const data: DeepseekResponse = await response.json();
+    console.log('Response from Deepseek:', data.choices[0].message.content);
     return data.choices[0].message.content;
   } catch (error) {
     console.error('Error calling Deepseek API:', error);
@@ -174,9 +180,15 @@ export const updateNutritionData = async (
   nutritionData: Partial<NutritionSettings>
 ) => {
   try {
+    // Log input data
+    console.log('updateNutritionData called with userId:', userId);
+    console.log('nutritionData received:', JSON.stringify(nutritionData, null, 2));
+
     // Validate the input data structure
     if (!nutritionData) {
-      throw new Error('No nutrition data provided');
+      const error = new Error('No nutrition data provided');
+      console.error(error);
+      throw error;
     }
 
     // Check if a record already exists for this user
@@ -191,22 +203,30 @@ export const updateNutritionData = async (
       throw checkError;
     }
 
+    console.log('Existing nutrition settings:', existingData);
+
     // Format meal times properly if provided
     let formattedData: any = { ...nutritionData };
     
     // If meal_times is provided, ensure it's properly formatted as an array
     if (nutritionData.meal_times && Array.isArray(nutritionData.meal_times)) {
-      formattedData.meal_times = nutritionData.meal_times.map((meal: any) => ({
-        name: meal.name || '',
-        time: meal.time || '12:00',
-        enabled: meal.enabled !== undefined ? meal.enabled : true
-      }));
+      formattedData.meal_times = nutritionData.meal_times.map((meal: any) => {
+        console.log('Processing meal time:', meal);
+        return {
+          name: meal.name || '',
+          time: meal.time || '12:00',
+          enabled: meal.enabled !== undefined ? meal.enabled : true
+        };
+      });
     }
 
     // Add updated_at timestamp
     formattedData.updated_at = new Date().toISOString();
+    
+    console.log('Formatted data for upsert:', JSON.stringify(formattedData, null, 2));
 
     // If record exists, update it; otherwise insert a new record
+    console.log('Upserting nutrition settings in Supabase...');
     const { data, error } = await supabase
       .from('nutrition_settings')
       .upsert({ 
@@ -236,9 +256,20 @@ export const addWorkoutEntry = async (
   workoutData: Workout
 ) => {
   try {
+    // Log input data
+    console.log('addWorkoutEntry called with userId:', userId);
+    console.log('workoutData received:', JSON.stringify(workoutData, null, 2));
+
     // Validate workout data
     if (!workoutData.title || !workoutData.date || !workoutData.exercises || workoutData.exercises.length === 0) {
-      throw new Error('Invalid workout data. Title, date, and exercises are required.');
+      const error = new Error('Invalid workout data. Title, date, and exercises are required.');
+      console.error(error);
+      console.error('Missing fields:', {
+        title: !workoutData.title,
+        date: !workoutData.date,
+        exercises: !workoutData.exercises || workoutData.exercises.length === 0
+      });
+      throw error;
     }
 
     // Format the workout data for the database
@@ -252,8 +283,11 @@ export const addWorkoutEntry = async (
       calories_burned: workoutData.calories_burned || 0,
       created_at: new Date().toISOString()
     };
+    
+    console.log('Formatted workout for insert:', JSON.stringify(formattedWorkout, null, 2));
 
     // Insert the workout
+    console.log('Inserting workout into Supabase...');
     const { data, error } = await supabase
       .from('workouts')
       .insert(formattedWorkout)
