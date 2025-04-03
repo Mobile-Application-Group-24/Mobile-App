@@ -4,9 +4,6 @@ import { ArrowLeft, Award, Calendar, ChartBar as BarChart } from 'lucide-react-n
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { getProfile, type Profile } from '@/utils/supabase';
 
-
-
-
 export default function ViewProfileScreen() {
   const { userId } = useLocalSearchParams();
   const router = useRouter();
@@ -63,10 +60,12 @@ export default function ViewProfileScreen() {
     );
   }
 
-  
-
   return (
     <>
+      <Stack.Screen options={{ 
+        headerShown: false,
+        title: '' 
+      }} />
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
       <SafeAreaView style={styles.safeAreaTop} />
       

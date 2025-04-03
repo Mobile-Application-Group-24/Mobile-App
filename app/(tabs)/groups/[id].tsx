@@ -39,6 +39,20 @@ export default function GroupScreen() {
     }
   };
 
+  const handleMembersPress = () => {
+    router.push({
+      pathname: '/groups/members',
+      params: { groupId: id }
+    });
+  };
+
+  const handleProfilePress = (userId: string) => {
+    router.push({
+      pathname: '/profile/Profileview',
+      params: { userId }
+    });
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -92,7 +106,7 @@ export default function GroupScreen() {
             
             <TouchableOpacity 
               style={styles.stats}
-              onPress={() => router.push({ pathname: '/groups/members', params: { groupId: id } })}
+              onPress={handleMembersPress}
               activeOpacity={0.7}>
               <View style={styles.stat}>
                 <Users size={20} color="#007AFF" />
@@ -117,10 +131,7 @@ export default function GroupScreen() {
             <TouchableOpacity 
               key={member.id} 
               style={styles.userCard}
-              onPress={() => router.push({
-                pathname: '/profile/Profileview',
-                params: { userId: member.user_id }
-              })}
+              onPress={() => handleProfilePress(member.user_id)}
             >
               <View style={styles.rankContainer}>
                 {index === 0 && <Trophy size={24} color="#FFD700" />}
