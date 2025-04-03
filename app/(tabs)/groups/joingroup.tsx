@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Platform, SafeAreaView } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { getGroupInvitation, useGroupInvitation, getGroupDetails, joinGroup, getGroups } from '../../../utils/supabase';
 import { Users, AlertCircle } from 'lucide-react-native';
@@ -160,59 +160,67 @@ export default function JoinGroupScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <Stack.Screen options={{ 
-        title: 'Join Group', 
-        headerBackVisible: true 
-      }} />
-      
-      {status === 'loading' && (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#007AFF" />
-          <Text style={styles.loadingText}>Loading group information...</Text>
-        </View>
-      )}
-      
-      {status === 'error' && (
-        <View style={styles.contentContainer}>
-          <AlertCircle size={64} color="#FF3B30" />
-          <Text style={styles.errorTitle}>Error</Text>
-          <Text style={styles.errorMessage}>{message}</Text>
-          <TouchableOpacity 
-            style={styles.button} 
-            onPress={() => router.replace('/groups')}
-          >
-            <Text style={styles.buttonText}>Back to Groups</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-      
-      {status === 'success' && (
-        <View style={styles.contentContainer}>
-          <View style={styles.iconContainer}>
-            <Users size={48} color="#007AFF" />
+    <SafeAreaView style={styles.safeArea}>
+      <View style={styles.container}>
+        <Stack.Screen options={{ 
+          title: 'Join Group', 
+          headerBackVisible: true 
+        }} />
+        
+        {status === 'loading' && (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#007AFF" />
+            <Text style={styles.loadingText}>Loading group information...</Text>
           </View>
-          
-          <Text style={styles.groupName}>{groupName}</Text>
-          
-          <View style={styles.infoRow}>
-            <Users size={20} color="#8E8E93" />
-            <Text style={styles.memberCount}>{memberCount} Members</Text>
+        )}
+        
+        {status === 'error' && (
+          <View style={styles.contentContainer}>
+            <AlertCircle size={64} color="#FF3B30" />
+            <Text style={styles.errorTitle}>Error</Text>
+            <Text style={styles.errorMessage}>{message}</Text>
+            <TouchableOpacity 
+              style={styles.button} 
+              onPress={() => router.replace('/groups')}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.buttonText}>Back to Groups</Text>
+            </TouchableOpacity>
           </View>
-          
-          <TouchableOpacity 
-            style={styles.joinButton}
-            onPress={handleJoinGroup}
-          >
-            <Text style={styles.joinButtonText}>Join Group</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-    </View>
+        )}
+        
+        {status === 'success' && (
+          <View style={styles.contentContainer}>
+            <View style={styles.iconContainer}>
+              <Users size={48} color="#007AFF" />
+            </View>
+            
+            <Text style={styles.groupName}>{groupName}</Text>
+            
+            <View style={styles.infoRow}>
+              <Users size={20} color="#8E8E93" />
+              <Text style={styles.memberCount}>{memberCount} Members</Text>
+            </View>
+            
+            <TouchableOpacity 
+              style={styles.joinButton}
+              onPress={handleJoinGroup}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.joinButtonText}>Join Group</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#F2F2F7',
+  },
   container: {
     flex: 1,
     backgroundColor: '#F2F2F7',
@@ -237,6 +245,8 @@ const styles = StyleSheet.create({
   },
   iconContainer: {
     marginBottom: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   groupName: {
     fontSize: 28,
@@ -248,6 +258,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 32,
+    justifyContent: 'center',
   },
   memberCount: {
     fontSize: 16,
@@ -260,6 +271,11 @@ const styles = StyleSheet.create({
     padding: 16,
     width: '100%',
     alignItems: 'center',
+    elevation: 2, // Android shadow
+    shadowColor: '#000', // iOS shadow
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
   joinButtonText: {
     color: '#FFFFFF',
@@ -286,6 +302,11 @@ const styles = StyleSheet.create({
     padding: 16,
     width: '100%',
     alignItems: 'center',
+    elevation: 2, // Android shadow
+    shadowColor: '#000', // iOS shadow
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
   buttonText: {
     color: '#FFFFFF',

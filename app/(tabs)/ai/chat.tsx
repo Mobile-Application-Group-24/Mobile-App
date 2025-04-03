@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Alert, StatusBar, SafeAreaView } from 'react-native';
 import { Send } from 'lucide-react-native';
 import { sendMessageToDeepseek, updateNutritionData, addWorkoutEntry } from '@/utils/deepseek';
 import { useSession } from '@/utils/auth';
@@ -223,75 +223,74 @@ export default function ChatScreen() {
   }, [messages, session?.user?.id]);
 
   return (
-    <KeyboardAvoidingView 
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={styles.container}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-    >
-      <ScrollView
-        ref={scrollViewRef}
-        style={styles.chatContainer}
-        onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
-      >
-        {messages.map((message) => (
-          <View
-            key={message.id}
-            style={[
-              styles.messageContainer,
-              message.isUser ? styles.userMessage : styles.aiMessage,
-            ]}
-          >
-            {message.isUser ? (
-              <Text style={[
-                styles.messageText,
-                styles.userMessageText,
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.container}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}>
+        <ScrollView
+          ref={scrollViewRef}
+          style={styles.chatContainer}
+          onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}>
+          {messages.map((message) => (
+            <View
+              key={message.id}
+              style={[
+                styles.messageContainer,
+                message.isUser ? styles.userMessage : styles.aiMessage,
               ]}>
-                {message.text}
+              {message.isUser ? (
+                <Text style={[
+                  styles.messageText,
+                  styles.userMessageText,
+                ]}>
+                  {message.text}
+                </Text>
+              ) : (
+                <Markdown
+                  style={markdownStyles}>
+                  {message.text}
+                </Markdown>
+              )}
+              <Text style={[
+                styles.timestamp,
+                message.isUser ? styles.userTimestamp : styles.aiTimestamp,
+              ]}>
+                {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
               </Text>
-            ) : (
-              <Markdown
-                style={markdownStyles}
-              >
-                {message.text}
-              </Markdown>
-            )}
-            <Text style={[
-              styles.timestamp,
-              message.isUser ? styles.userTimestamp : styles.aiTimestamp,
-            ]}>
-              {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-            </Text>
-          </View>
-        ))}
-        {isProcessing && (
-          <View style={styles.typingIndicator}>
-            <Text style={styles.typingText}>AI is thinking...</Text>
-          </View>
-        )}
-      </ScrollView>
+            </View>
+          ))}
+          {isProcessing && (
+            <View style={styles.typingIndicator}>
+              <Text style={styles.typingText}>AI is thinking...</Text>
+            </View>
+          )}
+        </ScrollView>
 
-      <View style={styles.inputContainer}>
-        <TextInput
-          style={styles.input}
-          value={inputText}
-          onChangeText={setInputText}
-          placeholder="Ask me anything about fitness..."
-          multiline
-          maxLength={500}
-          editable={!isProcessing}
-        />
-        <TouchableOpacity 
-          style={[
-            styles.sendButton,
-            (!inputText.trim() || isProcessing) && styles.sendButtonDisabled
-          ]} 
-          onPress={handleSend}
-          disabled={!inputText.trim() || isProcessing}
-        >
-          <Send size={24} color={inputText.trim() && !isProcessing ? '#FFFFFF' : '#A0A0A0'} />
-        </TouchableOpacity>
-      </View>
-    </KeyboardAvoidingView>
+        <View style={styles.inputContainer}>
+          <TextInput
+            style={styles.input}
+            value={inputText}
+            onChangeText={setInputText}
+            placeholder="Ask me anything about fitness..."
+            multiline
+            maxLength={500}
+            editable={!isProcessing}
+          />
+          <TouchableOpacity 
+            style={[
+              styles.sendButton,
+              (!inputText.trim() || isProcessing) && styles.sendButtonDisabled
+            ]} 
+            onPress={handleSend}
+            disabled={!inputText.trim() || isProcessing}
+            activeOpacity={0.7}>
+            <Send size={24} color={inputText.trim() && !isProcessing ? '#FFFFFF' : '#A0A0A0'} />
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
@@ -400,6 +399,11 @@ const styles = StyleSheet.create({
     marginVertical: 8,
     padding: 12,
     borderRadius: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 1,
   },
   userMessage: {
     alignSelf: 'flex-end',
@@ -437,6 +441,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
     borderTopColor: '#E5E5EA',
+    paddingBottom: Platform.OS === 'ios' ? 16 + (Platform.OS === 'ios' ? 10 : 0) : 12,
   },
   input: {
     flex: 1,
@@ -451,6 +456,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#007AFF',
     padding: 12,
     borderRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 1,
   },
   sendButtonDisabled: {
     backgroundColor: '#E5E5EA',
