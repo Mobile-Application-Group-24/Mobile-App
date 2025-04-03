@@ -2,7 +2,11 @@ import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, FlatList, Platform, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Plus, Minus, Dumbbell, Save, Search, X, Star } from 'lucide-react-native';
-import { saveWorkoutPlan } from '@/utils/storage';
+import { saveWorkout } from '@/utils/workout'; // Using workout.ts instead of storage
+import { useSession } from '@/utils/auth';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { format } from 'date-fns';
+import { supabase } from '@/utils/supabase';
 import type { Exercise } from '@/utils/storage';
 
 const commonExercises = [
@@ -38,8 +42,9 @@ const commonExercises = [
   "Burpees", "Battle Ropes", "Medicine Ball Slams", "Farmer's Walks"
 ].sort();
 
-export default function CreateWorkoutPlanScreen() {
+export default function CreateWorkoutScreen() {
   const router = useRouter();
+  const { session, isLoading } = useSession();
   const [planName, setPlanName] = useState('');
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [showExerciseSearch, setShowExerciseSearch] = useState(false);
@@ -79,24 +84,85 @@ export default function CreateWorkoutPlanScreen() {
   const handleSave = async () => {
     if (isSaving) return;
 
+    // Validate inputs
+    if (!planName) {
+      Alert.alert('Error', 'Please enter a workout title');
+      return;
+    }
+
+    if (exercises.length === 0) {
+      Alert.alert('Error', 'Please add at least one exercise');
+      return;
+    }
+
+    console.log('Current session state:', session ? 'Logged in' : 'Not logged in');
+    console.log('Session loading state:', isLoading ? 'Loading' : 'Loaded');
+    
+    if (isLoading) {
+      Alert.alert('Please wait', 'Verifying your login status...');
+      return;
+    }
+
+    if (!session?.user) {
+      console.error('Session validation failed:', { session, isLoading });
+      
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      console.log('Direct auth check:', userData?.user ? 'User found' : 'No user');
+      
+      if (userError || !userData.user) {
+        Alert.alert('Authentication Error', 'You must be logged in to save workouts. Please log out and log in again.');
+        return;
+      } else {
+        console.log('Session hook not working but user is authenticated, proceeding...');
+      }
+    }
+
     try {
       setIsSaving(true);
-      const workoutPlan = {
-        id: Date.now().toString(),
-        name: planName,
-        exercises,
-        createdAt: new Date().toISOString(),
-        isFavorite,
+      
+      const { data: authData } = await supabase.auth.getUser();
+      const userId = authData?.user?.id;
+      
+      if (!userId) {
+        throw new Error('Failed to get user ID');
+      }
+      
+      console.log('Confirmed user ID:', userId);
+      
+      const formattedExercises = exercises.map(ex => ({
+        id: ex.id || Date.now().toString() + Math.random().toString(36).substring(2),
+        name: ex.name,
+        sets: ex.sets,
+        reps: 10,
+        weight: undefined,
+      }));
+      
+      const workoutData = {
+        title: planName,
+        date: new Date().toISOString(),
+        duration_minutes: 60,
+        exercises: formattedExercises,
+        notes: '',
+        calories_burned: 0,
       };
-
-      await saveWorkoutPlan(workoutPlan);
-      router.back();
-    } catch (error) {
+      
+      console.log('Saving workout to database:', JSON.stringify(workoutData, null, 2));
+      
+      const savedWorkout = await saveWorkout(workoutData);
+      console.log('Workout saved successfully with ID:', savedWorkout.id);
+      
       Alert.alert(
-        'Error',
-        'Failed to save workout plan. Please try again.',
-        [{ text: 'OK' }]
+        'Success',
+        'Workout saved to database successfully',
+        [{ text: 'OK', onPress: () => router.back() }]
       );
+    } catch (error) {
+      console.error('Error saving workout:', error);
+      let errorMessage = 'Failed to save workout.';
+      if (error instanceof Error) {
+        errorMessage += ' ' + error.message;
+      }
+      Alert.alert('Error', errorMessage);
     } finally {
       setIsSaving(false);
     }
@@ -241,7 +307,7 @@ export default function CreateWorkoutPlanScreen() {
           disabled={!planName || exercises.length === 0 || isSaving}>
           <Save size={24} color="#FFFFFF" />
           <Text style={styles.saveButtonText}>
-            {isSaving ? 'Saving...' : 'Save Plan'}
+            {isSaving ? 'Saving to DB...' : 'Save to Database'}
           </Text>
         </TouchableOpacity>
       )}

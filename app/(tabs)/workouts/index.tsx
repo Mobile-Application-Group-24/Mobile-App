@@ -1,15 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
-import { Plus, Star, Play } from 'lucide-react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { Plus, Star, Play, Clock, Calendar, Dumbbell } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
-import { getWorkoutPlans, type WorkoutPlan } from '@/utils/storage';
+import { getWorkouts, Workout } from '@/utils/workout';
+import { useSession } from '@/utils/auth';
+import { format, parseISO } from 'date-fns';
 
 export default function WorkoutsScreen() {
   const router = useRouter();
+  const { session } = useSession();
   const [showOwnWorkouts, setShowOwnWorkouts] = useState(true);
   const [currentStreak, setCurrentStreak] = useState(5);
-  const [workoutPlans, setWorkoutPlans] = useState<WorkoutPlan[]>([]);
+  const [workouts, setWorkouts] = useState<Workout[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   
   const todaysWorkout = {
     isRestDay: false,
@@ -18,16 +22,24 @@ export default function WorkoutsScreen() {
   };
 
   useEffect(() => {
-    loadWorkoutPlans();
-  }, []);
+    if (session?.user) {
+      loadWorkouts();
+    } else {
+      setIsLoading(false);
+      setError('Please log in to view your workouts');
+    }
+  }, [session]);
 
-  const loadWorkoutPlans = async () => {
+  const loadWorkouts = async () => {
     try {
       setIsLoading(true);
-      const plans = await getWorkoutPlans();
-      setWorkoutPlans(plans);
+      setError(null);
+      const data = await getWorkouts();
+      setWorkouts(data);
+      console.log(`Loaded ${data.length} workouts from database`);
     } catch (error) {
-      console.error('Error loading workout plans:', error);
+      console.error('Error loading workouts:', error);
+      setError('Failed to load workouts. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -39,6 +51,75 @@ export default function WorkoutsScreen() {
     } else {
       console.log('Starting workout:', todaysWorkout.name);
     }
+  };
+
+  const renderWorkoutList = () => {
+    if (error) {
+      return (
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyStateText}>{error}</Text>
+          {session?.user && (
+            <TouchableOpacity style={styles.createButton} onPress={loadWorkouts}>
+              <Text style={styles.createButtonText}>Try Again</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      );
+    }
+
+    if (isLoading) {
+      return (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#007AFF" />
+        </View>
+      );
+    }
+
+    if (workouts.length === 0) {
+      return (
+        <View style={styles.emptyState}>
+          <Dumbbell size={64} color="#CCCCCC" />
+          <Text style={styles.emptyText}>No workouts yet</Text>
+          <Text style={styles.emptySubtext}>
+            Create your first workout to get started!
+          </Text>
+        </View>
+      );
+    }
+
+    return workouts.map((workout) => (
+      <TouchableOpacity
+        key={workout.id}
+        style={styles.planCard}
+        onPress={() => router.push(`/workouts/${workout.id}`)}
+      >
+        <View style={styles.planInfo}>
+          <Text style={styles.planName}>{workout.title}</Text>
+          <View style={styles.planDetails}>
+            <View style={styles.detailItem}>
+              <Calendar size={14} color="#8E8E93" />
+              <Text style={styles.detailText}>
+                {format(parseISO(workout.date), 'MMM d, yyyy')}
+              </Text>
+            </View>
+            
+            <View style={styles.detailItem}>
+              <Clock size={14} color="#8E8E93" />
+              <Text style={styles.detailText}>
+                {workout.duration_minutes} min
+              </Text>
+            </View>
+            
+            <View style={styles.detailItem}>
+              <Dumbbell size={14} color="#8E8E93" />
+              <Text style={styles.detailText}>
+                {workout.exercises.length} exercises
+              </Text>
+            </View>
+          </View>
+        </View>
+      </TouchableOpacity>
+    ));
   };
 
   return (
@@ -110,33 +191,7 @@ export default function WorkoutsScreen() {
           </TouchableOpacity>
         </View>
 
-        {isLoading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#007AFF" />
-          </View>
-        ) : workoutPlans.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyStateText}>No workout plans yet</Text>
-            <Text style={styles.emptyStateSubtext}>
-              Create your first workout plan to get started!
-            </Text>
-          </View>
-        ) : (
-          workoutPlans.map((plan) => (
-            <TouchableOpacity
-              key={plan.id}
-              style={styles.planCard}
-              onPress={() => router.push(`/workouts/${plan.id}`)}
-            >
-              <View style={styles.planInfo}>
-                <Text style={styles.planName}>{plan.name}</Text>
-                <Text style={styles.planDetails}>
-                  {plan.exercises.length} exercises
-                </Text>
-              </View>
-            </TouchableOpacity>
-          ))
-        )}
+        {renderWorkoutList()}
       </View>
     </ScrollView>
   );
@@ -298,9 +353,19 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginBottom: 4,
   },
-  planDetails: {
+  detailItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  detailText: {
     fontSize: 14,
     color: '#8E8E93',
+    marginLeft: 4,
+  },
+  planDetails: {
+    flexDirection: 'row',
+    marginTop: 8,
   },
   loadingContainer: {
     padding: 32,
@@ -318,7 +383,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#8E8E93',
   },
-  emptyStateSubtext: {
+  emptyText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#8E8E93',
+    marginTop: 16,
+  },
+  emptySubtext: {
     fontSize: 14,
     color: '#8E8E93',
     textAlign: 'center',
