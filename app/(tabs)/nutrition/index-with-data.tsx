@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Dimensions, Modal, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Dimensions, Modal, Alert, ActivityIndicator, StatusBar, SafeAreaView, Platform } from 'react-native';
 import { LineChart } from 'react-native-chart-kit';
 import { Droplets, Coffee, UtensilsCrossed, Pizza, Moon, Scale, Calculator, ChevronRight, X, Plus, Minus, Settings } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
@@ -405,349 +405,350 @@ export default function NutritionScreen() {
     }
 
     return (
-        <ScrollView style={styles.container}>
-            <View style={styles.safeArea} />
+        <SafeAreaView style={styles.container}>
+            <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+            <ScrollView>
+                <View style={styles.safeArea} />
 
-            <View style={styles.header}>
-                <View>
-                    <Text style={styles.headerTitle}>Nutrition Tracking</Text>
-                    <Text style={styles.headerDate}>
-                        {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-                    </Text>
+                <View style={styles.header}>
+                    <View>
+                        <Text style={styles.headerTitle}>Nutrition Tracking</Text>
+                        <Text style={styles.headerDate}>
+                            {format(new Date(), 'EEEE, d MMMM yyyy')}
+                        </Text>
+                    </View>
+                    <TouchableOpacity 
+                        onPress={() => navigation.navigate('settings' as never)}
+                        activeOpacity={0.7}>
+                        <Settings size={24} color="#007AFF" />
+                    </TouchableOpacity>
                 </View>
-                <TouchableOpacity
-                    style={styles.goalButton}
-                    onPress={() => navigation.navigate('settings' as never)}
-                >
-                    <Settings size={24} color="#007AFF" />
-                </TouchableOpacity>
-            </View>
 
-            <View style={styles.calorieCard}>
-                <View style={styles.calorieHeader}>
-                    <Text style={styles.calorieTitle}>Daily Calories</Text>
-                    <View style={styles.calorieProgress}>
-                        <View
-                            style={[
-                                styles.calorieProgressBar,
-                                { width: `${Math.min((totalCalories / calorieGoal) * 100, 100)}%` }
-                            ]}
+                <View style={styles.calorieCard}>
+                    <View style={styles.calorieHeader}>
+                        <Text style={styles.calorieTitle}>Daily Calories</Text>
+                        <View style={styles.calorieProgress}>
+                            <View
+                                style={[
+                                    styles.calorieProgressBar,
+                                    { width: `${Math.min((totalCalories / calorieGoal) * 100, 100)}%` }
+                                ]}
+                            />
+                        </View>
+                    </View>
+
+                    <View style={styles.calorieStats}>
+                        <View style={styles.calorieStat}>
+                            <Text style={styles.calorieStatLabel}>Consumed</Text>
+                            <Text style={styles.calorieStatValue}>{totalCalories}</Text>
+                        </View>
+                        <View style={styles.calorieDivider} />
+                        <View style={styles.calorieStat}>
+                            <Text style={styles.calorieStatLabel}>Remaining</Text>
+                            <Text style={[
+                                styles.calorieStatValue,
+                                { color: remainingCalories >= 0 ? '#34C759' : '#FF3B30' }
+                            ]}>
+                                {remainingCalories}
+                            </Text>
+                        </View>
+                        <View style={styles.calorieDivider} />
+                        <View style={styles.calorieStat}>
+                            <Text style={styles.calorieStatLabel}>Goal</Text>
+                            <Text style={styles.calorieStatValue}>{calorieGoal}</Text>
+                        </View>
+                    </View>
+                </View>
+
+                <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>Weekly Overview</Text>
+                    <View style={styles.chartWrapper}>
+                        <LineChart
+                            data={chartData}
+                            width={CHART_WIDTH}
+                            height={180}
+                            chartConfig={{
+                                backgroundColor: '#FFFFFF',
+                                backgroundGradientFrom: '#FFFFFF',
+                                backgroundGradientTo: '#FFFFFF',
+                                decimalPlaces: 0,
+                                color: (opacity = 1) => `rgba(0, 122, 255, ${opacity})`,
+                                labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+                                style: {
+                                    borderRadius: 16,
+                                },
+                                propsForDots: {
+                                    r: '6',
+                                    strokeWidth: '2',
+                                    stroke: '#FFFFFF',
+                                },
+                            }}
+                            bezier
+                            style={styles.chart}
                         />
                     </View>
                 </View>
 
-                <View style={styles.calorieStats}>
-                    <View style={styles.calorieStat}>
-                        <Text style={styles.calorieStatLabel}>Consumed</Text>
-                        <Text style={styles.calorieStatValue}>{totalCalories}</Text>
-                    </View>
-                    <View style={styles.calorieDivider} />
-                    <View style={styles.calorieStat}>
-                        <Text style={styles.calorieStatLabel}>Remaining</Text>
-                        <Text style={[
-                            styles.calorieStatValue,
-                            { color: remainingCalories >= 0 ? '#34C759' : '#FF3B30' }
-                        ]}>
-                            {remainingCalories}
-                        </Text>
-                    </View>
-                    <View style={styles.calorieDivider} />
-                    <View style={styles.calorieStat}>
-                        <Text style={styles.calorieStatLabel}>Goal</Text>
-                        <Text style={styles.calorieStatValue}>{calorieGoal}</Text>
-                    </View>
+                <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>Today's Meals</Text>
+                    {meals.map((meal) => (
+                        <TouchableOpacity
+                            key={meal.id}
+                            style={styles.mealCard}
+                            onPress={() => handleMealPress(meal)}
+                        >
+                            <View style={styles.mealIcon}>
+                                <meal.icon size={24} color="#007AFF" />
+                            </View>
+                            <View style={styles.mealInfo}>
+                                <Text style={styles.mealName}>{meal.name}</Text>
+                                <Text style={styles.mealTime}>{meal.time}</Text>
+                            </View>
+                            <View style={styles.mealCalories}>
+                                <Text style={styles.mealCaloriesValue}>{meal.calories}</Text>
+                                <Text style={styles.mealCaloriesLabel}>cal</Text>
+                            </View>
+                            <ChevronRight size={20} color="#8E8E93" />
+                        </TouchableOpacity>
+                    ))}
                 </View>
-            </View>
 
-            <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Weekly Overview</Text>
-                <View style={styles.chartWrapper}>
-                    <LineChart
-                        data={chartData}
-                        width={CHART_WIDTH}
-                        height={180}
-                        chartConfig={{
-                            backgroundColor: '#FFFFFF',
-                            backgroundGradientFrom: '#FFFFFF',
-                            backgroundGradientTo: '#FFFFFF',
-                            decimalPlaces: 0,
-                            color: (opacity = 1) => `rgba(0, 122, 255, ${opacity})`,
-                            labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
-                            style: {
-                                borderRadius: 16,
-                            },
-                            propsForDots: {
-                                r: '6',
-                                strokeWidth: '2',
-                                stroke: '#FFFFFF',
-                            },
-                        }}
-                        bezier
-                        style={styles.chart}
-                    />
-                </View>
-            </View>
-
-            <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Today's Meals</Text>
-                {meals.map((meal) => (
-                    <TouchableOpacity
-                        key={meal.id}
-                        style={styles.mealCard}
-                        onPress={() => handleMealPress(meal)}
+                <View style={[styles.section, styles.waterSection]}>
+                    <View style={styles.sectionHeader}>
+                        <Text style={styles.sectionTitle}>Water Intake</Text>
+                        <Text style={styles.waterTarget}>{waterIntake}/{waterGoal} glasses</Text>
+                    </View>
+                    {renderWaterDrops()}
+                    <Text style={styles.waterHint}>Tap drops to update your water intake</Text>
+                    
+                    <TouchableOpacity 
+                        style={styles.waterResetButton}
+                        onPress={() => handleWaterIntakeChange(0)}
                     >
-                        <View style={styles.mealIcon}>
-                            <meal.icon size={24} color="#007AFF" />
-                        </View>
-                        <View style={styles.mealInfo}>
-                            <Text style={styles.mealName}>{meal.name}</Text>
-                            <Text style={styles.mealTime}>{meal.time}</Text>
-                        </View>
-                        <View style={styles.mealCalories}>
-                            <Text style={styles.mealCaloriesValue}>{meal.calories}</Text>
-                            <Text style={styles.mealCaloriesLabel}>cal</Text>
-                        </View>
-                        <ChevronRight size={20} color="#8E8E93" />
+                        <Text style={styles.waterResetButtonText}>Reset Water Intake</Text>
                     </TouchableOpacity>
-                ))}
-            </View>
-
-            <View style={[styles.section, styles.waterSection]}>
-                <View style={styles.sectionHeader}>
-                    <Text style={styles.sectionTitle}>Water Intake</Text>
-                    <Text style={styles.waterTarget}>{waterIntake}/{waterGoal} glasses</Text>
                 </View>
-                {renderWaterDrops()}
-                <Text style={styles.waterHint}>Tap drops to update your water intake</Text>
-                
-                <TouchableOpacity 
-                    style={styles.waterResetButton}
-                    onPress={() => handleWaterIntakeChange(0)}
-                >
-                    <Text style={styles.waterResetButtonText}>Reset Water Intake</Text>
+
+                <TouchableOpacity
+                    style={styles.bmrCard}
+                    onPress={() => setShowBMRModal(true)}
+                    activeOpacity={0.7}>
+                    <View style={styles.bmrContent}>
+                        <View style={styles.bmrIcon}>
+                            <Calculator size={24} color="#FFFFFF" />
+                        </View>
+                        <View style={styles.bmrInfo}>
+                            <Text style={styles.bmrTitle}>Calculate BMR</Text>
+                            <Text style={styles.bmrDescription}>
+                                Find out your Basal Metabolic Rate and daily calorie needs
+                            </Text>
+                        </View>
+                    </View>
+                    <ChevronRight size={24} color="#FFFFFF" />
                 </TouchableOpacity>
-            </View>
 
-            <TouchableOpacity
-                style={styles.bmrCard}
-                onPress={() => setShowBMRModal(true)}
-            >
-                <View style={styles.bmrContent}>
-                    <View style={styles.bmrIcon}>
-                        <Calculator size={24} color="#FFFFFF" />
-                    </View>
-                    <View style={styles.bmrInfo}>
-                        <Text style={styles.bmrTitle}>Calculate BMR</Text>
-                        <Text style={styles.bmrDescription}>
-                            Find out your Basal Metabolic Rate and daily calorie needs
-                        </Text>
-                    </View>
-                </View>
-                <ChevronRight size={24} color="#FFFFFF" />
-            </TouchableOpacity>
+                <Modal
+                    visible={editModalVisible}
+                    transparent
+                    animationType="slide"
+                    onRequestClose={() => {
+                        Alert.alert(
+                            "Save Changes",
+                            "Do you want to save your changes?",
+                            [
+                                {
+                                    text: "Discard",
+                                    style: "cancel",
+                                    onPress: () => setEditModalVisible(false)
+                                },
+                                {
+                                    text: "Save",
+                                    onPress: saveMealChanges
+                                }
+                            ]
+                        );
+                    }}
+                >
+                    <View style={styles.modalOverlay}>
+                        <View style={styles.modalContent}>
+                            <View style={styles.modalHeader}>
+                                <Text style={styles.modalTitle}>
+                                    {selectedMeal?.name} Calories
+                                </Text>
+                                <TouchableOpacity
+                                    style={styles.closeButton}
+                                    onPress={saveMealChanges}
+                                >
+                                    <X size={24} color="#8E8E93" />
+                                </TouchableOpacity>
+                            </View>
 
-            <Modal
-                visible={editModalVisible}
-                transparent
-                animationType="slide"
-                onRequestClose={() => {
-                    Alert.alert(
-                        "Save Changes",
-                        "Do you want to save your changes?",
-                        [
-                            {
-                                text: "Discard",
-                                style: "cancel",
-                                onPress: () => setEditModalVisible(false)
-                            },
-                            {
-                                text: "Save",
-                                onPress: saveMealChanges
-                            }
-                        ]
-                    );
-                }}
-            >
-                <View style={styles.modalOverlay}>
-                    <View style={styles.modalContent}>
-                        <View style={styles.modalHeader}>
-                            <Text style={styles.modalTitle}>
-                                {selectedMeal?.name} Calories
+                            <View style={styles.calorieEditor}>
+                                <TouchableOpacity
+                                    style={styles.calorieButton}
+                                    onPress={() => updateMealCalories(-50)}
+                                >
+                                    <Minus size={24} color="#007AFF" />
+                                </TouchableOpacity>
+
+                                <Text style={styles.calorieValue}>
+                                    {temporaryCalories}
+                                </Text>
+
+                                <TouchableOpacity
+                                    style={styles.calorieButton}
+                                    onPress={() => updateMealCalories(50)}
+                                >
+                                    <Plus size={24} color="#007AFF" />
+                                </TouchableOpacity>
+                            </View>
+
+                            <Text style={styles.calorieHint}>
+                                Tap + or - to adjust by 50 calories
                             </Text>
-                            <TouchableOpacity
-                                style={styles.closeButton}
-                                onPress={saveMealChanges}
-                            >
-                                <X size={24} color="#8E8E93" />
-                            </TouchableOpacity>
-                        </View>
-
-                        <View style={styles.calorieEditor}>
-                            <TouchableOpacity
-                                style={styles.calorieButton}
-                                onPress={() => updateMealCalories(-50)}
-                            >
-                                <Minus size={24} color="#007AFF" />
-                            </TouchableOpacity>
-
-                            <Text style={styles.calorieValue}>
-                                {temporaryCalories}
-                            </Text>
-
-                            <TouchableOpacity
-                                style={styles.calorieButton}
-                                onPress={() => updateMealCalories(50)}
-                            >
-                                <Plus size={24} color="#007AFF" />
-                            </TouchableOpacity>
-                        </View>
-
-                        <Text style={styles.calorieHint}>
-                            Tap + or - to adjust by 50 calories
-                        </Text>
-                        
-                        <View style={styles.modalActions}>
-                            <TouchableOpacity
-                                style={[styles.saveButton, {flex: 1}]}
-                                onPress={saveMealChanges}
-                            >
-                                <Text style={styles.saveButtonText}>Save Changes</Text>
-                            </TouchableOpacity>
+                            
+                            <View style={styles.modalActions}>
+                                <TouchableOpacity
+                                    style={[styles.saveButton, {flex: 1}]}
+                                    onPress={saveMealChanges}
+                                >
+                                    <Text style={styles.saveButtonText}>Save Changes</Text>
+                                </TouchableOpacity>
+                            </View>
                         </View>
                     </View>
-                </View>
-            </Modal>
+                </Modal>
 
-            <Modal
-                visible={showBMRModal}
-                transparent
-                animationType="slide"
-                onRequestClose={() => setShowBMRModal(false)}
-            >
-                <View style={styles.modalOverlay}>
-                    <View style={styles.modalContent}>
-                        <View style={styles.modalHeader}>
-                            <Text style={styles.modalTitle}>Calculate BMR</Text>
-                            <TouchableOpacity
-                                style={styles.closeButton}
-                                onPress={() => setShowBMRModal(false)}
-                            >
-                                <X size={24} color="#8E8E93" />
-                            </TouchableOpacity>
-                        </View>
-
-                        <View style={styles.bmrForm}>
-                            <View style={styles.inputGroup}>
-                                <Text style={styles.inputLabel}>Weight (kg)</Text>
-                                <TextInput
-                                    style={styles.input}
-                                    value={bmrInputs.weight}
-                                    onChangeText={(text) => setBmrInputs(prev => ({ ...prev, weight: text }))}
-                                    keyboardType="numeric"
-                                    placeholder="70"
-                                />
+                <Modal
+                    animationType="slide"
+                    transparent={true}
+                    visible={showBMRModal}
+                    onRequestClose={() => setShowBMRModal(false)}>
+                    <View style={styles.modalOverlay}>
+                        <View style={styles.modalContent}>
+                            <View style={styles.modalHeader}>
+                                <Text style={styles.modalTitle}>Calculate BMR</Text>
+                                <TouchableOpacity 
+                                    style={styles.closeButton}
+                                    onPress={() => setShowBMRModal(false)}
+                                    activeOpacity={0.7}>
+                                    <X size={24} color="#8E8E93" />
+                                </TouchableOpacity>
                             </View>
 
-                            <View style={styles.inputGroup}>
-                                <Text style={styles.inputLabel}>Height (cm)</Text>
-                                <TextInput
-                                    style={styles.input}
-                                    value={bmrInputs.height}
-                                    onChangeText={(text) => setBmrInputs(prev => ({ ...prev, height: text }))}
-                                    keyboardType="numeric"
-                                    placeholder="170"
-                                />
-                            </View>
-
-                            <View style={styles.inputGroup}>
-                                <Text style={styles.inputLabel}>Age</Text>
-                                <TextInput
-                                    style={styles.input}
-                                    value={bmrInputs.age}
-                                    onChangeText={(text) => setBmrInputs(prev => ({ ...prev, age: text }))}
-                                    keyboardType="numeric"
-                                    placeholder="25"
-                                />
-                            </View>
-
-                            <View style={styles.inputGroup}>
-                                <Text style={styles.inputLabel}>Gender</Text>
-                                <View style={styles.genderButtons}>
-                                    <TouchableOpacity
-                                        style={[
-                                            styles.genderButton,
-                                            bmrInputs.gender === 'male' && styles.genderButtonActive
-                                        ]}
-                                        onPress={() => setBmrInputs(prev => ({ ...prev, gender: 'male' }))}
-                                    >
-                                        <Text style={[
-                                            styles.genderButtonText,
-                                            bmrInputs.gender === 'male' && styles.genderButtonTextActive
-                                        ]}>Male</Text>
-                                    </TouchableOpacity>
-                                    <TouchableOpacity
-                                        style={[
-                                            styles.genderButton,
-                                            bmrInputs.gender === 'female' && styles.genderButtonActive
-                                        ]}
-                                        onPress={() => setBmrInputs(prev => ({ ...prev, gender: 'female' }))}
-                                    >
-                                        <Text style={[
-                                            styles.genderButtonText,
-                                            bmrInputs.gender === 'female' && styles.genderButtonTextActive
-                                        ]}>Female</Text>
-                                    </TouchableOpacity>
+                            <View style={styles.bmrForm}>
+                                <View style={styles.inputGroup}>
+                                    <Text style={styles.inputLabel}>Weight (kg)</Text>
+                                    <TextInput
+                                        style={styles.input}
+                                        value={bmrInputs.weight}
+                                        onChangeText={(text) => setBmrInputs(prev => ({ ...prev, weight: text }))}
+                                        keyboardType="numeric"
+                                        placeholder="70"
+                                    />
                                 </View>
+
+                                <View style={styles.inputGroup}>
+                                    <Text style={styles.inputLabel}>Height (cm)</Text>
+                                    <TextInput
+                                        style={styles.input}
+                                        value={bmrInputs.height}
+                                        onChangeText={(text) => setBmrInputs(prev => ({ ...prev, height: text }))}
+                                        keyboardType="numeric"
+                                        placeholder="170"
+                                    />
+                                </View>
+
+                                <View style={styles.inputGroup}>
+                                    <Text style={styles.inputLabel}>Age</Text>
+                                    <TextInput
+                                        style={styles.input}
+                                        value={bmrInputs.age}
+                                        onChangeText={(text) => setBmrInputs(prev => ({ ...prev, age: text }))}
+                                        keyboardType="numeric"
+                                        placeholder="25"
+                                    />
+                                </View>
+
+                                <View style={styles.inputGroup}>
+                                    <Text style={styles.inputLabel}>Gender</Text>
+                                    <View style={styles.genderButtons}>
+                                        <TouchableOpacity
+                                            style={[
+                                                styles.genderButton,
+                                                bmrInputs.gender === 'male' && styles.genderButtonActive
+                                            ]}
+                                            onPress={() => setBmrInputs(prev => ({ ...prev, gender: 'male' }))}
+                                        >
+                                            <Text style={[
+                                                styles.genderButtonText,
+                                                bmrInputs.gender === 'male' && styles.genderButtonTextActive
+                                            ]}>Male</Text>
+                                        </TouchableOpacity>
+                                        <TouchableOpacity
+                                            style={[
+                                                styles.genderButton,
+                                                bmrInputs.gender === 'female' && styles.genderButtonActive
+                                            ]}
+                                            onPress={() => setBmrInputs(prev => ({ ...prev, gender: 'female' }))}
+                                        >
+                                            <Text style={[
+                                                styles.genderButtonText,
+                                                bmrInputs.gender === 'female' && styles.genderButtonTextActive
+                                            ]}>Female</Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                </View>
+
+                                <TouchableOpacity
+                                    style={styles.calculateButton}
+                                    onPress={calculateBMR}
+                                    activeOpacity={0.7}>
+                                    <Text style={styles.calculateButtonText}>Calculate</Text>
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+                    </View>
+                </Modal>
+
+                <Modal
+                    visible={showGoalModal}
+                    transparent
+                    animationType="slide"
+                    onRequestClose={() => setShowGoalModal(false)}
+                >
+                    <View style={styles.modalOverlay}>
+                        <View style={styles.modalContent}>
+                            <View style={styles.modalHeader}>
+                                <Text style={styles.modalTitle}>Set Calorie Goal</Text>
+                                <TouchableOpacity
+                                    style={styles.closeButton}
+                                    onPress={() => setShowGoalModal(false)}
+                                >
+                                    <X size={24} color="#8E8E93" />
+                                </TouchableOpacity>
                             </View>
 
-                            <TouchableOpacity
-                                style={styles.calculateButton}
-                                onPress={calculateBMR}
-                            >
-                                <Text style={styles.calculateButtonText}>Calculate & Set Goal</Text>
-                            </TouchableOpacity>
+                            <View style={styles.goalEditor}>
+                                <TextInput
+                                    style={styles.goalInput}
+                                    value={String(calorieGoal)}
+                                    onChangeText={(text) => setCalorieGoal(parseInt(text) || 0)}
+                                    keyboardType="numeric"
+                                    placeholder="Enter daily calorie goal"
+                                />
+                                <TouchableOpacity
+                                    style={styles.saveButton}
+                                    onPress={updateCalorieGoal}
+                                >
+                                    <Text style={styles.saveButtonText}>Save Goal</Text>
+                                </TouchableOpacity>
+                            </View>
                         </View>
                     </View>
-                </View>
-            </Modal>
-
-            <Modal
-                visible={showGoalModal}
-                transparent
-                animationType="slide"
-                onRequestClose={() => setShowGoalModal(false)}
-            >
-                <View style={styles.modalOverlay}>
-                    <View style={styles.modalContent}>
-                        <View style={styles.modalHeader}>
-                            <Text style={styles.modalTitle}>Set Calorie Goal</Text>
-                            <TouchableOpacity
-                                style={styles.closeButton}
-                                onPress={() => setShowGoalModal(false)}
-                            >
-                                <X size={24} color="#8E8E93" />
-                            </TouchableOpacity>
-                        </View>
-
-                        <View style={styles.goalEditor}>
-                            <TextInput
-                                style={styles.goalInput}
-                                value={String(calorieGoal)}
-                                onChangeText={(text) => setCalorieGoal(parseInt(text) || 0)}
-                                keyboardType="numeric"
-                                placeholder="Enter daily calorie goal"
-                            />
-                            <TouchableOpacity
-                                style={styles.saveButton}
-                                onPress={updateCalorieGoal}
-                            >
-                                <Text style={styles.saveButtonText}>Save Goal</Text>
-                            </TouchableOpacity>
-                        </View>
-                    </View>
-                </View>
-            </Modal>
-        </ScrollView>
+                </Modal>
+            </ScrollView>
+        </SafeAreaView>
     );
 }
 
@@ -757,8 +758,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#F2F2F7',
     },
     safeArea: {
-        height: 44,
-        backgroundColor: '#FFFFFF',
+        height: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
     },
     header: {
         backgroundColor: '#FFFFFF',
@@ -931,14 +931,19 @@ const styles = StyleSheet.create({
         marginTop: 16,
     },
     waterDrop: {
-        width: 60,
-        height: 60,
-        borderRadius: 30,
-        backgroundColor: '#F2F2F7',
+        width: 48,
+        height: 48,
+        borderRadius: 24,
         justifyContent: 'center',
         alignItems: 'center',
+        backgroundColor: '#F2F2F7',
         borderWidth: 2,
         borderColor: '#007AFF',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 2,
+        elevation: 1,
     },
     waterDropFilled: {
         backgroundColor: '#007AFF',
@@ -971,8 +976,9 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
+        elevation: 3,
     },
     bmrContent: {
         flexDirection: 'row',
@@ -1011,6 +1017,11 @@ const styles = StyleSheet.create({
         borderTopLeftRadius: 24,
         borderTopRightRadius: 24,
         padding: 24,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: -2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 5,
     },
     modalHeader: {
         flexDirection: 'row',
@@ -1070,6 +1081,11 @@ const styles = StyleSheet.create({
         borderRadius: 12,
         alignItems: 'center',
         marginTop: 8,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 2,
     },
     calculateButtonText: {
         color: '#FFFFFF',

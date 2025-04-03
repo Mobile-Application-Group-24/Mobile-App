@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, TextInput, ActivityIndicator, StatusBar, SafeAreaView, Modal, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, TextInput, ActivityIndicator, StatusBar, SafeAreaView, Modal, Alert, Platform } from 'react-native';
 import { Search, Users, Plus, KeyRound, X } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { getGroups, type Group, joinGroupWithCode } from '@/utils/supabase';
@@ -106,7 +106,7 @@ export default function GroupsScreen() {
     <>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
       <SafeAreaView style={styles.safeAreaTop} />
-      <ScrollView style={styles.container}>
+      <View style={styles.mainContainer}>
         <View style={styles.header}>
           <View style={styles.searchContainer}>
             <View style={styles.searchBar}>
@@ -120,73 +120,78 @@ export default function GroupsScreen() {
             </View>
             <TouchableOpacity
               style={styles.joinButton}
-              onPress={() => setJoinModalVisible(true)}>
+              onPress={() => setJoinModalVisible(true)}
+              activeOpacity={0.7}>
               <KeyRound size={20} color="#FFFFFF" />
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.createButton}
-              onPress={() => router.push('/groups/new')}>
+              onPress={() => router.push('/groups/new')}
+              activeOpacity={0.7}>
               <Plus size={20} color="#FFFFFF" />
             </TouchableOpacity>
           </View>
           <TouchableOpacity
             style={[styles.filterButton, showOwned && styles.filterButtonActive]}
-            onPress={() => setShowOwned(!showOwned)}>
+            onPress={() => setShowOwned(!showOwned)}
+            activeOpacity={0.7}>
             <Text style={[styles.filterButtonText, showOwned && styles.filterButtonTextActive]}>
               My Groups Only
             </Text>
           </TouchableOpacity>
         </View>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Your Groups</Text>
-          
-          {loading ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color="#007AFF" />
-            </View>
-          ) : filteredGroups.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Users size={48} color="#8E8E93" />
-              <Text style={styles.emptyStateText}>No groups found</Text>
-              <Text style={styles.emptyStateSubtext}>
-                {showOwned 
-                  ? "You haven't created any groups yet"
-                  : "No groups match your search"}
-              </Text>
-            </View>
-          ) : (
-            filteredGroups.map((group) => (
-              <TouchableOpacity 
-                key={group.id} 
-                style={styles.groupCard}
-                onPress={() => router.push(`/groups/${group.id}`)}
-              >
-                <Image 
-                  source={{ uri: group.cover_image || 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48' }} 
-                  style={styles.groupImage}
-                  onError={() => {
-                    console.log("Fehler beim Laden des Gruppenbilds:", group.cover_image);
-                    // If image loading fails, we could update the state to use a default image,
-                    // but that would require adding a state management for each group
-                  }}
-                />
-                <View style={styles.groupInfo}>
-                  <Text style={styles.groupName}>{group.name}</Text>
-                  <View style={styles.groupStats}>
-                    <Users size={16} color="#8E8E93" />
-                    <Text style={styles.groupMembers}>{group.member_count} members</Text>
-                    {group.owner_id === (group as any).currentUserId && (
-                      <View style={styles.ownerBadge}>
-                        <Text style={styles.ownerText}>Owner</Text>
-                      </View>
-                    )}
+        <ScrollView style={styles.scrollContainer}>
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Your Groups</Text>
+            
+            {loading ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color="#007AFF" />
+              </View>
+            ) : filteredGroups.length === 0 ? (
+              <View style={styles.emptyState}>
+                <Users size={48} color="#8E8E93" />
+                <Text style={styles.emptyStateText}>No groups found</Text>
+                <Text style={styles.emptyStateSubtext}>
+                  {showOwned 
+                    ? "You haven't created any groups yet"
+                    : "No groups match your search"}
+                </Text>
+              </View>
+            ) : (
+              filteredGroups.map((group) => (
+                <TouchableOpacity 
+                  key={group.id} 
+                  style={styles.groupCard}
+                  onPress={() => router.push(`/groups/${group.id}`)}
+                >
+                  <Image 
+                    source={{ uri: group.cover_image || 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48' }} 
+                    style={styles.groupImage}
+                    onError={() => {
+                      console.log("Fehler beim Laden des Gruppenbilds:", group.cover_image);
+                      // If image loading fails, we could update the state to use a default image,
+                      // but that would require adding a state management for each group
+                    }}
+                  />
+                  <View style={styles.groupInfo}>
+                    <Text style={styles.groupName}>{group.name}</Text>
+                    <View style={styles.groupStats}>
+                      <Users size={16} color="#8E8E93" />
+                      <Text style={styles.groupMembers}>{group.member_count} members</Text>
+                      {group.owner_id === (group as any).currentUserId && (
+                        <View style={styles.ownerBadge}>
+                          <Text style={styles.ownerText}>Owner</Text>
+                        </View>
+                      )}
+                    </View>
                   </View>
-                </View>
-              </TouchableOpacity>
-            ))
-          )}
-        </View>
+                </TouchableOpacity>
+              ))
+            )}
+          </View>
+        </ScrollView>
 
         {/* Join Group Modal */}
         <Modal
@@ -205,7 +210,7 @@ export default function GroupsScreen() {
                     setInviteCode('');
                   }}
                   style={styles.closeButton}
-                >
+                  activeOpacity={0.7}>
                   <X size={24} color="#8E8E93" />
                 </TouchableOpacity>
               </View>
@@ -227,7 +232,7 @@ export default function GroupsScreen() {
                 style={styles.joinGroupButton}
                 onPress={handleJoinWithCode}
                 disabled={joiningGroup}
-              >
+                activeOpacity={0.7}>
                 {joiningGroup ? (
                   <ActivityIndicator size="small" color="#FFFFFF" />
                 ) : (
@@ -237,12 +242,20 @@ export default function GroupsScreen() {
             </View>
           </View>
         </Modal>
-      </ScrollView>
+      </View>
     </>
   );
 }
 
 const styles = StyleSheet.create({
+  mainContainer: {
+    flex: 1,
+    backgroundColor: '#F2F2F7',
+  },
+  scrollContainer: {
+    flex: 1,
+    backgroundColor: '#F2F2F7',
+  },
   container: {
     flex: 1,
     backgroundColor: '#F2F2F7',
@@ -257,10 +270,15 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#E5E5EA',
     gap: 12,
+    ...(Platform.OS === 'android' && {
+      paddingTop: StatusBar.currentHeight || 24,
+    }),
   },
   searchContainer: {
     flexDirection: 'row',
     gap: 12,
+    height: Platform.OS === 'android' ? 52 : 44,
+    alignItems: 'center',
   },
   searchBar: {
     flex: 1,
@@ -269,29 +287,44 @@ const styles = StyleSheet.create({
     backgroundColor: '#F2F2F7',
     borderRadius: 12,
     paddingHorizontal: 12,
-    height: 44,
+    height: Platform.OS === 'android' ? 48 : 44,
   },
   searchInput: {
     flex: 1,
     marginLeft: 8,
     fontSize: 16,
     height: '100%',
+    ...(Platform.OS === 'android' && {
+      paddingVertical: 8,
+      paddingTop: 8,
+      paddingBottom: 8,
+    }),
   },
   createButton: {
-    width: 44,
-    height: 44,
+    width: Platform.OS === 'android' ? 48 : 44,
+    height: Platform.OS === 'android' ? 48 : 44,
     borderRadius: 12,
     backgroundColor: '#007AFF',
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   joinButton: {
-    width: 44,
-    height: 44,
+    width: Platform.OS === 'android' ? 48 : 44,
+    height: Platform.OS === 'android' ? 48 : 44,
     borderRadius: 12,
     backgroundColor: '#34C759',
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   filterButton: {
     backgroundColor: '#F2F2F7',
@@ -324,6 +357,11 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 12,
     overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   groupImage: {
     width: '100%',
@@ -453,6 +491,11 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 16,
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   joinGroupButtonText: {
     color: '#FFFFFF',

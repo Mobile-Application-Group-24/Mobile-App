@@ -66,23 +66,19 @@ export default function ProfileScreen() {
 
   return (
     <>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
-      <SafeAreaView style={styles.safeAreaTop} />
+      <StatusBar 
+        barStyle="dark-content" 
+        backgroundColor="transparent" 
+        translucent={Platform.OS === 'android'} 
+      />
+      <SafeAreaView style={[styles.safeAreaTop, { paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0 }]} />
       <ScrollView style={styles.container}>
-        <View style={styles.header}>
+        <View style={[styles.header, Platform.OS === 'android' && { paddingTop: 20 }]}>
           <Image
             source={{ 
-              uri: profile.avatar_url || 'https://images.unsplash.com/photo-1511367461989-f85a21fda167?q=80&w=3131&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D'
+              uri: profile?.avatar_url || 'https://images.unsplash.com/photo-1511367461989-f85a21fda167?q=80&w=3131&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D'
             }}
             style={styles.profileImage}
-            onError={(e) => {
-              console.log("Fehler beim Laden des Profilbilds:", profile.avatar_url);
-              // If image failed to load, try to use default image
-              if (e.nativeEvent.error && profile.avatar_url) {
-                // Update the component state to use default image
-                setProfile(prev => prev ? {...prev, avatar_url: null} : null);
-              }
-            }}
           />
           <Text style={styles.name}>{profile.full_name || 'Anonymous User'}</Text>
           <Text style={styles.bio}>{profile.bio || 'No bio yet'}</Text>
@@ -90,7 +86,7 @@ export default function ProfileScreen() {
           <TouchableOpacity 
             style={styles.editButton}
             onPress={() => router.push('/profile/settings')}
-          >
+            activeOpacity={0.7}>
             <Settings size={20} color="#007AFF" />
             <Text style={styles.editButtonText}>Edit Profile</Text>
           </TouchableOpacity>
@@ -226,6 +222,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#F2F2F7',
     padding: 10,
     borderRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 1,
   },
   editButtonText: {
     color: '#007AFF',
@@ -257,6 +258,11 @@ const styles = StyleSheet.create({
     margin: 16,
     padding: 16,
     borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 2,
   },
   sectionHeader: {
     flexDirection: 'row',
