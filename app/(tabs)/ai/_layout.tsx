@@ -1,5 +1,5 @@
 import { Stack } from 'expo-router';
-import React, { useState, useRef } from 'react';
+import React from 'react';
 
 export default function AILayout() {
   return (

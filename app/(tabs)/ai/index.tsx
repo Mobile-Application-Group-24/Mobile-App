@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { ThumbsUp, ThumbsDown, MessageSquare } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
+import { checkDatabaseSchema, createWorkoutsTable } from '@/utils/database-checker';
 
 const suggestions = [
   {
@@ -29,10 +30,56 @@ const suggestions = [
 
 export default function AIScreen() {
   const [responses, setResponses] = useState<Record<number, 'accept' | 'decline'>>({});
+  const [isChecking, setIsChecking] = useState(false);
   const router = useRouter();
 
   const handleResponse = (id: number, response: 'accept' | 'decline') => {
     setResponses(prev => ({ ...prev, [id]: response }));
+  };
+
+  const handleDatabaseCheck = async () => {
+    setIsChecking(true);
+    try {
+      const result = await checkDatabaseSchema();
+      
+      // Add a button to create the workouts table if it doesn't exist
+      if (!result.tablesExist?.workouts) {
+        Alert.alert(
+          'Database Check',
+          `Authentication: ${result.authentication ? '✅' : '❌'}\n` +
+          `User ID: ${result.userId || 'None'}\n` +
+          `Nutrition Settings: ${result.nutritionSettings ? '✅' : '❌'}\n` +
+          `Workouts: ❌ (Table does not exist)\n`,
+          [
+            { 
+              text: 'Create Workouts Table', 
+              onPress: async () => {
+                const created = await createWorkoutsTable();
+                if (created) {
+                  Alert.alert('Success', 'Workouts table was created successfully');
+                } else {
+                  Alert.alert('Error', 'Failed to create workouts table');
+                }
+              } 
+            },
+            { text: 'OK' }
+          ]
+        );
+      } else {
+        Alert.alert(
+          'Database Check',
+          `Authentication: ${result.authentication ? '✅' : '❌'}\n` +
+          `User ID: ${result.userId || 'None'}\n` +
+          `Nutrition Settings: ${result.nutritionSettings ? '✅' : '❌'}\n` +
+          `Workouts: ${result.workouts ? '✅' : '❌'}\n`,
+          [{ text: 'OK' }]
+        );
+      }
+    } catch (error) {
+      Alert.alert('Error', `Failed to check database: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsChecking(false);
+    }
   };
 
   return (
@@ -99,6 +146,16 @@ export default function AIScreen() {
           )}
         </View>
       ))}
+
+      <TouchableOpacity 
+        style={[styles.debugButton, isChecking && styles.debugButtonDisabled]} 
+        onPress={handleDatabaseCheck}
+        disabled={isChecking}
+      >
+        <Text style={styles.debugButtonText}>
+          {isChecking ? 'Checking...' : 'Check Database Connection'}
+        </Text>
+      </TouchableOpacity>
     </ScrollView>
   );
 }
@@ -244,5 +301,20 @@ const styles = StyleSheet.create({
   },
   declinedText: {
     color: '#FF3B30',
+  },
+  debugButton: {
+    backgroundColor: '#FF9500',
+    borderRadius: 12,
+    padding: 12,
+    margin: 16,
+    alignItems: 'center',
+  },
+  debugButtonDisabled: {
+    backgroundColor: '#CCCCCC',
+  },
+  debugButtonText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '600',
   },
 });

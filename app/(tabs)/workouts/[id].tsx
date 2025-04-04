@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Platform, StatusBar, SafeAreaView, KeyboardAvoidingView, Keyboard, TouchableWithoutFeedback } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { X, Clock, ChartBar as BarChart3, Star, Plus, MoveVertical as MoreVertical, CalendarClock, Scale, File as FileEdit, Dumbbell } from 'lucide-react-native';
-import { format } from 'date-fns';
-import { getWorkoutPlans, type WorkoutPlan } from '@/utils/storage';
+import { X, Clock, ChartBar as BarChart3, Star, Plus, MoveVertical as MoreVertical, CalendarClock, Scale, File as FileEdit, Dumbbell, Trash } from 'lucide-react-native';
+import { format, parseISO } from 'date-fns';
+import { getWorkout, deleteWorkout, updateWorkout, Workout, Exercise } from '@/utils/workout';
 
 type SetType = 'normal' | 'warmup' | 'dropset';
 
@@ -21,41 +21,79 @@ interface ExerciseProgress {
   sets: WorkoutSet[];
 }
 
-export default function WorkoutTrackingScreen() {
+export default function WorkoutDetailScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
-  const [startTime] = useState(new Date());
-  const [endTime, setEndTime] = useState<Date | null>(null);
+  const [workout, setWorkout] = useState<Workout | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [bodyWeight, setBodyWeight] = useState('');
   const [notes, setNotes] = useState('');
-  const [workoutPlan, setWorkoutPlan] = useState<WorkoutPlan | null>(null);
   const [exercises, setExercises] = useState<ExerciseProgress[]>([]);
 
   useEffect(() => {
-    loadWorkoutPlan();
+    if (id) {
+      loadWorkout(id as string);
+    } else {
+      setError('Workout ID not found');
+      setLoading(false);
+    }
   }, [id]);
 
-  const loadWorkoutPlan = async () => {
+  const loadWorkout = async (workoutId: string) => {
     try {
-      const plans = await getWorkoutPlans();
-      const plan = plans.find(p => p.id === id);
-      if (plan) {
-        setWorkoutPlan(plan);
-        // Initialize exercises from the plan
-        setExercises(plan.exercises.map(exercise => ({
-          id: exercise.id,
-          name: exercise.name,
-          sets: Array(exercise.sets).fill(null).map((_, index) => ({
-            id: (index + 1).toString(),
-            weight: '',
-            reps: '',
-            type: 'normal'
-          }))
-        })));
-      }
+      setLoading(true);
+      setError(null);
+      const data = await getWorkout(workoutId);
+      setWorkout(data);
+      setNotes(data.notes || '');
+
+      // Initialize exercises from the workout data
+      setExercises(data.exercises.map(exercise => ({
+        id: exercise.id,
+        name: exercise.name,
+        sets: Array(exercise.sets).fill(null).map((_, index) => ({
+          id: (index + 1).toString(),
+          weight: exercise.weight?.toString() || '',
+          reps: exercise.reps.toString() || '',
+          type: 'normal'
+        }))
+      })));
+      
     } catch (error) {
-      console.error('Error loading workout plan:', error);
+      console.error('Error loading workout:', error);
+      setError('Failed to load workout details');
+    } finally {
+      setLoading(false);
     }
+  };
+
+  const handleDelete = () => {
+    Alert.alert(
+      'Delete Workout',
+      'Are you sure you want to delete this workout?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              if (id) {
+                await deleteWorkout(id as string);
+                router.back();
+              }
+            } catch (error) {
+              console.error('Error deleting workout:', error);
+              Alert.alert('Error', 'Failed to delete workout');
+            }
+          },
+        },
+      ]
+    );
   };
 
   const addSet = (exerciseId: string) => {
@@ -113,6 +151,43 @@ export default function WorkoutTrackingScreen() {
       return exercise;
     }));
   };
+
+  const saveWorkoutChanges = async () => {
+    if (!workout || !id) return;
+
+    try {
+      const updatedWorkout = {
+        ...workout,
+        notes: notes
+        // Add other fields you want to update
+      };
+
+      await updateWorkout(id as string, updatedWorkout);
+      Alert.alert('Success', 'Workout updated successfully');
+    } catch (error) {
+      console.error('Error updating workout:', error);
+      Alert.alert('Error', 'Failed to update workout');
+    }
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#007AFF" />
+      </View>
+    );
+  }
+
+  if (error || !workout) {
+    return (
+      <View style={styles.errorContainer}>
+        <Text style={styles.errorText}>{error || 'Workout not found'}</Text>
+        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+          <Text style={styles.backButtonText}>Go Back</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <KeyboardAvoidingView 
@@ -522,5 +597,33 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 2,
     elevation: 1,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  errorText: {
+    fontSize: 16,
+    color: '#FF3B30',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  backButton: {
+    backgroundColor: '#007AFF',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+  },
+  backButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
