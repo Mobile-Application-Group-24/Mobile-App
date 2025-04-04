@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Platform, StatusBar, SafeAreaView, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Platform, StatusBar, SafeAreaView, KeyboardAvoidingView, Keyboard, TouchableWithoutFeedback } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { X, Clock, ChartBar as BarChart3, Star, Plus, MoveVertical as MoreVertical, CalendarClock, Scale, File as FileEdit, Dumbbell, Trash } from 'lucide-react-native';
 import { format, parseISO } from 'date-fns';
@@ -190,168 +190,157 @@ export default function WorkoutDetailScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
-      <ScrollView style={styles.content}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.closeButton} activeOpacity={0.7}>
-            <X size={24} color="#007AFF" />
-          </TouchableOpacity>
-          <Text style={styles.date}>{format(parseISO(workout.date), 'dd. MMMM')}</Text>
-          <View style={styles.headerActions}>
-            <TouchableOpacity style={styles.headerButton} activeOpacity={0.7}>
-              <Clock size={24} color="#007AFF" />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.headerButton} activeOpacity={0.7}>
-              <MoreVertical size={24} color="#007AFF" />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        <View style={styles.workoutInfo}>
-          <Text style={styles.workoutName}>{workout.title}</Text>
-          
-          <View style={styles.infoGrid}>
-            <View style={styles.infoCard}>
-              <View style={styles.infoIconContainer}>
-                <CalendarClock size={20} color="#007AFF" />
-              </View>
-              <View style={styles.infoContent}>
-                <Text style={styles.infoLabel}>Date</Text>
-                <Text style={styles.infoValue}>
-                  {format(parseISO(workout.date), 'MMM d, yyyy')}
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.infoCard}>
-              <View style={styles.infoIconContainer}>
-                <Clock size={20} color="#34C759" />
-              </View>
-              <View style={styles.infoContent}>
-                <Text style={styles.infoLabel}>Duration</Text>
-                <Text style={styles.infoValue}>
-                  {workout.duration_minutes} min
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.infoCard}>
-              <View style={styles.infoIconContainer}>
-                <Dumbbell size={20} color="#FF9500" />
-              </View>
-              <View style={styles.infoContent}>
-                <Text style={styles.infoLabel}>Exercises</Text>
-                <Text style={styles.infoValue}>
-                  {workout.exercises.length}
-                </Text>
-              </View>
-            </View>
-
-            <View style={[styles.infoCard, styles.notesCard]}>
-              <View style={styles.infoIconContainer}>
-                <FileEdit size={20} color="#FF3B30" />
-              </View>
-              <View style={styles.infoContent}>
-                <Text style={styles.infoLabel}>Notes</Text>
-                <TextInput
-                  style={[styles.infoInput, styles.notesInput]}
-                  value={notes}
-                  onChangeText={setNotes}
-                  placeholder="Add workout notes..."
-                  placeholderTextColor="#8E8E93"
-                  multiline
-                />
-              </View>
-            </View>
-          </View>
-        </View>
-
-        {exercises.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Dumbbell size={48} color="#8E8E93" />
-            <Text style={styles.emptyStateText}>No exercises found</Text>
-            <Text style={styles.emptyStateSubtext}>
-              This workout doesn't have any exercises yet
-            </Text>
-          </View>
-        ) : (
-          exercises.map((exercise, exerciseIndex) => (
-            <View key={exerciseIndex} style={styles.exerciseCard}>
-              <Text style={styles.exerciseName}>{exercise.name}</Text>
-              {exercise.sets.map((set, setIndex) => (
-                <View key={setIndex} style={styles.setContainer}>
-                  <View style={styles.setNumber}>
-                    <Text style={styles.setNumberText}>{setIndex + 1}</Text>
-                  </View>
-                  <View style={styles.setInputs}>
-                    <View style={styles.inputGroup}>
-                      <Text style={styles.inputLabel}>Weight</Text>
-                      <TextInput
-                        style={styles.input}
-                        keyboardType="numeric"
-                        value={set.weight}
-                        onChangeText={(text) => updateSet(exercise.id, set.id, 'weight', text)}
-                        placeholder="kg"
-                      />
-                    </View>
-                    <View style={styles.inputGroup}>
-                      <Text style={styles.inputLabel}>Reps</Text>
-                      <TextInput
-                        style={styles.input}
-                        keyboardType="numeric"
-                        value={set.reps}
-                        onChangeText={(text) => updateSet(exercise.id, set.id, 'reps', text)}
-                        placeholder="#"
-                      />
-                    </View>
-                    <TouchableOpacity 
-                      style={[
-                        styles.setType,
-                        set.type === 'warmup' && styles.warmupType,
-                        set.type === 'dropset' && styles.dropsetType,
-                      ]} 
-                      onPress={() => toggleSetType(exercise.id, set.id)}
-                      activeOpacity={0.7}>
-                      <Text style={[
-                        styles.setTypeText,
-                        set.type === 'warmup' && styles.warmupTypeText,
-                        set.type === 'dropset' && styles.dropsetTypeText,
-                      ]}>
-                        {set.type === 'normal' ? 'Normal' : 
-                         set.type === 'warmup' ? 'Warm-up' : 'Drop Set'}
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              ))}
-
-              <View style={styles.setActions}>
-                <TouchableOpacity
-                  style={styles.addSetButton}
-                  onPress={() => addSet(exercise.id)}
-                  activeOpacity={0.7}>
-                  <Plus size={20} color="#FFFFFF" />
-                  <Text style={styles.addSetText}>Add Set</Text>
+    <KeyboardAvoidingView 
+      behavior="padding"
+      style={{ flex: 1 }}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}>
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+        <SafeAreaView style={styles.container}>
+          <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+          <ScrollView 
+            style={styles.content}
+            keyboardShouldPersistTaps="handled">
+            <View style={styles.header}>
+              <TouchableOpacity onPress={() => router.back()} style={styles.closeButton} activeOpacity={0.7}>
+                <X size={24} color="#007AFF" />
+              </TouchableOpacity>
+              <Text style={styles.date}>{format(new Date(), 'dd. MMMM')}</Text>
+              <View style={styles.headerActions}>
+                <TouchableOpacity style={styles.headerButton} activeOpacity={0.7}>
+                  <Clock size={24} color="#007AFF" />
                 </TouchableOpacity>
+                <TouchableOpacity style={styles.headerButton} activeOpacity={0.7}>
+                  <MoreVertical size={24} color="#007AFF" />
+                </TouchableOpacity>
+              </View>
+            </View>
 
-                <View style={styles.setActionButtons}>
-                  <TouchableOpacity style={styles.actionButton} activeOpacity={0.7}>
-                    <Clock size={20} color="#007AFF" />
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.actionButton} activeOpacity={0.7}>
-                    <BarChart3 size={20} color="#007AFF" />
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.actionButton} activeOpacity={0.7}>
-                    <Star size={20} color="#007AFF" />
-                  </TouchableOpacity>
+            <View style={styles.workoutInfo}>
+              <Text style={styles.workoutName}>{workoutPlan?.name || 'Workout'}</Text>
+              <View style={styles.infoGrid}>
+                <View style={styles.infoCard}>
+                  <View style={styles.infoIconContainer}>
+                    <Scale size={20} color="#FF9500" />
+                  </View>
+                  <View style={styles.infoContent}>
+                    <Text style={styles.infoLabel}>Body Weight</Text>
+                    <TextInput
+                      style={styles.infoInput}
+                      value={bodyWeight}
+                      onChangeText={setBodyWeight}
+                      placeholder="Enter weight"
+                      keyboardType="numeric"
+                      placeholderTextColor="#8E8E93"
+                    />
+                  </View>
+                </View>
+
+                <View style={[styles.infoCard, styles.notesCard]}>
+                  <View style={styles.infoIconContainer}>
+                    <FileEdit size={20} color="#FF3B30" />
+                  </View>
+                  <View style={styles.infoContent}>
+                    <Text style={styles.infoLabel}>Notes</Text>
+                    <TextInput
+                      style={[styles.infoInput, styles.notesInput]}
+                      value={notes}
+                      onChangeText={setNotes}
+                      placeholder="Add workout notes..."
+                      placeholderTextColor="#8E8E93"
+                      multiline
+                    />
+                  </View>
                 </View>
               </View>
             </View>
-          ))
-        )}
-      </ScrollView>
-    </SafeAreaView>
+
+            {exercises.length === 0 ? (
+              <View style={styles.emptyState}>
+                <Dumbbell size={48} color="#8E8E93" />
+                <Text style={styles.emptyStateText}>No exercises found</Text>
+                <Text style={styles.emptyStateSubtext}>
+                  This workout plan doesn't have any exercises yet
+                </Text>
+              </View>
+            ) : (
+              exercises.map((exercise, exerciseIndex) => (
+                <View key={exerciseIndex} style={styles.exerciseCard}>
+                  <Text style={styles.exerciseName}>{exercise.name}</Text>
+                  {exercise.sets.map((set, setIndex) => (
+                    <View key={setIndex} style={styles.setContainer}>
+                      <View style={styles.setNumber}>
+                        <Text style={styles.setNumberText}>{setIndex + 1}</Text>
+                      </View>
+                      <View style={styles.setInputs}>
+                        <View style={styles.inputGroup}>
+                          <Text style={styles.inputLabel}>Weight</Text>
+                          <TextInput
+                            style={styles.input}
+                            keyboardType="numeric"
+                            value={set.weight}
+                            onChangeText={(text) => updateSet(exercise.id, set.id, 'weight', text)}
+                            placeholder="kg"
+                          />
+                        </View>
+                        <View style={styles.inputGroup}>
+                          <Text style={styles.inputLabel}>Reps</Text>
+                          <TextInput
+                            style={styles.input}
+                            keyboardType="numeric"
+                            value={set.reps}
+                            onChangeText={(text) => updateSet(exercise.id, set.id, 'reps', text)}
+                            placeholder="#"
+                          />
+                        </View>
+                        <TouchableOpacity 
+                          style={[
+                            styles.setType,
+                            set.type === 'warmup' && styles.warmupType,
+                            set.type === 'dropset' && styles.dropsetType,
+                          ]} 
+                          onPress={() => toggleSetType(exercise.id, set.id)}
+                          activeOpacity={0.7}>
+                          <Text style={[
+                            styles.setTypeText,
+                            set.type === 'warmup' && styles.warmupTypeText,
+                            set.type === 'dropset' && styles.dropsetTypeText,
+                          ]}>
+                            {set.type === 'normal' ? 'Normal' : 
+                             set.type === 'warmup' ? 'Warm-up' : 'Drop Set'}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  ))}
+
+                  <View style={styles.setActions}>
+                    <TouchableOpacity
+                      style={styles.addSetButton}
+                      onPress={() => addSet(exercise.id)}
+                      activeOpacity={0.7}>
+                      <Plus size={20} color="#FFFFFF" />
+                      <Text style={styles.addSetText}>Add Set</Text>
+                    </TouchableOpacity>
+
+                    <View style={styles.setActionButtons}>
+                      <TouchableOpacity style={styles.actionButton} activeOpacity={0.7}>
+                        <Clock size={20} color="#007AFF" />
+                      </TouchableOpacity>
+                      <TouchableOpacity style={styles.actionButton} activeOpacity={0.7}>
+                        <BarChart3 size={20} color="#007AFF" />
+                      </TouchableOpacity>
+                      <TouchableOpacity style={styles.actionButton} activeOpacity={0.7}>
+                        <Star size={20} color="#007AFF" />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </View>
+              ))
+            )}
+          </ScrollView>
+        </SafeAreaView>
+      </TouchableWithoutFeedback>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -368,7 +357,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: 16,
-    paddingTop: Platform.OS === 'android' ? 16 + (StatusBar.currentHeight ?? 0) : 60,
+    paddingTop: Platform.OS === 'android' ? 16 + (StatusBar.currentHeight ?? 0) : 16,
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: '#E5E5EA',
