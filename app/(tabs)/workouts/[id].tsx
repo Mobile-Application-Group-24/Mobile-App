@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Platform, StatusBar, SafeAreaView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Platform, StatusBar, SafeAreaView, Alert, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { X, Clock, ChartBar as BarChart3, Star, Plus, MoveVertical as MoreVertical, CalendarClock, Scale, File as FileEdit, Dumbbell, Trash } from 'lucide-react-native';
 import { format, parseISO } from 'date-fns';

@@ -7,6 +7,7 @@ import { Inter_400Regular, Inter_600SemiBold, Inter_700Bold } from '@expo-google
 import { SplashScreen } from 'expo-router';
 import { View } from 'react-native';
 import { AuthProvider } from '../providers/AuthProvider';
+import React from 'react';
 
 // Prevent the splash screen from auto-hiding
 SplashScreen.preventAutoHideAsync();

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Alert, StatusBar, SafeAreaView } from 'react-native';
-import { Send } from 'lucide-react-native';
+import { Send, ThumbsUp, CheckCircle } from 'lucide-react-native';
 import { sendMessageToDeepseek, updateNutritionData, addWorkoutEntry } from '@/utils/deepseek';
 import { useSession } from '@/utils/auth';
 import Markdown from 'react-native-markdown-display';
@@ -234,71 +234,71 @@ export default function ChatScreen() {
           style={styles.chatContainer}
           onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}>
           {messages.map((message) => (
-            <View
-              key={message.id}
-              style={[
-                styles.messageContainer,
-                message.isUser ? styles.userMessage : styles.aiMessage,
-              ]}>
-              {message.isUser ? (
-                <Text style={[
-                  styles.messageText,
-                  styles.userMessageText,
+            <View key={message.id}>
+              <View
+                style={[
+                  styles.messageContainer,
+                  message.isUser ? styles.userMessage : styles.aiMessage,
                 ]}>
-                  {message.text}
+                {message.isUser ? (
+                  <Text style={[
+                    styles.messageText,
+                    styles.userMessageText,
+                  ]}>
+                    {message.text}
+                  </Text>
+                ) : (
+                  <Markdown
+                    style={markdownStyles}>
+                    {message.text}
+                  </Markdown>
+                )}
+                <Text style={[
+                  styles.timestamp,
+                  message.isUser ? styles.userTimestamp : styles.aiTimestamp,
+                ]}>
+                  {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </Text>
-              ) : (
-                <Markdown
-                  style={markdownStyles}>
-                  {message.text}
-                </Markdown>
-              )}
-              <Text style={[
-                styles.timestamp,
-                message.isUser ? styles.userTimestamp : styles.aiTimestamp,
-              ]}>
-                {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              </Text>
-            </View>
-         
-            {message.suggestions && message.suggestions.length > 0 && (
-              <View style={styles.suggestionsContainer}>
-                {message.suggestions.map((suggestion) => (
-                  <View key={suggestion.id} style={styles.suggestionCard}>
-                    <View style={styles.suggestionHeader}>
-                      <Text style={styles.suggestionType}>
-                        {suggestion.type === 'nutrition' ? '🍎 Nutrition' : '💪 Workout'}
-                      </Text>
-                      <Text style={styles.suggestionTitle}>{suggestion.title}</Text>
-                    </View>
-                    
-                    {suggestion.accepted ? (
-                      <View style={styles.acceptedContainer}>
-                        <CheckCircle size={18} color="#34C759" />
-                        <Text style={styles.acceptedText}>Applied</Text>
-                      </View>
-                    ) : (
-                      <TouchableOpacity 
-                        style={styles.acceptButton}
-                        onPress={() => handleAcceptSuggestion(message.id, suggestion)}
-                      >
-                        <ThumbsUp size={18} color="#FFFFFF" />
-                        <Text style={styles.acceptButtonText}>Apply Changes</Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                ))}
               </View>
-            )}
-          </View>
-        ))}
-        
-        {isProcessing && (
-          <View style={styles.typingIndicator}>
-            <Text style={styles.typingText}>AI is thinking...</Text>
-          </View>
-        )}
-      </ScrollView>
+           
+              {message.suggestions && message.suggestions.length > 0 && (
+                <View style={styles.suggestionsContainer}>
+                  {message.suggestions.map((suggestion) => (
+                    <View key={suggestion.id} style={styles.suggestionCard}>
+                      <View style={styles.suggestionHeader}>
+                        <Text style={styles.suggestionType}>
+                          {suggestion.type === 'nutrition' ? '🍎 Nutrition' : '💪 Workout'}
+                        </Text>
+                        <Text style={styles.suggestionTitle}>{suggestion.title}</Text>
+                      </View>
+                      
+                      {suggestion.accepted ? (
+                        <View style={styles.acceptedContainer}>
+                          <CheckCircle size={18} color="#34C759" />
+                          <Text style={styles.acceptedText}>Applied</Text>
+                        </View>
+                      ) : (
+                        <TouchableOpacity 
+                          style={styles.acceptButton}
+                          onPress={() => handleAcceptSuggestion(message.id, suggestion)}
+                        >
+                          <ThumbsUp size={18} color="#FFFFFF" />
+                          <Text style={styles.acceptButtonText}>Apply Changes</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  ))}
+                </View>
+              )}
+            </View>
+          ))}
+          
+          {isProcessing && (
+            <View style={styles.typingIndicator}>
+              <Text style={styles.typingText}>AI is thinking...</Text>
+            </View>
+          )}
+        </ScrollView>
         <View style={styles.inputContainer}>
           <TextInput
             style={styles.input}

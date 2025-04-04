@@ -1,5 +1,6 @@
 import { Tabs } from 'expo-router';
 import { Dumbbell, Users, Brain, Apple, User } from 'lucide-react-native';
+import React from 'react';
 
 export default function TabLayout() {
   return (

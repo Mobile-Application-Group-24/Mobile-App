@@ -200,7 +200,7 @@ export default function WorkoutsScreen() {
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color="#007AFF" />
             </View>
-          ) : workoutPlans.length === 0 ? (
+          ) : workouts.length === 0 ? (
             <View style={styles.emptyState}>
               <Text style={styles.emptyStateText}>No workout plans yet</Text>
               <Text style={styles.emptyStateSubtext}>
@@ -208,14 +208,14 @@ export default function WorkoutsScreen() {
               </Text>
             </View>
           ) : (
-            workoutPlans.map((plan) => (
+            workouts.map((plan) => (
               <TouchableOpacity
                 key={plan.id}
                 style={styles.planCard}
                 onPress={() => router.push(`/workouts/${plan.id}`)}
               >
                 <View style={styles.planInfo}>
-                  <Text style={styles.planName}>{plan.name}</Text>
+                  <Text style={styles.planName}>{plan.title}</Text>
                   <Text style={styles.planDetails}>
                     {plan.exercises.length} exercises
                   </Text>
