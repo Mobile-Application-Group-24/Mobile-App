@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Platform, StatusBar, SafeAreaView, KeyboardAvoidingView, Keyboard, TouchableWithoutFeedback } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Platform, StatusBar, SafeAreaView, KeyboardAvoidingView, Keyboard, TouchableWithoutFeedback, Alert, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { X, Clock, ChartBar as BarChart3, Star, Plus, MoveVertical as MoreVertical, CalendarClock, Scale, File as FileEdit, Dumbbell, Trash } from 'lucide-react-native';
 import { format, parseISO } from 'date-fns';
@@ -216,7 +216,7 @@ export default function WorkoutDetailScreen() {
             </View>
 
             <View style={styles.workoutInfo}>
-              <Text style={styles.workoutName}>{workoutPlan?.name || 'Workout'}</Text>
+              <Text style={styles.workoutName}>{workout?.name || 'Workout'}</Text>
               <View style={styles.infoGrid}>
                 <View style={styles.infoCard}>
                   <View style={styles.infoIconContainer}>

@@ -203,7 +203,7 @@ export default function WorkoutsScreen() {
           ) : workouts.length === 0 ? (
             <View style={styles.emptyState}>
               <Text style={styles.emptyStateText}>No workout plans yet</Text>
-              <Text style={styles.emptyStateSubtext}>
+              <Text style={styles.emptyStateText}>
                 Create your first workout plan to get started!
               </Text>
             </View>
