@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Image, Switch, Platform, Alert, ActivityIndicator, StatusBar, SafeAreaView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Image, Switch, Platform, Alert, ActivityIndicator, StatusBar, SafeAreaView, KeyboardAvoidingView, TouchableWithoutFeedback, Keyboard } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Camera, Users, Lock, Globe as Globe2, X } from 'lucide-react-native';
 import { createGroup } from '@/utils/supabase';
@@ -186,201 +186,216 @@ export default function CreateGroupScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
-      <View style={styles.header}>
-        <TouchableOpacity 
-          onPress={() => router.back()} 
-          style={styles.closeButton}
-          activeOpacity={0.7}>
-          <X size={24} color="#007AFF" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Create New Group</Text>
-        <View style={styles.placeholderView} />
-      </View>
-
-      <ScrollView 
-        style={styles.content}
-        keyboardShouldPersistTaps="handled"
-        contentContainerStyle={styles.scrollContent}>
-        <View style={styles.section}>
-          <View style={styles.coverSection}>
-            <Image 
-              source={{ uri: groupData.cover_image }} 
-              style={styles.coverImage}
-              onLoadStart={() => setImageLoading(true)}
-              onLoadEnd={() => setImageLoading(false)}
-              onError={(e) => {
-                console.error('Error loading image:', e.nativeEvent.error);
-                if (isCustomImage) {
-                  Alert.alert(
-                    'Image Error', 
-                    'Could not load the uploaded image. The URL might be invalid.',
-                    [
-                      { 
-                        text: 'Use Default', 
-                        onPress: () => {
-                          setGroupData(prev => ({ ...prev, cover_image: coverImages[0] }));
-                          setIsCustomImage(false);
-                        }
-                      },
-                      { text: 'Try Again' }
-                    ]
-                  );
-                }
-              }}
-            />
-            {imageLoading && (
-              <View style={styles.imageLoadingContainer}>
-                <ActivityIndicator size="large" color="#FFFFFF" />
-              </View>
-            )}
+    <KeyboardAvoidingView 
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      style={{ flex: 1 }}
+      keyboardVerticalOffset={Platform.OS === 'android' ? 25 : 0}
+    >
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+        <SafeAreaView style={styles.container}>
+          <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+          <View style={styles.header}>
             <TouchableOpacity 
-              style={styles.changeCoverButton} 
-              onPress={pickImage}
-              disabled={uploadingImage}
+              onPress={() => router.back()} 
+              style={styles.closeButton}
               activeOpacity={0.7}>
-              <Camera size={20} color="#FFFFFF" />
-              <Text style={styles.changeCoverText}>
-                {uploadingImage ? 'Uploading...' : 'Gallery'}
-              </Text>
+              <X size={24} color="#007AFF" />
             </TouchableOpacity>
+            <Text style={styles.headerTitle}>Create New Group</Text>
+            <View style={styles.placeholderView} />
           </View>
 
-          {!isCustomImage && (
-            <View style={styles.coverSelector}>
-              <ScrollView 
-                horizontal 
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.coverOptions}
-              >
-                {coverImages.map((image, index) => (
-                  <TouchableOpacity
-                    key={index}
-                    onPress={() => setGroupData(prev => ({ ...prev, cover_image: image }))}
-                    style={[
-                      styles.coverOption,
-                      groupData.cover_image === image && styles.coverOptionSelected
-                    ]}
+          <ScrollView 
+            style={styles.content}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={[
+              styles.scrollContent,
+              { paddingBottom: Platform.OS === 'ios' ? 120 : 140 }
+            ]}
+          >
+            <View style={styles.section}>
+              <View style={styles.coverSection}>
+                <Image 
+                  source={{ uri: groupData.cover_image }} 
+                  style={styles.coverImage}
+                  onLoadStart={() => setImageLoading(true)}
+                  onLoadEnd={() => setImageLoading(false)}
+                  onError={(e) => {
+                    console.error('Error loading image:', e.nativeEvent.error);
+                    if (isCustomImage) {
+                      Alert.alert(
+                        'Image Error', 
+                        'Could not load the uploaded image. The URL might be invalid.',
+                        [
+                          { 
+                            text: 'Use Default', 
+                            onPress: () => {
+                              setGroupData(prev => ({ ...prev, cover_image: coverImages[0] }));
+                              setIsCustomImage(false);
+                            }
+                          },
+                          { text: 'Try Again' }
+                        ]
+                      );
+                    }
+                  }}
+                />
+                {imageLoading && (
+                  <View style={styles.imageLoadingContainer}>
+                    <ActivityIndicator size="large" color="#FFFFFF" />
+                  </View>
+                )}
+                <TouchableOpacity 
+                  style={styles.changeCoverButton} 
+                  onPress={pickImage}
+                  disabled={uploadingImage}
+                  activeOpacity={0.7}>
+                  <Camera size={20} color="#FFFFFF" />
+                  <Text style={styles.changeCoverText}>
+                    {uploadingImage ? 'Uploading...' : 'Gallery'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {!isCustomImage && (
+                <View style={styles.coverSelector}>
+                  <ScrollView 
+                    horizontal 
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.coverOptions}
                   >
-                    <Image source={{ uri: image }} style={styles.coverThumbnail} />
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            </View>
-          )}
-          
-          {isCustomImage && (
-            <TouchableOpacity 
-              style={styles.resetImageButton}
-              onPress={() => {
-                setGroupData(prev => ({ ...prev, cover_image: coverImages[0] }));
-                setIsCustomImage(false);
-              }}
-            >
-              <Text style={styles.resetImageText}>Use default images</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-
-        <View style={styles.section}>
-          <View style={styles.inputWrapper}>
-            <Text style={styles.label}>Group Name</Text>
-            <TextInput
-              style={styles.input}
-              value={groupData.name}
-              onChangeText={(text) => setGroupData(prev => ({ ...prev, name: text }))}
-              placeholder="Enter group name"
-              placeholderTextColor="#8E8E93"
-            />
-          </View>
-        </View>
-
-        <View style={styles.section}>
-          <View style={styles.inputWrapper}>
-            <Text style={styles.label}>Description</Text>
-            <TextInput
-              style={[styles.input, styles.textArea]}
-              value={groupData.description}
-              onChangeText={(text) => setGroupData(prev => ({ ...prev, description: text }))}
-              placeholder="What's your group about?"
-              multiline
-              numberOfLines={4}
-              placeholderTextColor="#8E8E93"
-            />
-          </View>
-        </View>
-
-        <View style={styles.section}>
-          <View style={styles.settingCard}>
-            <View style={styles.settingHeader}>
-              <Users size={20} color="#007AFF" />
-              <Text style={styles.settingTitle}>Maximum Members</Text>
-            </View>
-            <View style={styles.memberCounter}>
-              <TextInput
-                style={styles.memberInput}
-                value={groupData.max_members}
-                onChangeText={(text) => setGroupData(prev => ({ ...prev, max_members: text }))}
-                keyboardType="numeric"
-                maxLength={3}
-              />
-              <Text style={styles.memberLabel}>members</Text>
-            </View>
-          </View>
-
-          <View style={styles.settingCard}>
-            <View style={styles.settingHeader}>
-              {groupData.is_private ? (
-                <Lock size={20} color="#34C759" />
-              ) : (
-                <Globe2 size={20} color="#007AFF" />
+                    {coverImages.map((image, index) => (
+                      <TouchableOpacity
+                        key={index}
+                        onPress={() => setGroupData(prev => ({ ...prev, cover_image: image }))}
+                        style={[
+                          styles.coverOption,
+                          groupData.cover_image === image && styles.coverOptionSelected
+                        ]}
+                      >
+                        <Image source={{ uri: image }} style={styles.coverThumbnail} />
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
               )}
-              <Text style={styles.settingTitle}>Privacy</Text>
+              
+              {isCustomImage && (
+                <TouchableOpacity 
+                  style={styles.resetImageButton}
+                  onPress={() => {
+                    setGroupData(prev => ({ ...prev, cover_image: coverImages[0] }));
+                    setIsCustomImage(false);
+                  }}
+                >
+                  <Text style={styles.resetImageText}>Use default images</Text>
+                </TouchableOpacity>
+              )}
             </View>
-            <View style={styles.privacyToggle}>
+
+            <View style={styles.section}>
+              <View style={styles.inputWrapper}>
+                <Text style={styles.label}>Group Name</Text>
+                <TextInput
+                  style={styles.input}
+                  value={groupData.name}
+                  onChangeText={(text) => setGroupData(prev => ({ ...prev, name: text }))}
+                  placeholder="Enter group name"
+                  placeholderTextColor="#8E8E93"
+                />
+              </View>
+            </View>
+
+            <View style={styles.section}>
+              <View style={styles.inputWrapper}>
+                <Text style={styles.label}>Description</Text>
+                <TextInput
+                  style={[styles.input, styles.textArea]}
+                  value={groupData.description}
+                  onChangeText={(text) => setGroupData(prev => ({ ...prev, description: text }))}
+                  placeholder="What's your group about?"
+                  multiline
+                  numberOfLines={4}
+                  placeholderTextColor="#8E8E93"
+                />
+              </View>
+            </View>
+
+            <View style={styles.section}>
+              <View style={styles.settingCard}>
+                <View style={styles.settingHeader}>
+                  <Users size={20} color="#007AFF" />
+                  <Text style={styles.settingTitle}>Maximum Members</Text>
+                </View>
+                <View style={styles.memberCounter}>
+                  <TextInput
+                    style={styles.memberInput}
+                    value={groupData.max_members}
+                    onChangeText={(text) => setGroupData(prev => ({ ...prev, max_members: text }))}
+                    keyboardType="numeric"
+                    maxLength={3}
+                  />
+                  <Text style={styles.memberLabel}>members</Text>
+                </View>
+              </View>
+
+              <View style={styles.settingCard}>
+                <View style={styles.settingHeader}>
+                  {groupData.is_private ? (
+                    <Lock size={20} color="#34C759" />
+                  ) : (
+                    <Globe2 size={20} color="#007AFF" />
+                  )}
+                  <Text style={styles.settingTitle}>Privacy</Text>
+                </View>
+                <View style={styles.privacyToggle}>
+                  <Text style={[
+                    styles.privacyLabel,
+                    { color: groupData.is_private ? '#34C759' : '#8E8E93' }
+                  ]}>
+                    {groupData.is_private ? 'Private Group' : 'Public Group'}
+                  </Text>
+                  <Switch
+                    value={groupData.is_private}
+                    onValueChange={(value) => setGroupData(prev => ({ ...prev, is_private: value }))}
+                    trackColor={{ false: '#E5E5EA', true: '#34C759' }}
+                    thumbColor="#FFFFFF"
+                  />
+                </View>
+              </View>
+            </View>
+
+            <View style={styles.section}>
+              <View style={styles.infoCard}>
+                <Users size={20} color="#8E8E93" />
+                <Text style={styles.infoText}>
+                  Create a group to connect with people who share your fitness goals and motivate each other.
+                </Text>
+              </View>
+            </View>
+          </ScrollView>
+
+          <View style={[
+            styles.bottomButtonContainer,
+            Platform.OS === 'android' && { position: 'relative' }
+          ]}>
+            <TouchableOpacity 
+              style={[
+                styles.createButton,
+                (!groupData.name || !groupData.description || isCreating) && styles.createButtonDisabled
+              ]}
+              onPress={handleSave}
+              disabled={!groupData.name || !groupData.description || isCreating}
+              activeOpacity={0.7}>
               <Text style={[
-                styles.privacyLabel,
-                { color: groupData.is_private ? '#34C759' : '#8E8E93' }
-              ]}>
-                {groupData.is_private ? 'Private Group' : 'Public Group'}
-              </Text>
-              <Switch
-                value={groupData.is_private}
-                onValueChange={(value) => setGroupData(prev => ({ ...prev, is_private: value }))}
-                trackColor={{ false: '#E5E5EA', true: '#34C759' }}
-                thumbColor="#FFFFFF"
-              />
-            </View>
+                styles.createButtonText,
+                (!groupData.name || !groupData.description || isCreating) && styles.createButtonTextDisabled
+              ]}>{isCreating ? 'Creating...' : 'Create Group'}</Text>
+            </TouchableOpacity>
           </View>
-        </View>
-
-        <View style={styles.section}>
-          <View style={styles.infoCard}>
-            <Users size={20} color="#8E8E93" />
-            <Text style={styles.infoText}>
-              Create a group to connect with people who share your fitness goals and motivate each other.
-            </Text>
-          </View>
-        </View>
-      </ScrollView>
-
-      <View style={styles.bottomButtonContainer}>
-        <TouchableOpacity 
-          style={[
-            styles.createButton,
-            (!groupData.name || !groupData.description || isCreating) && styles.createButtonDisabled
-          ]}
-          onPress={handleSave}
-          disabled={!groupData.name || !groupData.description || isCreating}
-          activeOpacity={0.7}>
-          <Text style={[
-            styles.createButtonText,
-            (!groupData.name || !groupData.description || isCreating) && styles.createButtonTextDisabled
-          ]}>{isCreating ? 'Creating...' : 'Create Group'}</Text>
-        </TouchableOpacity>
-      </View>
-    </SafeAreaView>
+        </SafeAreaView>
+      </TouchableWithoutFeedback>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -393,7 +408,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: Platform.OS === 'ios' ? 80 : 100,
+    paddingBottom: Platform.OS === 'ios' ? 120 : 140,
   },
   header: {
     flexDirection: 'row',
@@ -579,13 +594,17 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.3)',
   },
   bottomButtonContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
+    ...(Platform.OS === 'ios' ? {
+      position: 'absolute',
+      bottom: 0,
+      left: 0,
+      right: 0,
+    } : {
+      marginTop: 16,
+    }),
     backgroundColor: '#FFFFFF',
     padding: 16,
-    paddingBottom: Platform.OS === 'ios' ? 24 + (Platform.OS === 'ios' ? 10 : 0) : 24,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 24,
     borderTopWidth: 1,
     borderTopColor: '#E5E5EA',
     shadowColor: '#000',
