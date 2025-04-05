@@ -1116,6 +1116,9 @@ const styles = StyleSheet.create({
     },
     modalActions: {
         marginTop: 24,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
     },
     calorieEditor: {
         flexDirection: 'row',
