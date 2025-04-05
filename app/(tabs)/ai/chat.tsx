@@ -1,9 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Alert, StatusBar, SafeAreaView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Alert, StatusBar, SafeAreaView, Keyboard } from 'react-native';
 import { Send, ThumbsUp, CheckCircle } from 'lucide-react-native';
 import { sendMessageToDeepseek, updateNutritionData, addWorkoutEntry } from '@/utils/deepseek';
 import { useSession } from '@/utils/auth';
 import Markdown from 'react-native-markdown-display';
+import { TAB_BAR_HEIGHT } from '../_layout';
 
 type Message = {
   id: string;
@@ -36,6 +37,32 @@ export default function ChatScreen() {
   const [inputText, setInputText] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
+
+  useEffect(() => {
+    if (Platform.OS === 'android') {
+      const keyboardDidShowListener = Keyboard.addListener(
+        'keyboardDidShow',
+        () => {
+          setKeyboardVisible(true);
+          setTimeout(() => {
+            scrollViewRef.current?.scrollToEnd({ animated: true });
+          }, 100);
+        }
+      );
+      const keyboardDidHideListener = Keyboard.addListener(
+        'keyboardDidHide',
+        () => {
+          setKeyboardVisible(false);
+        }
+      );
+
+      return () => {
+        keyboardDidShowListener.remove();
+        keyboardDidHideListener.remove();
+      };
+    }
+  }, []);
 
   const processResponseForSuggestions = (text: string): [string, Suggestion[]] => {
     const suggestions: Suggestion[] = [];
@@ -226,12 +253,13 @@ export default function ChatScreen() {
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
       <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.container}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}>
         <ScrollView
           ref={scrollViewRef}
           style={styles.chatContainer}
+          contentContainerStyle={{ paddingBottom: 20 }}
           onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}>
           {messages.map((message) => (
             <View key={message.id}>
@@ -299,15 +327,24 @@ export default function ChatScreen() {
             </View>
           )}
         </ScrollView>
-        <View style={styles.inputContainer}>
+        <View style={[
+          styles.inputContainer,
+          Platform.OS === 'android' && { paddingBottom: keyboardVisible ? 10 : 15 }
+        ]}>
           <TextInput
             style={styles.input}
             value={inputText}
             onChangeText={setInputText}
             placeholder="Ask me anything about fitness..."
+            placeholderTextColor="#8E8E93"
             multiline
             maxLength={500}
             editable={!isProcessing}
+            onFocus={() => {
+              setTimeout(() => {
+                scrollViewRef.current?.scrollToEnd({ animated: true });
+              }, 200);
+            }}
           />
           <TouchableOpacity 
             style={[
@@ -472,7 +509,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
     borderTopColor: '#E5E5EA',
-    paddingBottom: Platform.OS === 'ios' ? 16 + (Platform.OS === 'ios' ? 10 : 0) : 12,
+    paddingBottom: Platform.OS === 'ios' ? 26 : 12,
   },
   input: {
     flex: 1,
