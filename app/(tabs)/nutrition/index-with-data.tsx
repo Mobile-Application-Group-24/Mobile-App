@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Dimensions, Modal, Alert, ActivityIndicator, StatusBar, SafeAreaView, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Dimensions, Modal, Alert, ActivityIndicator, StatusBar, SafeAreaView, Platform, KeyboardAvoidingView } from 'react-native';
 import { LineChart } from 'react-native-chart-kit';
 import { Droplets, Coffee, UtensilsCrossed, Pizza, Moon, Scale, Calculator, ChevronRight, X, Plus, Minus, Settings } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
@@ -624,91 +624,98 @@ export default function NutritionScreen() {
                     transparent={true}
                     visible={showBMRModal}
                     onRequestClose={() => setShowBMRModal(false)}>
-                    <View style={styles.modalOverlay}>
-                        <View style={styles.modalContent}>
-                            <View style={styles.modalHeader}>
-                                <Text style={styles.modalTitle}>Calculate BMR</Text>
-                                <TouchableOpacity 
-                                    style={styles.closeButton}
-                                    onPress={() => setShowBMRModal(false)}
-                                    activeOpacity={0.7}>
-                                    <X size={24} color="#8E8E93" />
-                                </TouchableOpacity>
-                            </View>
-
-                            <View style={styles.bmrForm}>
-                                <View style={styles.inputGroup}>
-                                    <Text style={styles.inputLabel}>Weight (kg)</Text>
-                                    <TextInput
-                                        style={styles.input}
-                                        value={bmrInputs.weight}
-                                        onChangeText={(text) => setBmrInputs(prev => ({ ...prev, weight: text }))}
-                                        keyboardType="numeric"
-                                        placeholder="70"
-                                    />
+                    <KeyboardAvoidingView 
+                        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                        style={{ flex: 1 }}
+                    >
+                        <View style={styles.modalOverlay}>
+                            <View style={styles.modalContent}>
+                                <View style={styles.modalHeader}>
+                                    <Text style={styles.modalTitle}>Calculate BMR</Text>
+                                    <TouchableOpacity 
+                                        style={styles.closeButton}
+                                        onPress={() => setShowBMRModal(false)}
+                                        activeOpacity={0.7}>
+                                        <X size={24} color="#8E8E93" />
+                                    </TouchableOpacity>
                                 </View>
 
-                                <View style={styles.inputGroup}>
-                                    <Text style={styles.inputLabel}>Height (cm)</Text>
-                                    <TextInput
-                                        style={styles.input}
-                                        value={bmrInputs.height}
-                                        onChangeText={(text) => setBmrInputs(prev => ({ ...prev, height: text }))}
-                                        keyboardType="numeric"
-                                        placeholder="170"
-                                    />
-                                </View>
+                                <ScrollView>
+                                    <View style={styles.bmrForm}>
+                                        <View style={styles.inputGroup}>
+                                            <Text style={styles.inputLabel}>Weight (kg)</Text>
+                                            <TextInput
+                                                style={styles.input}
+                                                value={bmrInputs.weight}
+                                                onChangeText={(text) => setBmrInputs(prev => ({ ...prev, weight: text }))}
+                                                keyboardType="numeric"
+                                                placeholder="70"
+                                            />
+                                        </View>
 
-                                <View style={styles.inputGroup}>
-                                    <Text style={styles.inputLabel}>Age</Text>
-                                    <TextInput
-                                        style={styles.input}
-                                        value={bmrInputs.age}
-                                        onChangeText={(text) => setBmrInputs(prev => ({ ...prev, age: text }))}
-                                        keyboardType="numeric"
-                                        placeholder="25"
-                                    />
-                                </View>
+                                        <View style={styles.inputGroup}>
+                                            <Text style={styles.inputLabel}>Height (cm)</Text>
+                                            <TextInput
+                                                style={styles.input}
+                                                value={bmrInputs.height}
+                                                onChangeText={(text) => setBmrInputs(prev => ({ ...prev, height: text }))}
+                                                keyboardType="numeric"
+                                                placeholder="170"
+                                            />
+                                        </View>
 
-                                <View style={styles.inputGroup}>
-                                    <Text style={styles.inputLabel}>Gender</Text>
-                                    <View style={styles.genderButtons}>
+                                        <View style={styles.inputGroup}>
+                                            <Text style={styles.inputLabel}>Age</Text>
+                                            <TextInput
+                                                style={styles.input}
+                                                value={bmrInputs.age}
+                                                onChangeText={(text) => setBmrInputs(prev => ({ ...prev, age: text }))}
+                                                keyboardType="numeric"
+                                                placeholder="25"
+                                            />
+                                        </View>
+
+                                        <View style={styles.inputGroup}>
+                                            <Text style={styles.inputLabel}>Gender</Text>
+                                            <View style={styles.genderButtons}>
+                                                <TouchableOpacity
+                                                    style={[
+                                                        styles.genderButton,
+                                                        bmrInputs.gender === 'male' && styles.genderButtonActive
+                                                    ]}
+                                                    onPress={() => setBmrInputs(prev => ({ ...prev, gender: 'male' }))}
+                                                >
+                                                    <Text style={[
+                                                        styles.genderButtonText,
+                                                        bmrInputs.gender === 'male' && styles.genderButtonTextActive
+                                                    ]}>Male</Text>
+                                                </TouchableOpacity>
+                                                <TouchableOpacity
+                                                    style={[
+                                                        styles.genderButton,
+                                                        bmrInputs.gender === 'female' && styles.genderButtonActive
+                                                    ]}
+                                                    onPress={() => setBmrInputs(prev => ({ ...prev, gender: 'female' }))}
+                                                >
+                                                    <Text style={[
+                                                        styles.genderButtonText,
+                                                        bmrInputs.gender === 'female' && styles.genderButtonTextActive
+                                                    ]}>Female</Text>
+                                                </TouchableOpacity>
+                                            </View>
+                                        </View>
+
                                         <TouchableOpacity
-                                            style={[
-                                                styles.genderButton,
-                                                bmrInputs.gender === 'male' && styles.genderButtonActive
-                                            ]}
-                                            onPress={() => setBmrInputs(prev => ({ ...prev, gender: 'male' }))}
-                                        >
-                                            <Text style={[
-                                                styles.genderButtonText,
-                                                bmrInputs.gender === 'male' && styles.genderButtonTextActive
-                                            ]}>Male</Text>
-                                        </TouchableOpacity>
-                                        <TouchableOpacity
-                                            style={[
-                                                styles.genderButton,
-                                                bmrInputs.gender === 'female' && styles.genderButtonActive
-                                            ]}
-                                            onPress={() => setBmrInputs(prev => ({ ...prev, gender: 'female' }))}
-                                        >
-                                            <Text style={[
-                                                styles.genderButtonText,
-                                                bmrInputs.gender === 'female' && styles.genderButtonTextActive
-                                            ]}>Female</Text>
+                                            style={styles.calculateButton}
+                                            onPress={calculateBMR}
+                                            activeOpacity={0.7}>
+                                            <Text style={styles.calculateButtonText}>Calculate</Text>
                                         </TouchableOpacity>
                                     </View>
-                                </View>
-
-                                <TouchableOpacity
-                                    style={styles.calculateButton}
-                                    onPress={calculateBMR}
-                                    activeOpacity={0.7}>
-                                    <Text style={styles.calculateButtonText}>Calculate</Text>
-                                </TouchableOpacity>
+                                </ScrollView>
                             </View>
                         </View>
-                    </View>
+                    </KeyboardAvoidingView>
                 </Modal>
 
                 <Modal
@@ -717,35 +724,40 @@ export default function NutritionScreen() {
                     animationType="slide"
                     onRequestClose={() => setShowGoalModal(false)}
                 >
-                    <View style={styles.modalOverlay}>
-                        <View style={styles.modalContent}>
-                            <View style={styles.modalHeader}>
-                                <Text style={styles.modalTitle}>Set Calorie Goal</Text>
-                                <TouchableOpacity
-                                    style={styles.closeButton}
-                                    onPress={() => setShowGoalModal(false)}
-                                >
-                                    <X size={24} color="#8E8E93" />
-                                </TouchableOpacity>
-                            </View>
+                    <KeyboardAvoidingView
+                        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                        style={{ flex: 1 }}
+                    >
+                        <View style={styles.modalOverlay}>
+                            <View style={styles.modalContent}>
+                                <View style={styles.modalHeader}>
+                                    <Text style={styles.modalTitle}>Set Calorie Goal</Text>
+                                    <TouchableOpacity
+                                        style={styles.closeButton}
+                                        onPress={() => setShowGoalModal(false)}
+                                    >
+                                        <X size={24} color="#8E8E93" />
+                                    </TouchableOpacity>
+                                </View>
 
-                            <View style={styles.goalEditor}>
-                                <TextInput
-                                    style={styles.goalInput}
-                                    value={String(calorieGoal)}
-                                    onChangeText={(text) => setCalorieGoal(parseInt(text) || 0)}
-                                    keyboardType="numeric"
-                                    placeholder="Enter daily calorie goal"
-                                />
-                                <TouchableOpacity
-                                    style={styles.saveButton}
-                                    onPress={updateCalorieGoal}
-                                >
-                                    <Text style={styles.saveButtonText}>Save Goal</Text>
-                                </TouchableOpacity>
+                                <View style={styles.goalEditor}>
+                                    <TextInput
+                                        style={styles.goalInput}
+                                        value={String(calorieGoal)}
+                                        onChangeText={(text) => setCalorieGoal(parseInt(text) || 0)}
+                                        keyboardType="numeric"
+                                        placeholder="Enter daily calorie goal"
+                                    />
+                                    <TouchableOpacity
+                                        style={styles.saveButton}
+                                        onPress={updateCalorieGoal}
+                                    >
+                                        <Text style={styles.saveButtonText}>Save Goal</Text>
+                                    </TouchableOpacity>
+                                </View>
                             </View>
                         </View>
-                    </View>
+                    </KeyboardAvoidingView>
                 </Modal>
             </ScrollView>
         </SafeAreaView>
@@ -1022,6 +1034,7 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.1,
         shadowRadius: 4,
         elevation: 5,
+        maxHeight: Platform.OS === 'android' ? '90%' : '100%',
     },
     modalHeader: {
         flexDirection: 'row',
@@ -1038,6 +1051,7 @@ const styles = StyleSheet.create({
     },
     bmrForm: {
         gap: 16,
+        paddingBottom: Platform.OS === 'android' ? 20 : 0,
     },
     inputGroup: {
         gap: 8,
