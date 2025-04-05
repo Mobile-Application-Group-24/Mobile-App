@@ -151,11 +151,8 @@ export default function CreateWorkoutScreen() {
       const savedWorkout = await saveWorkout(workoutData);
       console.log('Workout saved successfully with ID:', savedWorkout.id);
       
-      Alert.alert(
-        'Success',
-        'Workout saved to database successfully',
-        [{ text: 'OK', onPress: () => router.back() }]
-      );
+      // Navigate back without showing alert
+      router.back();
     } catch (error) {
       console.error('Error saving workout:', error);
       let errorMessage = 'Failed to save workout.';
@@ -307,7 +304,7 @@ export default function CreateWorkoutScreen() {
           disabled={!planName || exercises.length === 0 || isSaving}>
           <Save size={24} color="#FFFFFF" />
           <Text style={styles.saveButtonText}>
-            {isSaving ? 'Saving to DB...' : 'Save to Database'}
+            {isSaving ? 'Saving...' : 'Save Workout'}
           </Text>
         </TouchableOpacity>
       )}

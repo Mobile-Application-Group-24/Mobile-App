@@ -93,6 +93,7 @@ export interface Meal {
   consumed_at: string;
   created_at: string;
 }
+
 export interface GroupInvitation {
   id: string;
   group_id: string;
@@ -103,6 +104,17 @@ export interface GroupInvitation {
   is_active: boolean;
   uses_left: number | null; // null means unlimited uses
   group?: Group;
+}
+
+export interface Workout {
+  id: string;
+  title: string;
+  date: string;
+  duration_minutes: number;
+  exercises: Exercise[];
+  notes: string;
+  calories_burned: number;
+  bodyweight?: number; // Adding the body_weight field
 }
 
 // Store invitation codes in memory since database operations are failing
@@ -435,6 +447,37 @@ export async function getWeeklyMeals(): Promise<{ date: string; calories: number
     calories,
   }));
 }; // Diese schließende Klammer und Semikolon fehlten
+
+// Function to update a workout with body weight
+export async function updateWorkoutWithBodyWeight(workoutId: string, updates: Partial<Workout>) {
+  const { data, error } = await supabase
+    .from('workouts')
+    .update(updates)
+    .eq('id', workoutId)
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error updating workout:', error);
+    throw error;
+  }
+  return data;
+}
+
+// Function to get workouts with body weight
+export async function getWorkoutWithBodyWeight(workoutId: string): Promise<Workout> {
+  const { data, error } = await supabase
+    .from('workouts')
+    .select('*, exercises:workout_exercises(*)')
+    .eq('id', workoutId)
+    .single();
+
+  if (error) {
+    console.error('Error getting workout:', error);
+    throw error;
+  }
+  return data;
+}
 
 // Invitation functions
 export const createGroupInvitation = async (groupId: string, options: { expiresIn?: number, maxUses?: number } = {}) => {

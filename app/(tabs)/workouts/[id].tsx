@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Platform, StatusBar, SafeAreaView, KeyboardAvoidingView, Keyboard, TouchableWithoutFeedback, Alert, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { X, Clock, ChartBar as BarChart3, Star, Plus, MoveVertical as MoreVertical, CalendarClock, Scale, File as FileEdit, Dumbbell, Trash } from 'lucide-react-native';
+import { X, Clock, ChartBar as BarChart3, Star, Plus, MoveVertical as MoreVertical, CalendarClock, Scale, File as FileEdit, Dumbbell, Trash, Save } from 'lucide-react-native';
 import { format, parseISO } from 'date-fns';
 import { getWorkout, deleteWorkout, updateWorkout, Workout, Exercise } from '@/utils/workout';
 
@@ -47,19 +47,38 @@ export default function WorkoutDetailScreen() {
       const data = await getWorkout(workoutId);
       setWorkout(data);
       setNotes(data.notes || '');
+      
+      // Use bodyweight field instead of body_weight
+      setBodyWeight(data.bodyweight?.toString() || '');
 
       // Initialize exercises from the workout data
-      setExercises(data.exercises.map(exercise => ({
-        id: exercise.id,
-        name: exercise.name,
-        sets: Array(exercise.sets).fill(null).map((_, index) => ({
-          id: (index + 1).toString(),
-          weight: exercise.weight?.toString() || '',
-          reps: exercise.reps.toString() || '',
-          type: 'normal'
-        }))
-      })));
-      
+      setExercises(data.exercises.map(exercise => {
+        if (exercise.setDetails && exercise.setDetails.length > 0) {
+          return {
+            id: exercise.id,
+            name: exercise.name,
+            sets: exercise.setDetails.map(set => ({
+              id: set.id.toString(),
+              weight: set.weight?.toString() || '',
+              reps: set.reps?.toString() || '',
+              type: set.type || 'normal',
+              notes: set.notes || '' // Ensure notes are loaded
+            }))
+          };
+        } else {
+          // Fallback to creating sets based on the sets count
+          return {
+            id: exercise.id,
+            name: exercise.name,
+            sets: Array(exercise.sets).fill(null).map((_, index) => ({
+              id: (index + 1).toString(),
+              weight: exercise.weight?.toString() || '',
+              reps: exercise.reps?.toString() || '',
+              type: 'normal'
+            }))
+          };
+        }
+      }));
     } catch (error) {
       console.error('Error loading workout:', error);
       setError('Failed to load workout details');
@@ -156,14 +175,39 @@ export default function WorkoutDetailScreen() {
     if (!workout || !id) return;
 
     try {
+      // Transform the exercise data to include all sets
+      const updatedExercises = exercises.map(exercise => {
+        const exerciseData = {
+          id: exercise.id,
+          name: exercise.name,
+          sets: exercise.sets.length,
+          // For compatibility
+          reps: exercise.sets[0]?.reps ? parseInt(exercise.sets[0].reps, 10) : 0,
+          weight: exercise.sets[0]?.weight ? parseFloat(exercise.sets[0].weight) : undefined,
+          // Save all set details including notes
+          setDetails: exercise.sets.map(set => ({
+            id: set.id,
+            weight: set.weight ? parseFloat(set.weight) : undefined,
+            reps: set.reps ? parseInt(set.reps, 10) : 0,
+            type: set.type,
+            notes: set.notes || '' // Ensure notes are saved
+          }))
+        };
+        
+        return exerciseData;
+      });
+
+      // Use bodyweight field instead of body_weight
       const updatedWorkout = {
         ...workout,
-        notes: notes
-        // Add other fields you want to update
+        notes: notes,
+        exercises: updatedExercises,
+        bodyweight: bodyWeight ? parseFloat(bodyWeight) : undefined,
       };
 
+      console.log('Saving workout:', JSON.stringify(updatedWorkout, null, 2));
       await updateWorkout(id as string, updatedWorkout);
-      Alert.alert('Success', 'Workout updated successfully');
+      router.back();
     } catch (error) {
       console.error('Error updating workout:', error);
       Alert.alert('Error', 'Failed to update workout');
@@ -282,7 +326,8 @@ export default function WorkoutDetailScreen() {
                             placeholder="kg"
                           />
                         </View>
-                        <View style={styles.inputGroup}>
+                        
+                        <View style={[styles.inputGroup, styles.smallInputGroup]}>
                           <Text style={styles.inputLabel}>Reps</Text>
                           <TextInput
                             style={styles.input}
@@ -292,6 +337,17 @@ export default function WorkoutDetailScreen() {
                             placeholder="#"
                           />
                         </View>
+                        
+                        <View style={[styles.inputGroup, styles.notesGroup]}>
+                          <Text style={styles.inputLabel}>Notes</Text>
+                          <TextInput
+                            style={styles.input}
+                            value={set.notes}
+                            onChangeText={(text) => updateSet(exercise.id, set.id, 'notes', text)}
+                            placeholder="Notes"
+                          />
+                        </View>
+                        
                         <TouchableOpacity 
                           style={[
                             styles.setType,
@@ -337,6 +393,17 @@ export default function WorkoutDetailScreen() {
                 </View>
               ))
             )}
+
+            {/* Save Workout Button */}
+            <View style={styles.saveButtonContainer}>
+              <TouchableOpacity
+                style={styles.saveWorkoutButton}
+                onPress={saveWorkoutChanges}
+                activeOpacity={0.7}>
+                <Save size={24} color="#FFFFFF" />
+                <Text style={styles.saveWorkoutText}>Save Workout</Text>
+              </TouchableOpacity>
+            </View>
           </ScrollView>
         </SafeAreaView>
       </TouchableWithoutFeedback>
@@ -519,10 +586,16 @@ const styles = StyleSheet.create({
   setInputs: {
     flex: 1,
     flexDirection: 'row',
-    gap: 12,
+    gap: 8,
   },
   inputGroup: {
     flex: 1,
+  },
+  smallInputGroup: {
+    flex: 0.7, // Make reps input smaller
+  },
+  notesGroup: {
+    flex: 1.3, // Make notes input wider
   },
   inputLabel: {
     fontSize: 14,
@@ -535,12 +608,19 @@ const styles = StyleSheet.create({
     padding: 8,
     color: '#000000',
     fontSize: 16,
+    height: 40, // Ensure consistent height
   },
   setType: {
     backgroundColor: '#F2F2F7',
     borderRadius: 8,
     padding: 8,
     alignItems: 'center',
+    justifyContent: 'center',
+    height: 40, // Match height with input fields
+    alignSelf: 'flex-end',
+    marginBottom: 0,
+    marginTop: 21, // To align with inputs (considering the input label height)
+    width: 80, // Fixed width for the type button
   },
   setTypeText: {
     color: '#000000',
@@ -597,6 +677,30 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 2,
     elevation: 1,
+  },
+  saveButtonContainer: {
+    padding: 16,
+    paddingBottom: Platform.OS === 'ios' ? 32 : 16,
+  },
+  saveWorkoutButton: {
+    backgroundColor: '#007AFF',
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  saveWorkoutText: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '600',
   },
   loadingContainer: {
     flex: 1,

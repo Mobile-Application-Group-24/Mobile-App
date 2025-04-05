@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, StatusBar, SafeAreaView, Alert, Platform } from 'react-native';
 import { Plus, Star, Play, Clock, Calendar, Dumbbell } from 'lucide-react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { getWorkouts, Workout } from '@/utils/workout';
 import { useSession } from '@/utils/auth';
 import { format, parseISO } from 'date-fns';
@@ -20,15 +20,6 @@ export default function WorkoutsScreen() {
     name: 'Upper Body Focus',
     duration: '60 min',
   };
-
-  useEffect(() => {
-    if (session?.user) {
-      loadWorkouts();
-    } else {
-      setIsLoading(false);
-      setError('Please log in to view your workouts');
-    }
-  }, [session]);
 
   const loadWorkouts = async () => {
     try {
@@ -121,6 +112,23 @@ export default function WorkoutsScreen() {
       </TouchableOpacity>
     ));
   };
+
+  useFocusEffect(
+    useCallback(() => {
+      if (session?.user) {
+        loadWorkouts();
+      }
+    }, [session])
+  );
+
+  useEffect(() => {
+    if (session?.user) {
+      loadWorkouts();
+    } else {
+      setIsLoading(false);
+      setError('Please log in to view your workouts');
+    }
+  }, [session]);
 
   return (
     <SafeAreaView style={[styles.container, Platform.OS === 'ios' && { paddingTop: 0 }]}>
