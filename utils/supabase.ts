@@ -167,16 +167,29 @@ export async function createGroup(groupData: Omit<Group, 'id' | 'created_at' | '
 
 export async function getGroups(showOwned = false) {
   const { data: userData } = await supabase.auth.getUser();
+  if (!userData.user) throw new Error('User not authenticated');
+
+  // First get groups where user is a member
+  const { data: memberGroups } = await supabase
+    .from('group_members')
+    .select('group_id')
+    .eq('user_id', userData.user.id);
+
+  const memberGroupIds = memberGroups?.map(g => g.group_id) || [];
 
   let query = supabase
-      .from('groups')
-      .select(`
+    .from('groups')
+    .select(`
       *,
       member_count:group_members(count)
     `);
 
-  if (showOwned && userData.user) {
-    query = query.eq('owner_id', userData.user.id);
+  if (showOwned) {
+    // Show groups where user is owner OR member
+    query = query.or(`owner_id.eq.${userData.user.id},id.in.(${memberGroupIds.join(',')})`)
+  } else {
+    // Show public groups OR groups where user is member
+    query = query.or(`is_private.eq.false,id.in.(${memberGroupIds.join(',')})`)
   }
 
   const { data, error } = await query;
