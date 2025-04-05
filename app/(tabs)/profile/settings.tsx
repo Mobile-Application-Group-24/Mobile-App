@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Image,
 import { useRouter } from 'expo-router';
 import { Camera, Bell, Lock, LogOut, Trash2 } from 'lucide-react-native';
 import { useAuth } from '@/providers/AuthProvider';
-import { getProfile, updateProfile, type Profile } from '@/utils/supabase';
+import { getProfile, updateProfile, deleteUserAccount, type Profile } from '@/utils/supabase';
 import { supabase } from '@/utils/supabase';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
@@ -105,14 +105,11 @@ export default function ProfileSettingsScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              const { error } = await supabase.auth.admin.deleteUser(
-                session?.user?.id as string
-              );
-              if (error) throw error;
+              await deleteUserAccount();
               await signOut();
             } catch (error) {
               console.error('Error deleting account:', error);
-              Alert.alert('Error', 'Failed to delete account');
+              Alert.alert('Error', 'Failed to delete account. Please try again later.');
             }
           },
         },
@@ -140,13 +137,10 @@ export default function ProfileSettingsScreen() {
       if (!result.canceled) {
         const { uri } = result.assets[0];
         setTempAvatar(uri);
-
         const fileName = `${session.user.id}/${Date.now()}.jpg`;
-
         const base64 = await FileSystem.readAsStringAsync(uri, {
           encoding: FileSystem.EncodingType.Base64,
         });
-
         const arrayBuffer = _base64ToArrayBuffer(base64);
 
         const { data, error: uploadError } = await supabase.storage
@@ -188,7 +182,6 @@ export default function ProfileSettingsScreen() {
       }
     } catch (error) {
       console.error('Error updating avatar:', error);
-
       if (typeof error === 'object' && error !== null && 'message' in error) {
         Alert.alert('Error', `Failed to update profile picture: ${(error as any).message}`);
       } else {
@@ -229,9 +222,9 @@ export default function ProfileSettingsScreen() {
       <SafeAreaView style={styles.safeAreaTop} />
       <ScrollView style={styles.container}>
         <View style={styles.avatarSection}>
-          <Image 
-            source={{ 
-              uri: tempAvatar || formData.avatar_url || DEFAULT_AVATAR 
+          <Image
+            source={{
+              uri: tempAvatar || formData.avatar_url || DEFAULT_AVATAR,
             }}
             style={styles.avatar}
           />
@@ -240,7 +233,6 @@ export default function ProfileSettingsScreen() {
             <Text style={styles.changeAvatarText}>Change Photo</Text>
           </TouchableOpacity>
         </View>
-
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Personal Information</Text>
           <View style={styles.inputContainer}>
@@ -248,11 +240,10 @@ export default function ProfileSettingsScreen() {
             <TextInput
               style={styles.input}
               value={formData.full_name}
-              onChangeText={(text) => setFormData(prev => ({ ...prev, full_name: text }))}
+              onChangeText={(text) => setFormData((prev) => ({ ...prev, full_name: text }))}
               placeholder="Enter your name"
             />
           </View>
-
           <View style={styles.inputContainer}>
             <Text style={styles.label}>Email</Text>
             <TextInput
@@ -262,23 +253,20 @@ export default function ProfileSettingsScreen() {
               placeholder="Email address"
             />
           </View>
-
           <View style={styles.inputContainer}>
             <Text style={styles.label}>Bio</Text>
             <TextInput
               style={[styles.input, styles.textArea]}
               value={formData.bio}
-              onChangeText={(text) => setFormData(prev => ({ ...prev, bio: text }))}
+              onChangeText={(text) => setFormData((prev) => ({ ...prev, bio: text }))}
               placeholder="Tell us about yourself"
               multiline
               numberOfLines={4}
             />
           </View>
         </View>
-
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Preferences</Text>
-          
           <View style={styles.preference}>
             <View style={styles.preferenceInfo}>
               <Bell size={24} color="#007AFF" />
@@ -286,12 +274,11 @@ export default function ProfileSettingsScreen() {
             </View>
             <Switch
               value={formData.notifications}
-              onValueChange={(value) => setFormData(prev => ({ ...prev, notifications: value }))}
+              onValueChange={(value) => setFormData((prev) => ({ ...prev, notifications: value }))}
               trackColor={{ false: '#E5E5EA', true: '#34C759' }}
               thumbColor="#FFFFFF"
             />
           </View>
-
           <View style={styles.preference}>
             <View style={styles.preferenceInfo}>
               <Lock size={24} color="#007AFF" />
@@ -299,36 +286,36 @@ export default function ProfileSettingsScreen() {
             </View>
             <Switch
               value={formData.privateProfile}
-              onValueChange={(value) => setFormData(prev => ({ ...prev, privateProfile: value }))}
+              onValueChange={(value) => setFormData((prev) => ({ ...prev, privateProfile: value }))}
               trackColor={{ false: '#E5E5EA', true: '#34C759' }}
               thumbColor="#FFFFFF"
             />
           </View>
         </View>
-
         <View style={styles.section}>
           <TouchableOpacity
             style={styles.logoutButton}
             onPress={handleLogout}
-            activeOpacity={0.7}>
+            activeOpacity={0.7}
+          >
             <LogOut size={24} color="#FF3B30" />
             <Text style={styles.logoutButtonText}>Log Out</Text>
           </TouchableOpacity>
-
           <TouchableOpacity
             style={styles.deleteAccountButton}
             onPress={handleDeleteAccount}
-            activeOpacity={0.7}>
+            activeOpacity={0.7}
+          >
             <Trash2 size={24} color="#FFFFFF" />
             <Text style={styles.deleteAccountButtonText}>Delete Account</Text>
           </TouchableOpacity>
         </View>
-
         <TouchableOpacity
           style={[styles.saveButton, saving && styles.saveButtonDisabled]}
           onPress={handleSave}
           disabled={saving}
-          activeOpacity={0.7}>
+          activeOpacity={0.7}
+        >
           <Text style={styles.saveButtonText}>
             {saving ? 'Saving...' : 'Save Changes'}
           </Text>
@@ -341,11 +328,11 @@ export default function ProfileSettingsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F2F2F7',
+    backgroundColor: '#FFFFFF',
   },
   safeAreaTop: {
     flex: 0,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F2F2F7',
   },
   loadingContainer: {
     flex: 1,
@@ -441,11 +428,11 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 12,
     gap: 8,
-    marginBottom: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 2,
+    marginBottom: 12,
     elevation: 1,
   },
   logoutButtonText: {

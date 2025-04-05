@@ -665,3 +665,43 @@ export async function joinGroupWithCode(code: string) {
     throw error instanceof Error ? error : new Error('Failed to join group with this code');
   }
 }
+
+export async function deleteUserAccount() {
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+  if (userError || !userData.user) throw new Error('User not authenticated');
+
+  // Delete all user data first
+  try {
+    // Delete profile data
+    await supabase
+      .from('profiles')
+      .delete()
+      .eq('id', userData.user.id);
+
+    // Delete user's group memberships
+    await supabase
+      .from('group_members')
+      .delete()
+      .eq('user_id', userData.user.id);
+
+    // Delete user's meals
+    await supabase
+      .from('meals')
+      .delete()
+      .eq('user_id', userData.user.id);
+
+    // Delete user's nutrition settings
+    await supabase
+      .from('nutrition_settings')
+      .delete()
+      .eq('user_id', userData.user.id);
+
+    // Finally, delete the user's auth account
+    const { error: deleteError } = await supabase.rpc('delete_user');
+    if (deleteError) throw deleteError;
+
+  } catch (error) {
+    console.error('Error deleting account:', error);
+    throw error;
+  }
+}

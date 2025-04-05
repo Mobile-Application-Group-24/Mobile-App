@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, TextInput, Modal, Alert, Clipboard, ActivityIndicator, SafeAreaView, StatusBar, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, TextInput, Modal, Alert, ActivityIndicator, SafeAreaView, StatusBar, Platform } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { Search, UserPlus, X, Copy, Check, Clock, ArrowLeft, LogOut } from 'lucide-react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Linking from 'expo-linking';
@@ -133,8 +134,8 @@ export default function MembersScreen() {
     }
   };
 
-  const copyToClipboard = () => {
-    Clipboard.setString(inviteLink);
+  const copyToClipboard = async () => {
+    await Clipboard.setStringAsync(inviteLink);
     setCopied(true);
 
     setTimeout(() => {
@@ -142,8 +143,8 @@ export default function MembersScreen() {
     }, 3000);
   };
 
-  const copyCodeToClipboard = () => {
-    Clipboard.setString(invitationCode);
+  const copyCodeToClipboard = async () => {
+    await Clipboard.setStringAsync(invitationCode);
     setCodeCopied(true);
 
     setTimeout(() => {
