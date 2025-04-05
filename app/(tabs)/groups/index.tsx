@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, TextInput,
 import { Search, Users, Plus, KeyRound, X } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { getGroups, type Group, joinGroupWithCode } from '@/utils/supabase';
+import { TAB_BAR_HEIGHT } from '../_layout';
 
 export default function GroupsScreen() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -141,7 +142,10 @@ export default function GroupsScreen() {
           </TouchableOpacity>
         </View>
 
-        <ScrollView style={styles.scrollContainer}>
+        <ScrollView 
+          style={styles.scrollContainer}
+          contentContainerStyle={styles.scrollContent}
+        >
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Your Groups</Text>
             
@@ -191,6 +195,9 @@ export default function GroupsScreen() {
               ))
             )}
           </View>
+          
+          {/* Add extra padding at the bottom to ensure content isn't hidden */}
+          {Platform.OS === 'android' && <View style={{ height: TAB_BAR_HEIGHT }} />}
         </ScrollView>
 
         {/* Join Group Modal */}
@@ -255,6 +262,9 @@ const styles = StyleSheet.create({
   scrollContainer: {
     flex: 1,
     backgroundColor: '#F2F2F7',
+  },
+  scrollContent: {
+    paddingBottom: Platform.OS === 'android' ? TAB_BAR_HEIGHT : 0,
   },
   container: {
     flex: 1,

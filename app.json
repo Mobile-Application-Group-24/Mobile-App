@@ -16,6 +16,8 @@
       }
     },
     "android": {
+      "softwareKeyboardLayoutMode": "resize",
+      "windowSoftInputMode": "adjustPan",
       "permissions": [
         "READ_EXTERNAL_STORAGE",
         "WRITE_EXTERNAL_STORAGE",
