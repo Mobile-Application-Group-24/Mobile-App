@@ -36,7 +36,8 @@
         {
           "photosPermission": "The app needs access to your photos to let you update your profile picture and group cover photos."
         }
-      ]
+      ],
+      "expo-health-kit"
     ],
     "experiments": {
       "typedRoutes": true

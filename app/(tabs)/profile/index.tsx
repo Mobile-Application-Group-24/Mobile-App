@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, ActivityIndicator, StatusBar, SafeAreaView, Platform } from 'react-native';
-import { Settings, Award, Calendar, ChartBar as BarChart } from 'lucide-react-native';
+import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, ActivityIndicator, StatusBar, SafeAreaView, Platform, Alert, Linking } from 'react-native';
+import { Settings, Award, Calendar, ChartBar as BarChart, Activity } from 'lucide-react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/providers/AuthProvider';
 import { getProfile, type Profile } from '@/utils/supabase';
+import { initHealthKit, getStepCount } from '@/utils/healthKit';
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -11,15 +12,97 @@ export default function ProfileScreen() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [steps, setSteps] = useState<number>(0);
+  const [healthConnected, setHealthConnected] = useState<boolean>(false);
+  const [healthPermissionRequested, setHealthPermissionRequested] = useState<boolean>(false);
 
-  // Use useFocusEffect to reload data when screen comes into focus
   useFocusEffect(
     React.useCallback(() => {
       if (session?.user?.id) {
         loadProfile();
+        if (Platform.OS === 'ios' && healthConnected) {
+          loadHealthData();
+        }
       }
-    }, [session?.user?.id])
+    }, [session?.user?.id, healthConnected])
   );
+
+  useEffect(() => {
+    const checkHealthConnection = async () => {
+      if (Platform.OS === 'ios') {
+        try {
+          const hasPermission = await initHealthKit();
+          setHealthConnected(hasPermission);
+          if (hasPermission) {
+            loadHealthData();
+          }
+        } catch (error) {
+          console.error('HealthKit check error:', error);
+        }
+      }
+    };
+    
+    checkHealthConnection();
+  }, []);
+
+  const connectToHealthKit = async () => {
+    if (Platform.OS !== 'ios') return;
+    
+    try {
+      setHealthPermissionRequested(true);
+      
+      Alert.alert(
+        "Connect to Apple Health",
+        "This will allow us to access your step count and activity data from Apple Health. Your privacy is important - this data is only displayed in the app and not shared with third parties.",
+        [
+          {
+            text: "Cancel",
+            style: "cancel"
+          },
+          {
+            text: "Connect", 
+            onPress: async () => {
+              console.log("Requesting HealthKit permissions...");
+              const hasPermission = await initHealthKit();
+              console.log("HealthKit permission result:", hasPermission);
+              setHealthConnected(hasPermission);
+              
+              if (hasPermission) {
+                await loadHealthData();
+                Alert.alert("Success", "Successfully connected to Apple Health!");
+              } else {
+                Alert.alert(
+                  "Permission Required",
+                  "To connect Apple Health, please go to your iPhone Settings app > Privacy & Security > Health > [YourAppName] and enable all categories.",
+                  [
+                    { text: "OK" },
+                    { 
+                      text: "Open Settings",
+                      onPress: () => {
+                        Linking.openSettings();
+                      }
+                    }
+                  ]
+                );
+              }
+            }
+          }
+        ]
+      );
+    } catch (error) {
+      console.error('[HealthKit] Connection error:', error);
+      Alert.alert("Error", "Failed to connect to Apple Health. Please try again.");
+    }
+  };
+
+  const loadHealthData = async () => {
+    try {
+      const stepCount = await getStepCount();
+      setSteps(stepCount);
+    } catch (error) {
+      console.error('Error loading health data:', error);
+    }
+  };
 
   const loadProfile = async () => {
     if (!session?.user?.id) return;
@@ -28,7 +111,6 @@ export default function ProfileScreen() {
       setLoading(true);
       setError(null);
       const data = await getProfile(session.user.id);
-      // Ensure achievements and stats have default values
       setProfile({
         ...data,
         achievements: data.achievements || [],
@@ -83,23 +165,53 @@ export default function ProfileScreen() {
           <Text style={styles.name}>{profile.full_name || 'Anonymous User'}</Text>
           <Text style={styles.bio}>{profile.bio || 'No bio yet'}</Text>
           
-          <TouchableOpacity 
-            style={styles.editButton}
-            onPress={() => router.push('/profile/settings')}
-            activeOpacity={0.7}>
-            <Settings size={20} color="#007AFF" />
-            <Text style={styles.editButtonText}>Edit Profile</Text>
-          </TouchableOpacity>
+          <View style={styles.buttonContainer}>
+            <TouchableOpacity 
+              style={styles.editButton}
+              onPress={() => router.push('/profile/settings')}
+              activeOpacity={0.7}>
+              <Settings size={20} color="#007AFF" />
+              <Text style={styles.editButtonText}>Edit Profile</Text>
+            </TouchableOpacity>
+            
+            {Platform.OS === 'ios' && (
+              <TouchableOpacity 
+                style={[
+                  styles.editButton, 
+                  healthConnected ? styles.connectedButton : {},
+                  healthPermissionRequested && !healthConnected ? styles.deniedButton : {}
+                ]}
+                onPress={connectToHealthKit}
+                activeOpacity={0.7}>
+                <Activity size={20} color={
+                  healthConnected ? "#4CD964" : 
+                  healthPermissionRequested && !healthConnected ? "#FF3B30" : 
+                  "#007AFF"
+                } />
+                <Text style={[
+                  styles.editButtonText, 
+                  healthConnected ? styles.connectedText : {},
+                  healthPermissionRequested && !healthConnected ? styles.deniedText : {}
+                ]}>
+                  {healthConnected 
+                    ? "Health Connected" 
+                    : healthPermissionRequested && !healthConnected 
+                    ? "Reconnect Health" 
+                    : "Connect Health"}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
 
         <View style={styles.statsContainer}>
           <View style={styles.statItem}>
-            <Text style={styles.statValue}>{profile.stats?.workouts || 0}</Text>
-            <Text style={styles.statLabel}>Workouts</Text>
+            <Text style={styles.statValue}>{steps}</Text>
+            <Text style={styles.statLabel}>Steps Today</Text>
           </View>
           <View style={styles.statItem}>
-            <Text style={styles.statValue}>{profile.stats?.hours || 0}</Text>
-            <Text style={styles.statLabel}>Hours</Text>
+            <Text style={styles.statValue}>{profile.stats?.workouts || 0}</Text>
+            <Text style={styles.statLabel}>Workouts</Text>
           </View>
           <View style={styles.statItem}>
             <Text style={styles.statValue}>
@@ -216,6 +328,12 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     textAlign: 'center',
   },
+  buttonContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
   editButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -232,6 +350,18 @@ const styles = StyleSheet.create({
     color: '#007AFF',
     marginLeft: 8,
     fontWeight: '600',
+  },
+  connectedButton: {
+    backgroundColor: '#E6F9ED',
+  },
+  connectedText: {
+    color: '#4CD964',
+  },
+  deniedButton: {
+    backgroundColor: '#FFF2F2',
+  },
+  deniedText: {
+    color: '#FF3B30',
   },
   statsContainer: {
     flexDirection: 'row',

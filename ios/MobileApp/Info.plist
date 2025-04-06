@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>NSHealthShareUsageDescription</key>
+    <string>We need access to your Health data to display your daily steps in the app. Your data remains private and is only used for display purposes.</string>
+    <key>NSHealthUpdateUsageDescription</key>
+    <string>We need access to your Health data to display your daily steps in the app. Your data remains private and is only used for display purposes.</string>
+    <key>UIRequiredDeviceCapabilities</key>
+    <array>
+        <string>armv7</string>
+        <string>healthkit</string>
+    </array>
+</dict>
+</plist>
