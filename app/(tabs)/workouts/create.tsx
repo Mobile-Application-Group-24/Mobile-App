@@ -1,6 +1,6 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, FlatList, Platform, Alert } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Plus, Minus, Dumbbell, Save, Search, X, Star } from 'lucide-react-native';
 import { saveWorkout } from '@/utils/workout'; // Using workout.ts instead of storage
 import { useSession } from '@/utils/auth';
@@ -44,13 +44,23 @@ const commonExercises = [
 
 export default function CreateWorkoutScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams();
+  const showExerciseSearch = params.showExerciseSearch === 'true';
+  const callbackRoute = params.callbackRoute as string;
+  const previousState = params.state ? JSON.parse(params.state as string) : null;
   const { session, isLoading } = useSession();
   const [planName, setPlanName] = useState('');
   const [exercises, setExercises] = useState<Exercise[]>([]);
-  const [showExerciseSearch, setShowExerciseSearch] = useState(false);
+  const [showExerciseSearchState, setShowExerciseSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [isFavorite, setIsFavorite] = useState(false);
+
+  useEffect(() => {
+    if (showExerciseSearch) {
+      setShowExerciseSearch(true);
+    }
+  }, []);
 
   const filteredExercises = commonExercises.filter(exercise =>
     exercise.toLowerCase().includes(searchQuery.toLowerCase())
@@ -165,10 +175,27 @@ export default function CreateWorkoutScreen() {
     }
   };
 
+  const handleExerciseSelect = (exerciseName: string) => {
+    const callbackId = params.callbackId;
+    if (callbackId) {
+      // Navigiere zurück zum vorherigen Screen mit der ausgewählten Übung
+      router.back();
+      // Setze die Parameter nach einer kurzen Verzögerung
+      setTimeout(() => {
+        router.setParams({
+          id: callbackId,
+          selectedExercise: exerciseName
+        });
+      }, 100);
+    } else {
+      addExercise(exerciseName);
+    }
+  };
+
   const renderExerciseItem = useCallback(({ item }: { item: string }) => (
     <TouchableOpacity
       style={styles.exerciseSearchItem}
-      onPress={() => addExercise(item)}
+      onPress={() => handleExerciseSelect(item)}
     >
       <Dumbbell size={20} color="#007AFF" />
       <Text style={styles.exerciseSearchText}>{item}</Text>
@@ -263,7 +290,7 @@ export default function CreateWorkoutScreen() {
         </View>
       </ScrollView>
 
-      {showExerciseSearch ? (
+      {showExerciseSearchState ? (
         <View style={styles.searchOverlay}>
           <View style={styles.searchHeader}>
             <View style={styles.searchInputContainer}>

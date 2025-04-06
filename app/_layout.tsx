@@ -1,3 +1,4 @@
+import 'react-native-gesture-handler';  // Dies muss der erste Import sein!
 import { useEffect } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -8,6 +9,7 @@ import { SplashScreen } from 'expo-router';
 import { View } from 'react-native';
 import { AuthProvider } from '../providers/AuthProvider';
 import React from 'react';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 // Prevent the splash screen from auto-hiding
 SplashScreen.preventAutoHideAsync();
@@ -34,15 +36,17 @@ export default function RootLayout() {
   }
 
   return (
-    <AuthProvider>
-      <View style={{ flex: 1, backgroundColor: '#F2F2F7' }}>
-        <StatusBar style="dark" backgroundColor="#FFFFFF" />
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen name="+not-found" options={{ title: 'Oops!' }} />
-        </Stack>
-      </View>
-    </AuthProvider>
+    <GestureHandlerRootView style={{ flex: 1 }} collapsable={false}>
+      <AuthProvider>
+        <View style={{ flex: 1, backgroundColor: '#F2F2F7' }}>
+          <StatusBar style="dark" backgroundColor="#FFFFFF" />
+          <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            <Stack.Screen name="+not-found" options={{ title: 'Oops!' }} />
+          </Stack>
+        </View>
+      </AuthProvider>
+    </GestureHandlerRootView>
   );
 }
