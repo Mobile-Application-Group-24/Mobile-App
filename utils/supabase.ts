@@ -414,19 +414,33 @@ export async function getWeeklyMeals(): Promise<{ date: string; calories: number
   const { data: userData, error: userError } = await supabase.auth.getUser();
   if (userError || !userData.user) throw new Error('User not authenticated');
 
+  // Get exactly 7 days including today
+  const today = new Date();
+  today.setHours(23, 59, 59, 999); // End of today
+  
+  const sevenDaysAgo = new Date(today);
+  sevenDaysAgo.setDate(today.getDate() - 6);
+  sevenDaysAgo.setHours(0, 0, 0, 0); // Start of day 7 days ago
+
   const { data, error } = await supabase
       .from('meals')
-      .select('consumed_at, calories')
+      .select('consumed_at, calories, meal_type')
       .eq('user_id', userData.user.id)
-      .gte('consumed_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString())
+      .gte('consumed_at', sevenDaysAgo.toISOString())
+      .lte('consumed_at', today.toISOString())
       .order('consumed_at', { ascending: true });
 
   if (error) throw error;
 
   // Group meals by date and sum calories
   const dailyCalories = data.reduce((acc, meal) => {
+    // Skip water entries as they're not calories
+    if (meal.meal_type === 'water') return acc;
+    
     const date = new Date(meal.consumed_at).toISOString().split('T')[0];
-    acc[date] = (acc[date] || 0) + meal.calories;
+    // Ensure calories is a number
+    const mealCalories = typeof meal.calories === 'number' ? meal.calories : parseInt(String(meal.calories)) || 0;
+    acc[date] = (acc[date] || 0) + mealCalories;
     return acc;
   }, {} as Record<string, number>);
 
@@ -434,7 +448,7 @@ export async function getWeeklyMeals(): Promise<{ date: string; calories: number
     date,
     calories,
   }));
-}; // Diese schließende Klammer und Semikolon fehlten
+}
 
 // Invitation functions
 export const createGroupInvitation = async (groupId: string, options: { expiresIn?: number, maxUses?: number } = {}) => {

@@ -64,39 +64,43 @@ export default function NutritionScreen() {
     const [dbMeals, setDbMeals] = useState<MealType[]>([]);
     const [temporaryCalories, setTemporaryCalories] = useState(0);
     const [waterMealId, setWaterMealId] = useState<string | null>(null);
-    
+
     const formatChartData = (weekData: {date: string; calories: number}[]) => {
-        const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-        const today = new Date().getDay();
-        
-        // Create ordered days array (last 7 days ending with today)
-        const orderedDays = Array.from({ length: 7 }, (_, i) => {
-            const dayIndex = (today - 6 + i + 7) % 7;
-            return days[dayIndex];
+        const today = new Date();
+        const last7Days = Array.from({ length: 7 }, (_, i) => {
+            const date = new Date(today);
+            date.setDate(today.getDate() - (6 - i));
+            return {
+                date: date,
+                dayName: format(date, 'EEE'),
+                formattedDate: format(date, 'yyyy-MM-dd'),
+                calories: 0
+            };
         });
-        
-        // Initialize calorie data array with zeros
-        const calorieData = Array(7).fill(0);
-        
-        // Fill in calorie data for each day
+
         weekData.forEach(item => {
             try {
-                const date = new Date(item.date);
-                if (!isNaN(date.getTime())) {
-                    const dayIndex = (7 + date.getDay() - today) % 7;
-                    // Ensure calories is a number
-                    const calories = typeof item.calories === 'number' ? item.calories : parseInt(String(item.calories)) || 0;
-                    calorieData[6 - dayIndex] = calories;
+                const itemDate = new Date(item.date);
+                if (!isNaN(itemDate.getTime())) {
+                    const formattedItemDate = format(itemDate, 'yyyy-MM-dd');
+                    const dayIndex = last7Days.findIndex(day => 
+                        day.formattedDate === formattedItemDate
+                    );
+                    if (dayIndex !== -1) {
+                        last7Days[dayIndex].calories += typeof item.calories === 'number' 
+                            ? item.calories 
+                            : parseInt(String(item.calories)) || 0;
+                    }
                 }
             } catch (error) {
                 console.error('Error processing chart data item:', error);
             }
         });
-        
+
         return {
-            labels: orderedDays,
+            labels: last7Days.map(day => day.dayName),
             datasets: [{
-                data: calorieData,
+                data: last7Days.map(day => day.calories),
             }],
         };
     };
@@ -110,12 +114,10 @@ export default function NutritionScreen() {
                     const settings = await getNutritionSettings();
                     setCalorieGoal(settings.calorie_goal);
                     
-                    // Get water goal (number of glasses) from settings
                     if (settings.water_goal) {
                         setWaterGoal(settings.water_goal);
                     }
                     
-                    // Get meal times from settings
                     if (settings.meal_times && Array.isArray(settings.meal_times)) {
                         const mealTimeSettings = {} as Record<string, string>;
                         
@@ -125,7 +127,6 @@ export default function NutritionScreen() {
                             }
                         });
                         
-                        // Only update if we have at least one valid meal time
                         if (Object.keys(mealTimeSettings).length > 0) {
                             setMealTimes(prev => ({
                                 ...prev,
@@ -137,7 +138,6 @@ export default function NutritionScreen() {
                     const todaysMeals = await getTodaysMeals();
                     setDbMeals(todaysMeals);
                     
-                    // Reset meal calories before accumulating
                     const mealCalories = {
                         breakfast: 0,
                         lunch: 0,
@@ -148,14 +148,11 @@ export default function NutritionScreen() {
                     let todaysWaterIntake = 0;
                     let waterMeal = null;
                     
-                    // Process all meals properly
                     todaysMeals.forEach(meal => {
                         if (meal.name === 'Water Intake' && meal.meal_type === 'water') {
-                            // Handle water intake separately
                             todaysWaterIntake = typeof meal.calories === 'number' ? meal.calories : parseInt(String(meal.calories)) || 0;
                             waterMeal = meal;
                         } else if (mealCalories.hasOwnProperty(meal.meal_type)) {
-                            // Make sure to convert any value to number and handle NaN
                             const mealCalorieValue = typeof meal.calories === 'number' ? meal.calories : parseInt(String(meal.calories)) || 0;
                             if (meal.meal_type !== 'water') {
                                 mealCalories[meal.meal_type as keyof typeof mealCalories] += mealCalorieValue;
@@ -168,13 +165,16 @@ export default function NutritionScreen() {
                     } else {
                         setWaterMealId(null);
                     }
-                    
                     setWaterIntake(todaysWaterIntake);
                     setCalories(mealCalories);
-                    
+
                     const weeklyMealData = await getWeeklyMeals();
-                    setWeeklyData(weeklyMealData);
-                    
+                    const processedWeeklyData = weeklyMealData.map(item => ({
+                        date: item.date,
+                        calories: typeof item.calories === 'number' ? item.calories : parseInt(String(item.calories)) || 0
+                    }));
+                    setWeeklyData(processedWeeklyData);
+
                 } catch (error) {
                     console.error('Failed to load nutrition data:', error);
                     Alert.alert('Error', 'Failed to load nutrition data');
@@ -194,40 +194,39 @@ export default function NutritionScreen() {
             dinner: Pizza,
             snacks: Moon
         };
-        
-        // Use meal times from settings
+
         const mealGroups = {
-            breakfast: { 
-                id: 'breakfast', 
-                name: 'Breakfast', 
-                icon: Coffee, 
-                calories: calories.breakfast, 
-                time: mealTimes.breakfast, 
-                mealType: 'breakfast' as const 
+            breakfast: {
+                id: 'breakfast',
+                name: 'Breakfast',
+                icon: Coffee,
+                calories: calories.breakfast,
+                time: mealTimes.breakfast,
+                mealType: 'breakfast' as const
             },
-            lunch: { 
-                id: 'lunch', 
-                name: 'Lunch', 
-                icon: UtensilsCrossed, 
-                calories: calories.lunch, 
-                time: mealTimes.lunch, 
-                mealType: 'lunch' as const 
+            lunch: {
+                id: 'lunch',
+                name: 'Lunch',
+                icon: UtensilsCrossed,
+                calories: calories.lunch,
+                time: mealTimes.lunch,
+                mealType: 'lunch' as const
             },
-            dinner: { 
-                id: 'dinner', 
-                name: 'Dinner', 
-                icon: Pizza, 
-                calories: calories.dinner, 
-                time: mealTimes.dinner, 
-                mealType: 'dinner' as const 
+            dinner: {
+                id: 'dinner',
+                name: 'Dinner',
+                icon: Pizza,
+                calories: calories.dinner,
+                time: mealTimes.dinner,
+                mealType: 'dinner' as const
             },
-            snacks: { 
-                id: 'snacks', 
-                name: 'Snacks', 
-                icon: Moon, 
-                calories: calories.snacks, 
-                time: mealTimes.snacks, 
-                mealType: 'snacks' as const 
+            snacks: {
+                id: 'snacks',
+                name: 'Snacks',
+                icon: Moon,
+                calories: calories.snacks,
+                time: mealTimes.snacks,
+                mealType: 'snacks' as const
             }
         };
         
@@ -241,24 +240,20 @@ export default function NutritionScreen() {
 
     const handleWaterIntakeChange = async (amount: number) => {
         try {
-            // Update state immediately for responsive UI
             setWaterIntake(amount);
             
             if (waterMealId) {
-                // Update existing water intake record
                 await updateMealInDb(waterMealId, { 
                     calories: amount,
                     meal_type: 'water'
                 });
             } else {
-                // Create new water intake record
                 const result = await addMeal({
                     name: 'Water Intake',
                     calories: amount,
                     meal_type: 'water',
                     consumed_at: new Date().toISOString()
                 });
-                
                 if (result && result.id) {
                     setWaterMealId(result.id);
                 }
@@ -266,7 +261,6 @@ export default function NutritionScreen() {
         } catch (error) {
             console.error('Failed to update water intake:', error);
             Alert.alert('Error', 'Failed to update water intake');
-            // Revert to previous state on error
             setWaterIntake(prevWaterIntake => prevWaterIntake);
         }
     };
@@ -286,11 +280,11 @@ export default function NutritionScreen() {
             }
 
             const newGoal = Math.round(bmr * 1.2);
-            setCalorieGoal(newGoal);
-            
+
             try {
                 await updateNutritionSettings({ calorie_goal: newGoal });
                 setShowBMRModal(false);
+                setCalorieGoal(newGoal);
             } catch (error) {
                 console.error('Failed to update calorie goal:', error);
                 Alert.alert('Error', 'Failed to update calorie goal');
@@ -312,26 +306,22 @@ export default function NutritionScreen() {
     const saveMealChanges = async () => {
         if (!selectedMeal) return;
         
-        // No changes made, just close the modal
         if (selectedMeal.mealType !== 'water' && temporaryCalories === calories[selectedMeal.mealType]) {
             setEditModalVisible(false);
             return;
         }
-        
+
         try {
-            // Find existing meal of this type for today
             const existingMeal = dbMeals.find(meal => 
                 meal.meal_type === selectedMeal.mealType && 
-                meal.meal_type !== 'water' // Exclude water meals
+                meal.meal_type !== 'water'
             );
             
             if (existingMeal) {
-                // Update existing meal
                 await updateMealInDb(existingMeal.id, { 
-                    calories: temporaryCalories 
+                    calories: temporaryCalories
                 });
             } else {
-                // Create new meal
                 await addMeal({
                     name: selectedMeal.name,
                     calories: temporaryCalories,
@@ -339,17 +329,13 @@ export default function NutritionScreen() {
                     consumed_at: new Date().toISOString()
                 });
             }
-            
-            // Update local state
+
             setCalories(prev => ({
                 ...prev,
                 [selectedMeal.mealType]: temporaryCalories
             }));
-            
-            // Refresh meals from database
             const updatedMeals = await getTodaysMeals();
             setDbMeals(updatedMeals);
-            
             setEditModalVisible(false);
         } catch (error) {
             console.error('Failed to update meal calories:', error);
@@ -369,7 +355,6 @@ export default function NutritionScreen() {
 
     const renderWaterDrops = () => {
         const waterDrops = [];
-        
         for (let i = 1; i <= waterGoal; i++) {
             waterDrops.push(
                 <TouchableOpacity
@@ -387,7 +372,6 @@ export default function NutritionScreen() {
                 </TouchableOpacity>
             );
         }
-        
         return (
             <View style={styles.waterDropsContainer}>
                 {waterDrops}
@@ -407,9 +391,7 @@ export default function NutritionScreen() {
     return (
         <SafeAreaView style={styles.container}>
             <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
-            <ScrollView>
-                <View style={styles.safeArea} />
-
+            <View style={styles.fixedHeader}>
                 <View style={styles.header}>
                     <View>
                         <Text style={styles.headerTitle}>Nutrition Tracking</Text>
@@ -423,7 +405,9 @@ export default function NutritionScreen() {
                         <Settings size={24} color="#007AFF" />
                     </TouchableOpacity>
                 </View>
-
+            </View>
+            
+            <ScrollView style={styles.scrollContent} contentContainerStyle={styles.scrollContentContainer}>
                 <View style={styles.calorieCard}>
                     <View style={styles.calorieHeader}>
                         <Text style={styles.calorieTitle}>Daily Calories</Text>
@@ -480,11 +464,33 @@ export default function NutritionScreen() {
                                 propsForDots: {
                                     r: '6',
                                     strokeWidth: '2',
-                                    stroke: '#FFFFFF',
+                                    stroke: '#007AFF',
+                                    fill: '#FFFFFF',
                                 },
+                                formatYLabel: (value) => Math.round(Number(value)).toString(),
+                                propsForLabels: {
+                                    fontSize: 12,
+                                    fontWeight: '500',
+                                }
                             }}
                             bezier
                             style={styles.chart}
+                            fromZero={true}
+                            renderDotContent={({x, y, index, indexData}) => (
+                                <View key={index} style={{
+                                    position: 'absolute',
+                                    top: y - 25,
+                                    left: x - 15,
+                                }}>
+                                    {indexData > 0 && (
+                                        <Text style={{
+                                            color: '#007AFF',
+                                            fontSize: 10,
+                                            fontWeight: 'bold',
+                                        }}>{Math.round(Number(indexData))}</Text>
+                                    )}
+                                </View>
+                            )}
                         />
                     </View>
                 </View>
@@ -520,7 +526,6 @@ export default function NutritionScreen() {
                     </View>
                     {renderWaterDrops()}
                     <Text style={styles.waterHint}>Tap drops to update your water intake</Text>
-                    
                     <TouchableOpacity 
                         style={styles.waterResetButton}
                         onPress={() => handleWaterIntakeChange(0)}
@@ -546,220 +551,211 @@ export default function NutritionScreen() {
                     </View>
                     <ChevronRight size={24} color="#FFFFFF" />
                 </TouchableOpacity>
+            </ScrollView>
 
-                <Modal
-                    visible={editModalVisible}
-                    transparent
-                    animationType="slide"
-                    onRequestClose={() => {
-                        Alert.alert(
-                            "Save Changes",
-                            "Do you want to save your changes?",
-                            [
-                                {
-                                    text: "Discard",
-                                    style: "cancel",
-                                    onPress: () => setEditModalVisible(false)
-                                },
-                                {
-                                    text: "Save",
-                                    onPress: saveMealChanges
-                                }
-                            ]
-                        );
-                    }}
+            <Modal
+                visible={editModalVisible}
+                transparent
+                animationType="slide"
+                onRequestClose={() => {
+                    Alert.alert(
+                        "Save Changes",
+                        "Do you want to save your changes?",
+                        [
+                            {
+                                text: "Discard",
+                                style: "cancel",
+                                onPress: () => setEditModalVisible(false)
+                            },
+                            {
+                                text: "Save",
+                                onPress: saveMealChanges
+                            }
+                        ]
+                    );
+                }}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContent}>
+                        <View style={styles.modalHeader}>
+                            <Text style={styles.modalTitle}>
+                                {selectedMeal?.name} Calories
+                            </Text>
+                            <TouchableOpacity
+                                style={styles.closeButton}
+                                onPress={() => setEditModalVisible(false)}
+                            >
+                                <X size={24} color="#8E8E93" />
+                            </TouchableOpacity>
+                        </View>
+
+                        <View style={styles.calorieEditor}>
+                            <TouchableOpacity
+                                style={styles.calorieButton}
+                                onPress={() => updateMealCalories(-50)}
+                            >
+                                <Minus size={24} color="#007AFF" />
+                            </TouchableOpacity>
+                            <Text style={styles.calorieValue}>
+                                {temporaryCalories}
+                            </Text>
+                            <TouchableOpacity
+                                style={styles.calorieButton}
+                                onPress={() => updateMealCalories(50)}
+                            >
+                                <Plus size={24} color="#007AFF" />
+                            </TouchableOpacity>
+                        </View>
+
+                        <Text style={styles.calorieHint}>
+                            Tap + or - to adjust by 50 calories
+                        </Text>
+                        
+                        <View style={styles.modalActions}>
+                            <TouchableOpacity
+                                style={[styles.saveButton, {flex: 1}]}
+                                onPress={saveMealChanges}
+                            >
+                                <Text style={styles.saveButtonText}>Save Changes</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
+            <Modal
+                animationType="slide"
+                transparent={true}
+                visible={showBMRModal}
+                onRequestClose={() => setShowBMRModal(false)}>
+                <KeyboardAvoidingView 
+                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                    style={{ flex: 1 }}
                 >
                     <View style={styles.modalOverlay}>
                         <View style={styles.modalContent}>
                             <View style={styles.modalHeader}>
-                                <Text style={styles.modalTitle}>
-                                    {selectedMeal?.name} Calories
-                                </Text>
+                                <Text style={styles.modalTitle}>Calculate BMR</Text>
+                                <TouchableOpacity 
+                                    style={styles.closeButton}
+                                    onPress={() => setShowBMRModal(false)}>
+                                    <X size={24} color="#8E8E93" />
+                                </TouchableOpacity>
+                            </View>
+                            <ScrollView>
+                                <View style={styles.bmrForm}>
+                                    <View style={styles.inputGroup}>
+                                        <Text style={styles.inputLabel}>Weight (kg)</Text>
+                                        <TextInput
+                                            style={styles.input}
+                                            value={bmrInputs.weight}
+                                            onChangeText={(text) => setBmrInputs(prev => ({ ...prev, weight: text }))}
+                                            keyboardType="numeric"
+                                            placeholder="70"
+                                        />
+                                    </View>
+                                    <View style={styles.inputGroup}>
+                                        <Text style={styles.inputLabel}>Height (cm)</Text>
+                                        <TextInput
+                                            style={styles.input}
+                                            value={bmrInputs.height}
+                                            onChangeText={(text) => setBmrInputs(prev => ({ ...prev, height: text }))}
+                                            keyboardType="numeric"
+                                            placeholder="170"
+                                        />
+                                    </View>
+                                    <View style={styles.inputGroup}>
+                                        <Text style={styles.inputLabel}>Age</Text>
+                                        <TextInput
+                                            style={styles.input}
+                                            value={bmrInputs.age}
+                                            onChangeText={(text) => setBmrInputs(prev => ({ ...prev, age: text }))}
+                                            keyboardType="numeric"
+                                            placeholder="25"
+                                        />
+                                    </View>
+                                    <View style={styles.inputGroup}>
+                                        <Text style={styles.inputLabel}>Gender</Text>
+                                        <View style={styles.genderButtons}>
+                                            <TouchableOpacity
+                                                style={[
+                                                    styles.genderButton,
+                                                    bmrInputs.gender === 'male' && styles.genderButtonActive
+                                                ]}
+                                                onPress={() => setBmrInputs(prev => ({ ...prev, gender: 'male' }))}
+                                            >
+                                                <Text style={[
+                                                    styles.genderButtonText,
+                                                    bmrInputs.gender === 'male' && styles.genderButtonTextActive
+                                                ]}>Male</Text>
+                                            </TouchableOpacity>
+                                            <TouchableOpacity
+                                                style={[
+                                                    styles.genderButton,
+                                                    bmrInputs.gender === 'female' && styles.genderButtonActive
+                                                ]}
+                                                onPress={() => setBmrInputs(prev => ({ ...prev, gender: 'female' }))}
+                                            >
+                                                <Text style={[
+                                                    styles.genderButtonText,
+                                                    bmrInputs.gender === 'female' && styles.genderButtonTextActive
+                                                ]}>Female</Text>
+                                            </TouchableOpacity>
+                                        </View>
+                                    </View>
+                                    <TouchableOpacity
+                                        style={styles.calculateButton}
+                                        onPress={calculateBMR}
+                                        activeOpacity={0.7}>
+                                        <Text style={styles.calculateButtonText}>Calculate</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            </ScrollView>
+                        </View>
+                    </View>
+                </KeyboardAvoidingView>
+            </Modal>
+
+            <Modal
+                visible={showGoalModal}
+                transparent
+                animationType="slide"
+                onRequestClose={() => setShowGoalModal(false)}
+            >
+                <KeyboardAvoidingView
+                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                    style={{ flex: 1 }}
+                >
+                    <View style={styles.modalOverlay}>
+                        <View style={styles.modalContent}>
+                            <View style={styles.modalHeader}>
+                                <Text style={styles.modalTitle}>Set Calorie Goal</Text>
                                 <TouchableOpacity
                                     style={styles.closeButton}
-                                    onPress={saveMealChanges}
+                                    onPress={() => setShowGoalModal(false)}
                                 >
                                     <X size={24} color="#8E8E93" />
                                 </TouchableOpacity>
                             </View>
-
-                            <View style={styles.calorieEditor}>
+                            <View style={styles.goalEditor}>
+                                <TextInput
+                                    style={styles.goalInput}
+                                    value={String(calorieGoal)}
+                                    onChangeText={(text) => setCalorieGoal(parseInt(text) || 0)}
+                                    keyboardType="numeric"
+                                    placeholder="Enter daily calorie goal"
+                                />
                                 <TouchableOpacity
-                                    style={styles.calorieButton}
-                                    onPress={() => updateMealCalories(-50)}
+                                    style={styles.saveButton}
+                                    onPress={updateCalorieGoal}
                                 >
-                                    <Minus size={24} color="#007AFF" />
-                                </TouchableOpacity>
-
-                                <Text style={styles.calorieValue}>
-                                    {temporaryCalories}
-                                </Text>
-
-                                <TouchableOpacity
-                                    style={styles.calorieButton}
-                                    onPress={() => updateMealCalories(50)}
-                                >
-                                    <Plus size={24} color="#007AFF" />
-                                </TouchableOpacity>
-                            </View>
-
-                            <Text style={styles.calorieHint}>
-                                Tap + or - to adjust by 50 calories
-                            </Text>
-                            
-                            <View style={styles.modalActions}>
-                                <TouchableOpacity
-                                    style={[styles.saveButton, {flex: 1}]}
-                                    onPress={saveMealChanges}
-                                >
-                                    <Text style={styles.saveButtonText}>Save Changes</Text>
+                                    <Text style={styles.saveButtonText}>Save Goal</Text>
                                 </TouchableOpacity>
                             </View>
                         </View>
                     </View>
-                </Modal>
-
-                <Modal
-                    animationType="slide"
-                    transparent={true}
-                    visible={showBMRModal}
-                    onRequestClose={() => setShowBMRModal(false)}>
-                    <KeyboardAvoidingView 
-                        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                        style={{ flex: 1 }}
-                    >
-                        <View style={styles.modalOverlay}>
-                            <View style={styles.modalContent}>
-                                <View style={styles.modalHeader}>
-                                    <Text style={styles.modalTitle}>Calculate BMR</Text>
-                                    <TouchableOpacity 
-                                        style={styles.closeButton}
-                                        onPress={() => setShowBMRModal(false)}
-                                        activeOpacity={0.7}>
-                                        <X size={24} color="#8E8E93" />
-                                    </TouchableOpacity>
-                                </View>
-
-                                <ScrollView>
-                                    <View style={styles.bmrForm}>
-                                        <View style={styles.inputGroup}>
-                                            <Text style={styles.inputLabel}>Weight (kg)</Text>
-                                            <TextInput
-                                                style={styles.input}
-                                                value={bmrInputs.weight}
-                                                onChangeText={(text) => setBmrInputs(prev => ({ ...prev, weight: text }))}
-                                                keyboardType="numeric"
-                                                placeholder="70"
-                                            />
-                                        </View>
-
-                                        <View style={styles.inputGroup}>
-                                            <Text style={styles.inputLabel}>Height (cm)</Text>
-                                            <TextInput
-                                                style={styles.input}
-                                                value={bmrInputs.height}
-                                                onChangeText={(text) => setBmrInputs(prev => ({ ...prev, height: text }))}
-                                                keyboardType="numeric"
-                                                placeholder="170"
-                                            />
-                                        </View>
-
-                                        <View style={styles.inputGroup}>
-                                            <Text style={styles.inputLabel}>Age</Text>
-                                            <TextInput
-                                                style={styles.input}
-                                                value={bmrInputs.age}
-                                                onChangeText={(text) => setBmrInputs(prev => ({ ...prev, age: text }))}
-                                                keyboardType="numeric"
-                                                placeholder="25"
-                                            />
-                                        </View>
-
-                                        <View style={styles.inputGroup}>
-                                            <Text style={styles.inputLabel}>Gender</Text>
-                                            <View style={styles.genderButtons}>
-                                                <TouchableOpacity
-                                                    style={[
-                                                        styles.genderButton,
-                                                        bmrInputs.gender === 'male' && styles.genderButtonActive
-                                                    ]}
-                                                    onPress={() => setBmrInputs(prev => ({ ...prev, gender: 'male' }))}
-                                                >
-                                                    <Text style={[
-                                                        styles.genderButtonText,
-                                                        bmrInputs.gender === 'male' && styles.genderButtonTextActive
-                                                    ]}>Male</Text>
-                                                </TouchableOpacity>
-                                                <TouchableOpacity
-                                                    style={[
-                                                        styles.genderButton,
-                                                        bmrInputs.gender === 'female' && styles.genderButtonActive
-                                                    ]}
-                                                    onPress={() => setBmrInputs(prev => ({ ...prev, gender: 'female' }))}
-                                                >
-                                                    <Text style={[
-                                                        styles.genderButtonText,
-                                                        bmrInputs.gender === 'female' && styles.genderButtonTextActive
-                                                    ]}>Female</Text>
-                                                </TouchableOpacity>
-                                            </View>
-                                        </View>
-
-                                        <TouchableOpacity
-                                            style={styles.calculateButton}
-                                            onPress={calculateBMR}
-                                            activeOpacity={0.7}>
-                                            <Text style={styles.calculateButtonText}>Calculate</Text>
-                                        </TouchableOpacity>
-                                    </View>
-                                </ScrollView>
-                            </View>
-                        </View>
-                    </KeyboardAvoidingView>
-                </Modal>
-
-                <Modal
-                    visible={showGoalModal}
-                    transparent
-                    animationType="slide"
-                    onRequestClose={() => setShowGoalModal(false)}
-                >
-                    <KeyboardAvoidingView
-                        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                        style={{ flex: 1 }}
-                    >
-                        <View style={styles.modalOverlay}>
-                            <View style={styles.modalContent}>
-                                <View style={styles.modalHeader}>
-                                    <Text style={styles.modalTitle}>Set Calorie Goal</Text>
-                                    <TouchableOpacity
-                                        style={styles.closeButton}
-                                        onPress={() => setShowGoalModal(false)}
-                                    >
-                                        <X size={24} color="#8E8E93" />
-                                    </TouchableOpacity>
-                                </View>
-
-                                <View style={styles.goalEditor}>
-                                    <TextInput
-                                        style={styles.goalInput}
-                                        value={String(calorieGoal)}
-                                        onChangeText={(text) => setCalorieGoal(parseInt(text) || 0)}
-                                        keyboardType="numeric"
-                                        placeholder="Enter daily calorie goal"
-                                    />
-                                    <TouchableOpacity
-                                        style={styles.saveButton}
-                                        onPress={updateCalorieGoal}
-                                    >
-                                        <Text style={styles.saveButtonText}>Save Goal</Text>
-                                    </TouchableOpacity>
-                                </View>
-                            </View>
-                        </View>
-                    </KeyboardAvoidingView>
-                </Modal>
-            </ScrollView>
+                </KeyboardAvoidingView>
+            </Modal>
         </SafeAreaView>
     );
 }
@@ -772,11 +768,19 @@ const styles = StyleSheet.create({
     safeArea: {
         height: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
     },
-    header: {
+    fixedHeader: {
         backgroundColor: '#FFFFFF',
-        padding: 16,
         borderBottomWidth: 1,
         borderBottomColor: '#E5E5EA',
+        zIndex: 1000,
+        elevation: 3,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 2,
+    },
+    header: {
+        padding: 16,
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
@@ -790,13 +794,11 @@ const styles = StyleSheet.create({
         fontSize: 16,
         color: '#8E8E93',
     },
-    goalButton: {
-        width: 44,
-        height: 44,
-        borderRadius: 22,
-        backgroundColor: '#F2F2F7',
-        justifyContent: 'center',
-        alignItems: 'center',
+    scrollContent: {
+        flex: 1,
+    },
+    scrollContentContainer: {
+        paddingBottom: 24,
     },
     calorieCard: {
         backgroundColor: '#FFFFFF',
@@ -831,6 +833,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
+        height: 40,
     },
     calorieStat: {
         flex: 1,
@@ -1128,25 +1131,19 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: '600',
     },
-    modalActions: {
-        marginTop: 24,
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-    },
     calorieEditor: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
         marginBottom: 16,
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        flexDirection: 'row',
     },
     calorieButton: {
-        width: 56,
-        height: 56,
-        backgroundColor: '#F2F2F7',
-        borderRadius: 28,
-        justifyContent: 'center',
         alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: 28,
+        backgroundColor: '#F2F2F7',
+        height: 56,
+        width: 56,
     },
     calorieValue: {
         fontSize: 36,
@@ -1157,6 +1154,12 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         color: '#8E8E93',
         fontSize: 14,
+    },
+    modalActions: {
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        flexDirection: 'row',
+        marginTop: 24,
     },
     loadingContainer: {
         flex: 1,
