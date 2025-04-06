@@ -105,6 +105,59 @@ export default function NutritionScreen() {
         };
     };
 
+    const refreshNutritionData = useCallback(async () => {
+        try {
+            setLoading(true);
+            
+            const todaysMeals = await getTodaysMeals();
+            setDbMeals(todaysMeals);
+            
+            const mealCalories = {
+                breakfast: 0,
+                lunch: 0,
+                dinner: 0,
+                snacks: 0
+            };
+            
+            let todaysWaterIntake = 0;
+            let waterMeal = null;
+            
+            todaysMeals.forEach(meal => {
+                if (meal.name === 'Water Intake' && meal.meal_type === 'water') {
+                    todaysWaterIntake = typeof meal.calories === 'number' ? meal.calories : parseInt(String(meal.calories)) || 0;
+                    waterMeal = meal;
+                } else if (mealCalories.hasOwnProperty(meal.meal_type)) {
+                    const mealCalorieValue = typeof meal.calories === 'number' ? meal.calories : parseInt(String(meal.calories)) || 0;
+                    if (meal.meal_type !== 'water') {
+                        mealCalories[meal.meal_type as keyof typeof mealCalories] += mealCalorieValue;
+                    }
+                }
+            });
+            
+            if (waterMeal) {
+                setWaterMealId(waterMeal.id);
+            } else {
+                setWaterMealId(null);
+            }
+            
+            setWaterIntake(todaysWaterIntake);
+            setCalories(mealCalories);
+            
+            const weeklyMealData = await getWeeklyMeals();
+            const processedWeeklyData = weeklyMealData.map(item => ({
+                date: item.date,
+                calories: typeof item.calories === 'number' ? item.calories : parseInt(String(item.calories)) || 0
+            }));
+            setWeeklyData(processedWeeklyData);
+            
+        } catch (error) {
+            console.error('Failed to refresh nutrition data:', error);
+            Alert.alert('Error', 'Failed to refresh nutrition data');
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
     useFocusEffect(
         useCallback(() => {
             const fetchNutritionData = async () => {
@@ -135,46 +188,8 @@ export default function NutritionScreen() {
                         }
                     }
                     
-                    const todaysMeals = await getTodaysMeals();
-                    setDbMeals(todaysMeals);
+                    await refreshNutritionData();
                     
-                    const mealCalories = {
-                        breakfast: 0,
-                        lunch: 0,
-                        dinner: 0,
-                        snacks: 0
-                    };
-                    
-                    let todaysWaterIntake = 0;
-                    let waterMeal = null;
-                    
-                    todaysMeals.forEach(meal => {
-                        if (meal.name === 'Water Intake' && meal.meal_type === 'water') {
-                            todaysWaterIntake = typeof meal.calories === 'number' ? meal.calories : parseInt(String(meal.calories)) || 0;
-                            waterMeal = meal;
-                        } else if (mealCalories.hasOwnProperty(meal.meal_type)) {
-                            const mealCalorieValue = typeof meal.calories === 'number' ? meal.calories : parseInt(String(meal.calories)) || 0;
-                            if (meal.meal_type !== 'water') {
-                                mealCalories[meal.meal_type as keyof typeof mealCalories] += mealCalorieValue;
-                            }
-                        }
-                    });
-                    
-                    if (waterMeal) {
-                        setWaterMealId(waterMeal.id);
-                    } else {
-                        setWaterMealId(null);
-                    }
-                    setWaterIntake(todaysWaterIntake);
-                    setCalories(mealCalories);
-
-                    const weeklyMealData = await getWeeklyMeals();
-                    const processedWeeklyData = weeklyMealData.map(item => ({
-                        date: item.date,
-                        calories: typeof item.calories === 'number' ? item.calories : parseInt(String(item.calories)) || 0
-                    }));
-                    setWeeklyData(processedWeeklyData);
-
                 } catch (error) {
                     console.error('Failed to load nutrition data:', error);
                     Alert.alert('Error', 'Failed to load nutrition data');
@@ -184,7 +199,7 @@ export default function NutritionScreen() {
             };
             
             fetchNutritionData();
-        }, [])
+        }, [refreshNutritionData])
     );
 
     useEffect(() => {
@@ -258,6 +273,13 @@ export default function NutritionScreen() {
                     setWaterMealId(result.id);
                 }
             }
+            
+            const updatedMeals = await getTodaysMeals();
+            const waterMeal = updatedMeals.find(meal => meal.name === 'Water Intake' && meal.meal_type === 'water');
+            if (waterMeal) {
+                setWaterMealId(waterMeal.id);
+            }
+            
         } catch (error) {
             console.error('Failed to update water intake:', error);
             Alert.alert('Error', 'Failed to update water intake');
@@ -330,12 +352,8 @@ export default function NutritionScreen() {
                 });
             }
 
-            setCalories(prev => ({
-                ...prev,
-                [selectedMeal.mealType]: temporaryCalories
-            }));
-            const updatedMeals = await getTodaysMeals();
-            setDbMeals(updatedMeals);
+            await refreshNutritionData();
+            
             setEditModalVisible(false);
         } catch (error) {
             console.error('Failed to update meal calories:', error);
