@@ -29,18 +29,41 @@ export interface Workout {
 }
 
 // Get all workouts
-export async function getWorkouts(): Promise<Workout[]> {
-  const { data, error } = await supabase
-    .from('workouts')
-    .select('*')
-    .order('date', { ascending: false });
-
-  if (error) {
-    console.error('Error fetching workouts:', error);
+export async function getWorkouts(userId?: string): Promise<Workout[]> {
+  try {
+    // If no userId is provided, return an empty array for safety
+    if (!userId) {
+      console.warn('getWorkouts called without a user ID');
+      return [];
+    }
+    
+    console.log(`Fetching workouts for user ID: ${userId}`);
+    
+    const { data, error } = await supabase
+      .from('workouts')
+      .select('*')
+      .eq('user_id', userId) // Make sure your column name matches exactly
+      .order('date', { ascending: false });
+    
+    if (error) {
+      console.error('Error fetching workouts:', error);
+      throw new Error(error.message);
+    }
+    
+    console.log(`Retrieved ${data?.length || 0} workouts for user ${userId}`);
+    
+    // Add additional safety check to verify user_id matches
+    const filteredData = data?.filter(workout => workout.user_id === userId) || [];
+    
+    if (filteredData.length !== data?.length) {
+      console.warn(`Found ${data?.length} workouts but only ${filteredData.length} match user ID ${userId}`);
+    }
+    
+    return filteredData;
+  } catch (error) {
+    console.error('Error in getWorkouts:', error);
     throw error;
   }
-  
-  return data || [];
 }
 
 // Get a specific workout
