@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, SafeAreaView } from 'react-native';
 import { ThumbsUp, ThumbsDown, MessageSquare } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { checkDatabaseSchema, createWorkoutsTable } from '@/utils/database-checker';
@@ -83,80 +83,83 @@ export default function AIScreen() {
   };
 
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.safeArea} />
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.headerTitle}>AI Workout Assistant</Text>
-          <Text style={styles.headerSubtitle}>Personalized workout suggestions</Text>
+    <View style={styles.container}>
+      <SafeAreaView style={styles.safeAreaHeader}>
+        <View style={styles.header}>
+          <View>
+            <Text style={styles.headerTitle}>AI Workout Assistant</Text>
+            <Text style={styles.headerSubtitle}>Personalized workout suggestions</Text>
+          </View>
+          <TouchableOpacity 
+            style={styles.chatButton}
+            onPress={() => router.push('/ai/chat')}
+          >
+            <MessageSquare size={20} color="#FFFFFF" />
+            <Text style={styles.chatButtonText}>Chat</Text>
+          </TouchableOpacity>
         </View>
-        <TouchableOpacity 
-          style={styles.chatButton}
-          onPress={() => router.push('/ai/chat')}
-        >
-          <MessageSquare size={20} color="#FFFFFF" />
-          <Text style={styles.chatButtonText}>Chat</Text>
-        </TouchableOpacity>
-      </View>
+      </SafeAreaView>
 
-      {suggestions.map(suggestion => (
-        <View key={suggestion.id} style={styles.card}>
-          <View style={styles.cardHeader}>
-            <Text style={[
-              styles.cardType,
-              suggestion.type === 'Modification' && styles.modificationType,
-              suggestion.type === 'Addition' && styles.additionType,
-              suggestion.type === 'Recovery' && styles.recoveryType,
-            ]}>{suggestion.type}</Text>
-            <Text style={styles.cardExercise}>{suggestion.exercise}</Text>
-          </View>
-
-          <Text style={styles.suggestion}>{suggestion.suggestion}</Text>
-          
-          <View style={styles.reasoningContainer}>
-            <Text style={styles.reasoningTitle}>Why this suggestion?</Text>
-            <Text style={styles.reasoning}>{suggestion.reasoning}</Text>
-          </View>
-
-          {!responses[suggestion.id] ? (
-            <View style={styles.actionButtons}>
-              <TouchableOpacity
-                style={[styles.actionButton, styles.acceptButton]}
-                onPress={() => handleResponse(suggestion.id, 'accept')}>
-                <ThumbsUp size={20} color="#FFFFFF" />
-                <Text style={styles.actionButtonText}>Accept</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={[styles.actionButton, styles.declineButton]}
-                onPress={() => handleResponse(suggestion.id, 'decline')}>
-                <ThumbsDown size={20} color="#FFFFFF" />
-                <Text style={styles.actionButtonText}>Decline</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <View style={styles.responseContainer}>
+      <ScrollView style={styles.scrollContent} contentContainerStyle={styles.scrollContentContainer}>
+        {suggestions.map(suggestion => (
+          <View key={suggestion.id} style={styles.card}>
+            <View style={styles.cardHeader}>
               <Text style={[
-                styles.responseText,
-                responses[suggestion.id] === 'accept' ? styles.acceptedText : styles.declinedText
-              ]}>
-                {responses[suggestion.id] === 'accept' ? 'Accepted ✓' : 'Declined ×'}
-              </Text>
+                styles.cardType,
+                suggestion.type === 'Modification' && styles.modificationType,
+                suggestion.type === 'Addition' && styles.additionType,
+                suggestion.type === 'Recovery' && styles.recoveryType,
+              ]}>{suggestion.type}</Text>
+              <Text style={styles.cardExercise}>{suggestion.exercise}</Text>
             </View>
-          )}
-        </View>
-      ))}
 
-      <TouchableOpacity 
-        style={[styles.debugButton, isChecking && styles.debugButtonDisabled]} 
-        onPress={handleDatabaseCheck}
-        disabled={isChecking}
-      >
-        <Text style={styles.debugButtonText}>
-          {isChecking ? 'Checking...' : 'Check Database Connection'}
-        </Text>
-      </TouchableOpacity>
-    </ScrollView>
+            <Text style={styles.suggestion}>{suggestion.suggestion}</Text>
+            
+            <View style={styles.reasoningContainer}>
+              <Text style={styles.reasoningTitle}>Why this suggestion?</Text>
+              <Text style={styles.reasoning}>{suggestion.reasoning}</Text>
+            </View>
+
+            {!responses[suggestion.id] ? (
+              <View style={styles.actionButtons}>
+                <TouchableOpacity
+                  style={[styles.actionButton, styles.acceptButton]}
+                  onPress={() => handleResponse(suggestion.id, 'accept')}>
+                  <ThumbsUp size={20} color="#FFFFFF" />
+                  <Text style={styles.actionButtonText}>Accept</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity
+                  style={[styles.actionButton, styles.declineButton]}
+                  onPress={() => handleResponse(suggestion.id, 'decline')}>
+                  <ThumbsDown size={20} color="#FFFFFF" />
+                  <Text style={styles.actionButtonText}>Decline</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={styles.responseContainer}>
+                <Text style={[
+                  styles.responseText,
+                  responses[suggestion.id] === 'accept' ? styles.acceptedText : styles.declinedText
+                ]}>
+                  {responses[suggestion.id] === 'accept' ? 'Accepted ✓' : 'Declined ×'}
+                </Text>
+              </View>
+            )}
+          </View>
+        ))}
+
+        <TouchableOpacity 
+          style={[styles.debugButton, isChecking && styles.debugButtonDisabled]} 
+          onPress={handleDatabaseCheck}
+          disabled={isChecking}
+        >
+          <Text style={styles.debugButtonText}>
+            {isChecking ? 'Checking...' : 'Check Database Connection'}
+          </Text>
+        </TouchableOpacity>
+      </ScrollView>
+    </View>
   );
 }
 
@@ -165,9 +168,14 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F2F2F7',
   },
-  safeArea: {
-    height: 44,
+  safeAreaHeader: {
     backgroundColor: '#FFFFFF',
+  },
+  scrollContent: {
+    flex: 1,
+  },
+  scrollContentContainer: {
+    paddingBottom: 20,
   },
   header: {
     flexDirection: 'row',
