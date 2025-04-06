@@ -25,9 +25,14 @@ export default function WorkoutsScreen() {
     try {
       setIsLoading(true);
       setError(null);
-      const data = await getWorkouts();
+      if (!session?.user?.id) {
+        setError('User not authenticated');
+        setWorkouts([]);
+        return;
+      }
+      const data = await getWorkouts(session.user.id);
       setWorkouts(data);
-      console.log(`Loaded ${data.length} workouts from database`);
+      console.log(`Loaded ${data.length} workouts for user ${session.user.id}`);
     } catch (error) {
       console.error('Error loading workouts:', error);
       setError('Failed to load workouts. Please try again.');
@@ -115,20 +120,20 @@ export default function WorkoutsScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      if (session?.user) {
+      if (session?.user?.id) {
         loadWorkouts();
       }
-    }, [session])
+    }, [session?.user?.id])
   );
 
   useEffect(() => {
-    if (session?.user) {
+    if (session?.user?.id) {
       loadWorkouts();
     } else {
       setIsLoading(false);
       setError('Please log in to view your workouts');
     }
-  }, [session]);
+  }, [session?.user?.id]);
 
   return (
     <SafeAreaView style={[styles.container, Platform.OS === 'ios' && { paddingTop: 0 }]}>
