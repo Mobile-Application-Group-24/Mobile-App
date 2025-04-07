@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { Scale, Droplets, Bell, Clock, Save } from 'lucide-react-native';
 import { getNutritionSettings, updateNutritionSettings, supabase } from '@/utils/supabase';
 import type { NutritionSettings } from '@/utils/supabase';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 const defaultSettings: Omit<NutritionSettings, 'user_id' | 'updated_at'> = {
   calorie_goal: 2200,
@@ -24,6 +25,7 @@ export default function NutritionSettingsScreen() {
   const [saving, setSaving] = useState(false);
   const [settings, setSettings] = useState<NutritionSettings | null>(null);
   const [isNewUser, setIsNewUser] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState<number | null>(null);
 
   useEffect(() => {
     loadSettings();
@@ -131,7 +133,7 @@ export default function NutritionSettingsScreen() {
       const normalizedSettings = {
         ...settings,
         calorie_goal:
-typeof settings.calorie_goal === 'string' || settings.calorie_goal === null
+          typeof settings.calorie_goal === 'string' || settings.calorie_goal === null
             ? settings.calorie_goal === ''
               ? 2200
               : parseInt(String(settings.calorie_goal), 10) || 2200
@@ -198,6 +200,42 @@ typeof settings.calorie_goal === 'string' || settings.calorie_goal === null
       ...settings,
       meal_times: updatedMealTimes,
     });
+  };
+
+  const handleTimePickerChange = (index: number, event: any, selectedDate?: Date) => {
+    setShowTimePicker(null);
+
+    if (Platform.OS === 'android') {
+      if (event.type === 'dismissed') {
+        return;
+      }
+    }
+
+    if (selectedDate) {
+      const hours = selectedDate.getHours().toString().padStart(2, '0');
+      const minutes = selectedDate.getMinutes().toString().padStart(2, '0');
+      const timeString = `${hours}:${minutes}`;
+
+      handleMealTimeChange(index, 'time', timeString);
+    }
+  };
+
+  const showTimepicker = (index: number) => {
+    setShowTimePicker(index);
+  };
+
+  const parseTimeString = (timeString: string): Date => {
+    const date = new Date();
+    const [hoursStr, minutesStr] = timeString.split(':');
+    const hours = parseInt(hoursStr, 10);
+    const minutes = parseInt(minutesStr, 10);
+
+    if (!isNaN(hours) && !isNaN(minutes)) {
+      date.setHours(hours);
+      date.setMinutes(minutes);
+    }
+
+    return date;
   };
 
   if (loading) {
@@ -311,13 +349,37 @@ typeof settings.calorie_goal === 'string' || settings.calorie_goal === null
             {meal.enabled && (
               <View style={styles.timeContainer}>
                 <Text style={styles.timeLabel}>Reminder Time</Text>
-                <TextInput
-                  style={styles.timeInput}
-                  value={meal.time}
-                  onChangeText={(value) => handleMealTimeChange(index, 'time', value)}
-                  placeholder="HH:MM"
-                  keyboardType={Platform.OS === 'ios' ? 'numbers-and-punctuation' : 'default'}
-                />
+
+                {Platform.OS === 'ios' ? (
+                  <View style={styles.timePickerContainer}>
+                    <DateTimePicker
+                      value={parseTimeString(meal.time)}
+                      mode="time"
+                      display="default"
+                      onChange={(event, selectedDate) => handleTimePickerChange(index, event, selectedDate)}
+                      style={styles.iosTimePicker}
+                    />
+                  </View>
+                ) : (
+                  <>
+                    <TouchableOpacity
+                      style={styles.timeButton}
+                      onPress={() => showTimepicker(index)}
+                    >
+                      <Text style={styles.timeButtonText}>{meal.time}</Text>
+                    </TouchableOpacity>
+
+                    {showTimePicker === index && (
+                      <DateTimePicker
+                        value={parseTimeString(meal.time)}
+                        mode="time"
+                        is24Hour={true}
+                        display="default"
+                        onChange={(event, selectedDate) => handleTimePickerChange(index, event, selectedDate)}
+                      />
+                    )}
+                  </>
+                )}
               </View>
             )}
           </View>
@@ -466,6 +528,25 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 16,
     fontWeight: '500',
+  },
+  timeButton: {
+    backgroundColor: '#FFFFFF',
+    padding: 12,
+    borderRadius: 8,
+    width: 100,
+    alignItems: 'center',
+  },
+  timeButtonText: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  timePickerContainer: {
+    width: 120,
+    overflow: 'hidden',
+  },
+  iosTimePicker: {
+    height: 40,
+    alignSelf: 'flex-end',
   },
   saveButton: {
     backgroundColor: '#007AFF',
