@@ -1,10 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Switch, Platform, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Scale, Droplets, Bell, Clock, Save } from 'lucide-react-native';
+import { Scale, Droplets, Bell, Clock, Save, AlertTriangle } from 'lucide-react-native';
 import { getNutritionSettings, updateNutritionSettings, supabase } from '@/utils/supabase';
 import type { NutritionSettings } from '@/utils/supabase';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { 
+  requestNotificationPermissions, 
+  scheduleMealNotifications, 
+  scheduleWaterReminders, 
+  sendTestNotification,
+  sendImmediateTestNotification,
+  listScheduledNotifications,
+  setupNotificationChannels
+} from '@/utils/notifications';
 
 const defaultSettings: Omit<NutritionSettings, 'user_id' | 'updated_at'> = {
   calorie_goal: 2200,
@@ -26,10 +35,36 @@ export default function NutritionSettingsScreen() {
   const [settings, setSettings] = useState<NutritionSettings | null>(null);
   const [isNewUser, setIsNewUser] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState<number | null>(null);
+  const [notificationsPermission, setNotificationsPermission] = useState(false);
+  const [showDebugInfo, setShowDebugInfo] = useState(false);
+  const [scheduledNotifications, setScheduledNotifications] = useState<any[]>([]);
 
   useEffect(() => {
     loadSettings();
+    checkNotificationPermissions();
   }, []);
+
+  const checkNotificationPermissions = async () => {
+    try {
+      if (Platform.OS === 'android') {
+        await setupNotificationChannels();
+      }
+      
+      const hasPermission = await requestNotificationPermissions();
+      setNotificationsPermission(hasPermission);
+      if (!hasPermission) {
+        Alert.alert(
+          "Notification Permission Required",
+          "To receive meal and water reminders, please enable notifications for this app in your device settings.",
+          [{ text: "OK" }]
+        );
+      } else {
+        console.log('Notification permissions granted');
+      }
+    } catch (error) {
+      console.error('Error checking notification permissions:', error);
+    }
+  };
 
   const loadSettings = async () => {
     try {
@@ -43,7 +78,6 @@ export default function NutritionSettingsScreen() {
         setIsNewUser(false);
       } catch (error: any) {
         if (error?.message?.includes('JSON object requested, multiple (or no) rows returned')) {
-          // No settings found, use defaults
           setSettings({
             user_id: userData.user.id,
             updated_at: new Date().toISOString(),
@@ -174,6 +208,41 @@ export default function NutritionSettingsScreen() {
         });
       }
 
+      if (notificationsPermission) {
+        console.log('Setting up notifications with settings:', normalizedSettings);
+        
+        const mealNotificationIds = await scheduleMealNotifications(normalizedSettings);
+        console.log('Meal notification IDs:', mealNotificationIds);
+        
+        if (normalizedSettings.water_notifications) {
+          const waterReminderId = await scheduleWaterReminders(
+            normalizedSettings.water_notifications,
+            normalizedSettings.water_interval
+          );
+          console.log('Water reminder ID:', waterReminderId);
+        }
+        
+        const notifications = await listScheduledNotifications();
+        setScheduledNotifications(notifications);
+        
+        if (notifications.length === 0) {
+          Alert.alert(
+            "Notification Warning",
+            "Your settings were saved, but no notifications could be scheduled. This might be due to system restrictions.",
+            [{ text: "OK" }]
+          );
+        }
+      } else {
+        Alert.alert(
+          "Notification Permission Required",
+          "Please enable notifications to receive meal and water reminders.",
+          [
+            { text: "Skip", style: "cancel" },
+            { text: "Check Permissions", onPress: checkNotificationPermissions }
+          ]
+        );
+      }
+
       router.replace('/nutrition/index-with-data');
     } catch (error) {
       console.error('Error saving settings:', error);
@@ -236,6 +305,54 @@ export default function NutritionSettingsScreen() {
     }
 
     return date;
+  };
+
+  const handleTestNotification = async () => {
+    try {
+      const notificationId = await sendTestNotification();
+      if (notificationId) {
+        Alert.alert(
+          "Test Notification Sent",
+          "You should receive a test notification in a few seconds. If not, please check your notification settings."
+        );
+      } else {
+        Alert.alert(
+          "Notification Failed",
+          "The test notification could not be sent. Please check your notification permissions."
+        );
+      }
+    } catch (error) {
+      console.error('Error sending test notification:', error);
+      Alert.alert("Error", "Failed to send test notification");
+    }
+  };
+
+  const handleImmediateNotification = async () => {
+    try {
+      const notificationId = await sendImmediateTestNotification();
+      if (notificationId) {
+        Alert.alert(
+          "Immediate Notification Sent",
+          "You should receive a notification immediately. If not, there's a problem with your notification settings."
+        );
+      } else {
+        Alert.alert(
+          "Notification Failed",
+          "The immediate notification could not be sent. Please check your notification permissions."
+        );
+      }
+    } catch (error) {
+      console.error('Error sending immediate notification:', error);
+      Alert.alert("Error", "Failed to send immediate notification");
+    }
+  };
+
+  const toggleDebugInfo = async () => {
+    setShowDebugInfo(!showDebugInfo);
+    if (!showDebugInfo) {
+      const notifications = await listScheduledNotifications();
+      setScheduledNotifications(notifications);
+    }
   };
 
   if (loading) {
@@ -385,6 +502,45 @@ export default function NutritionSettingsScreen() {
           </View>
         ))}
         <Text style={styles.hint}>Set reminders to log your meals at specific times</Text>
+        
+        <TouchableOpacity 
+          style={styles.testButton}
+          onPress={handleTestNotification}
+        >
+          <Bell size={20} color="#FFFFFF" />
+          <Text style={styles.testButtonText}>Test Delayed Notification (5s)</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity 
+          style={[styles.testButton, { backgroundColor: '#FF9500', marginTop: 8 }]}
+          onPress={handleImmediateNotification}
+        >
+          <Bell size={20} color="#FFFFFF" />
+          <Text style={styles.testButtonText}>Test Immediate Notification</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity 
+          style={styles.debugButton}
+          onPress={toggleDebugInfo}
+        >
+          <Text style={styles.debugButtonText}>{showDebugInfo ? "Hide Debug Info" : "Show Notification Debug Info"}</Text>
+        </TouchableOpacity>
+        
+        {showDebugInfo && (
+          <View style={styles.debugInfo}>
+            <Text style={styles.debugTitle}>Notification Status</Text>
+            <Text style={styles.debugText}>Permission: {notificationsPermission ? "Granted" : "Denied"}</Text>
+            <Text style={styles.debugText}>Platform: {Platform.OS}</Text>
+            <Text style={styles.debugText}>Scheduled Notifications: {scheduledNotifications.length}</Text>
+            {scheduledNotifications.map((notification, index) => (
+              <View key={index} style={styles.debugItem}>
+                <Text style={styles.debugText}>ID: {notification.identifier}</Text>
+                <Text style={styles.debugText}>Title: {notification.content.title}</Text>
+                <Text style={styles.debugText}>Trigger: {JSON.stringify(notification.trigger)}</Text>
+              </View>
+            ))}
+          </View>
+        )}
       </View>
 
       <TouchableOpacity
@@ -397,6 +553,15 @@ export default function NutritionSettingsScreen() {
           {saving ? 'Saving...' : isNewUser ? 'Create Settings' : 'Save Settings'}
         </Text>
       </TouchableOpacity>
+      
+      {!notificationsPermission && (
+        <View style={styles.permissionWarning}>
+          <AlertTriangle size={20} color="#FF9500" />
+          <Text style={styles.permissionWarningText}>
+            Notification permission not granted. You won't receive meal and water reminders.
+          </Text>
+        </View>
+      )}
     </ScrollView>
   );
 }
@@ -565,5 +730,66 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
+  },
+  testButton: {
+    backgroundColor: '#34C759',
+    padding: 12,
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 16,
+    gap: 8,
+  },
+  testButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  debugButton: {
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  debugButtonText: {
+    color: '#8E8E93',
+    fontSize: 14,
+  },
+  debugInfo: {
+    backgroundColor: '#F2F2F7',
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 8,
+  },
+  debugTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  debugText: {
+    fontSize: 12,
+    color: '#8E8E93',
+  },
+  debugItem: {
+    borderTopWidth: 1,
+    borderTopColor: '#E5E5EA',
+    paddingTop: 8,
+    marginTop: 8,
+  },
+  permissionWarning: {
+    backgroundColor: '#FFF9EB',
+    margin: 16,
+    marginTop: 0,
+    padding: 12,
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  permissionWarningText: {
+    color: '#FF9500',
+    fontSize: 14,
+    flex: 1,
   },
 });

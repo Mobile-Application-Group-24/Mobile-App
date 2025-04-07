@@ -15,6 +15,7 @@ import {
     Meal as MealType,
     NutritionSettings 
 } from '../../../utils/supabase';
+import { requestNotificationPermissions } from '@/utils/notifications';
 
 interface Meal {
     id: string;
@@ -64,6 +65,17 @@ export default function NutritionScreen() {
     const [dbMeals, setDbMeals] = useState<MealType[]>([]);
     const [temporaryCalories, setTemporaryCalories] = useState(0);
     const [waterMealId, setWaterMealId] = useState<string | null>(null);
+    const [notificationsPermission, setNotificationsPermission] = useState(false);
+    const [settingsData, setSettingsData] = useState<NutritionSettings | null>(null);
+
+    useEffect(() => {
+        checkNotificationPermissions();
+    }, []);
+
+    const checkNotificationPermissions = async () => {
+        const hasPermission = await requestNotificationPermissions();
+        setNotificationsPermission(hasPermission);
+    };
 
     const formatChartData = (weekData: {date: string; calories: number}[]) => {
         const today = new Date();
@@ -108,6 +120,14 @@ export default function NutritionScreen() {
     const refreshNutritionData = useCallback(async () => {
         try {
             setLoading(true);
+            
+            const settings = await getNutritionSettings();
+            setSettingsData(settings);
+            setCalorieGoal(settings.calorie_goal);
+            
+            if (settings.water_goal) {
+                setWaterGoal(settings.water_goal);
+            }
             
             const todaysMeals = await getTodaysMeals();
             setDbMeals(todaysMeals);
