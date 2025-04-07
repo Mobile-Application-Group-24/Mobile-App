@@ -123,15 +123,19 @@ export default function Index() {
 
   console.log("Rendering redirects. Session:", session ? "EXISTS" : "NONE", "Onboarded:", isOnboarded ? "YES" : "NO");
 
-  // Render the appropriate redirect with explicit paths
+  // If no session, always redirect to auth login
   if (!session) {
+    console.log("INDEX SCREEN: No auth session, redirecting to login");
     return <Redirect href="/(auth)/login" replace />;
   }
   
   if (isOnboarded) {
-    console.log("Redirecting to tabs/workouts");
-    return <Redirect href="/(tabs)/workouts" replace />;
+    console.log("INDEX SCREEN: User is authenticated and onboarded, redirecting to tabs with timestamp");
+    // Add timestamp to ensure new navigation
+    return <Redirect href={`/(tabs)/workouts?t=${Date.now()}`} replace />;
   }
   
+  // Must be authenticated but not onboarded
+  console.log("INDEX SCREEN: User needs onboarding, redirecting to goals");
   return <Redirect href="/(onboarding)/goals" replace />;
 }

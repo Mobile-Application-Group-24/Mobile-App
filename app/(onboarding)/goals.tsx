@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput } from 'react-native';
+import React, { useState, useRef } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Scale, TrendingDown, TrendingUp, ArrowRight } from 'lucide-react-native';
 import { supabase } from '@/utils/supabase';
@@ -7,61 +7,26 @@ import { supabase } from '@/utils/supabase';
 type FitnessGoal = 'lose' | 'gain' | 'maintain';
 
 export default function GoalsScreen() {
-  console.log("SCREEN: Goals screen rendering");
-
   const router = useRouter();
+  const scrollViewRef = useRef<ScrollView>(null);
   const [selectedGoal, setSelectedGoal] = useState<FitnessGoal | null>(null);
   const [targetWeight, setTargetWeight] = useState('');
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    async function checkIfAlreadyOnboarded() {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
-        
-        console.log("Goals screen: Checking if user is already onboarded");
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('is_onboarded')
-          .eq('id', user.id)
-          .single();
-          
-        if (error) {
-          console.error("Error checking onboarding status in goals screen:", error);
-          return;
-        }
-        
-        console.log("Onboarding check in goals screen:", data?.is_onboarded);
-        
-        if (data && data.is_onboarded === true) {
-          console.log("Goals screen: User already onboarded, redirecting to tabs");
-          
-          // Use a delay to ensure the component is mounted before navigation
-          setTimeout(() => {
-            // Force Navigation to tabs using replace and a timestamp to prevent caching
-            router.replace({
-              pathname: "/(tabs)",
-              params: { t: Date.now() }
-            });
-          }, 500);
-        } else {
-          console.log("Goals screen: User needs onboarding, staying on this screen");
-        }
-      } catch (err) {
-        console.error("Exception checking onboarding in goals screen:", err);
-      }
-    }
-    
-    checkIfAlreadyOnboarded();
-  }, []);
+  const handleGoalSelect = (goal: FitnessGoal) => {
+    setSelectedGoal(goal);
+    // Scroll to target weight section with animation
+    setTimeout(() => {
+      scrollViewRef.current?.scrollToEnd({ animated: true });
+    }, 100);
+  };
 
   const handleContinue = async () => {
     if (!selectedGoal || !targetWeight) return;
 
     try {
       setLoading(true);
-      console.log("NAVIGATION: Saving goals...");
+      console.log("Saving goals and navigating directly to schedule...");
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
@@ -75,8 +40,16 @@ export default function GoalsScreen() {
 
       if (error) throw error;
       
-      console.log("NAVIGATION: Successfully saved goals, redirecting to training-days...");
-      router.push("/(onboarding)/training-days");
+      console.log("Successfully saved goals, navigating to schedule screen");
+      // Explicitly log the navigation path
+      console.log("Navigation path: /(onboarding)/schedule");
+      
+      // Force a delay to ensure state update completes
+      setTimeout(() => {
+        router.push({
+          pathname: "/(onboarding)/schedule"
+        });
+      }, 100);
     } catch (error) {
       console.error('Error saving goals:', error);
     } finally {
@@ -85,65 +58,115 @@ export default function GoalsScreen() {
   };
 
   const goals = [
-    { id: 'lose' as const, icon: TrendingDown, label: 'Lose Weight', color: '#FF3B30' },
-    { id: 'maintain' as const, icon: Scale, label: 'Maintain Weight', color: '#007AFF' },
-    { id: 'gain' as const, icon: TrendingUp, label: 'Gain Weight', color: '#34C759' },
+    {
+      id: 'lose' as const,
+      icon: TrendingDown,
+      label: 'Lose Weight',
+      description: 'Burn fat and get lean',
+      color: '#FF3B30',
+      details: 'Perfect for those looking to reduce body fat, improve definition, and achieve a leaner physique.',
+    },
+    {
+      id: 'maintain' as const,
+      icon: Scale,
+      label: 'Maintain Weight',
+      description: 'Stay fit and healthy',
+      color: '#007AFF',
+      details: 'Ideal for those who want to maintain their current weight while improving strength and fitness.',
+    },
+    {
+      id: 'gain' as const,
+      icon: TrendingUp,
+      label: 'Gain Weight',
+      description: 'Build muscle and strength',
+      color: '#34C759',
+      details: 'Designed for those looking to build muscle mass and increase overall strength.',
+    },
   ];
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>What's Your Goal?</Text>
-      <Text style={styles.subtitle}>Select your primary fitness goal</Text>
-
-      <View style={styles.goalsContainer}>
-        {goals.map((goal) => (
-          <TouchableOpacity
-            key={goal.id}
-            style={[
-              styles.goalCard,
-              selectedGoal === goal.id && styles.goalCardSelected,
-              { borderColor: selectedGoal === goal.id ? goal.color : '#E5E5EA' }
-            ]}
-            onPress={() => setSelectedGoal(goal.id)}
-          >
-            <goal.icon
-              size={32}
-              color={selectedGoal === goal.id ? goal.color : '#8E8E93'}
-            />
-            <Text style={[
-              styles.goalLabel,
-              { color: selectedGoal === goal.id ? goal.color : '#8E8E93' }
-            ]}>
-              {goal.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      <View style={styles.weightContainer}>
-        <Text style={styles.weightLabel}>Target Weight (kg)</Text>
-        <TextInput
-          style={styles.weightInput}
-          value={targetWeight}
-          onChangeText={setTargetWeight}
-          placeholder="Enter target weight"
-          keyboardType="numeric"
-        />
-      </View>
-
-      <TouchableOpacity
-        style={[
-          styles.continueButton,
-          (!selectedGoal || !targetWeight || loading) && styles.continueButtonDisabled
-        ]}
-        onPress={handleContinue}
-        disabled={!selectedGoal || !targetWeight || loading}
+      <ScrollView 
+        ref={scrollViewRef}
+        style={styles.scrollView} 
+        showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.continueButtonText}>
-          {loading ? 'Saving...' : 'Continue'}
-        </Text>
-        <ArrowRight size={20} color="#FFFFFF" />
-      </TouchableOpacity>
+        <View style={styles.content}>
+          <Text style={styles.title}>What's Your Goal?</Text>
+          <Text style={styles.subtitle}>Select your primary fitness goal</Text>
+
+          <View style={styles.goalsContainer}>
+            {goals.map((goal) => (
+              <TouchableOpacity
+                key={goal.id}
+                style={[
+                  styles.goalCard,
+                  selectedGoal === goal.id && styles.goalCardSelected
+                ]}
+                onPress={() => handleGoalSelect(goal.id)}
+              >
+                <View style={[
+                  styles.iconContainer,
+                  { backgroundColor: selectedGoal === goal.id ? goal.color : `${goal.color}15` }
+                ]}>
+                  <goal.icon
+                    size={32}
+                    color={selectedGoal === goal.id ? '#FFFFFF' : goal.color}
+                  />
+                </View>
+                <View style={styles.goalContent}>
+                  <View style={styles.goalHeader}>
+                    <Text style={[
+                      styles.goalLabel,
+                      selectedGoal === goal.id && { color: goal.color }
+                    ]}>
+                      {goal.label}
+                    </Text>
+                    <Text style={styles.goalDescription}>
+                      {goal.description}
+                    </Text>
+                  </View>
+                  <Text style={styles.goalDetails}>
+                    {goal.details}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <View style={styles.weightSection}>
+            <Text style={styles.weightTitle}>Target Weight</Text>
+            <Text style={styles.weightSubtitle}>What weight do you want to achieve?</Text>
+            <View style={styles.weightInputContainer}>
+              <TextInput
+                style={styles.weightInput}
+                value={targetWeight}
+                onChangeText={setTargetWeight}
+                placeholder="Enter target weight"
+                keyboardType="numeric"
+                placeholderTextColor="#8E8E93"
+              />
+              <Text style={styles.weightUnit}>kg</Text>
+            </View>
+          </View>
+        </View>
+      </ScrollView>
+
+      <View style={styles.footer}>
+        <TouchableOpacity
+          style={[
+            styles.continueButton,
+            (!selectedGoal || !targetWeight || loading) && styles.continueButtonDisabled
+          ]}
+          onPress={handleContinue}
+          disabled={!selectedGoal || !targetWeight || loading}
+        >
+          <Text style={styles.continueButtonText}>
+            {loading ? 'Saving...' : 'Continue'}
+          </Text>
+          <ArrowRight size={20} color="#FFFFFF" />
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -152,52 +175,130 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F2F2F7',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  content: {
     padding: 20,
+    paddingBottom: 100,
   },
   title: {
-    fontSize: 32,
+    fontSize: 34,
     fontWeight: 'bold',
     marginTop: 60,
     marginBottom: 8,
+    color: '#000000',
   },
   subtitle: {
-    fontSize: 18,
-    color: '#8E8E93',
+    fontSize: 17,
+    color: '#666666',
     marginBottom: 32,
+    lineHeight: 22,
   },
   goalsContainer: {
     gap: 16,
   },
   goalCard: {
     flexDirection: 'row',
-    alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    padding: 20,
-    borderRadius: 16,
-    borderWidth: 2,
+    borderRadius: 20,
+    padding: 16,
     gap: 16,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 2,
   },
   goalCardSelected: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F8F8F8',
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  iconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  goalContent: {
+    flex: 1,
+    gap: 8,
+  },
+  goalHeader: {
+    gap: 4,
   },
   goalLabel: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#000000',
   },
-  weightContainer: {
-    marginTop: 32,
+  goalDescription: {
+    fontSize: 15,
+    color: '#666666',
   },
-  weightLabel: {
-    fontSize: 16,
+  goalDetails: {
+    fontSize: 13,
+    lineHeight: 18,
     color: '#8E8E93',
+  },
+  weightSection: {
+    marginTop: 32,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 20,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  weightTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
     marginBottom: 8,
+    color: '#000000',
+  },
+  weightSubtitle: {
+    fontSize: 15,
+    color: '#666666',
+    marginBottom: 16,
+  },
+  weightInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F2F2F7',
+    borderRadius: 16,
+    padding: 16,
   },
   weightInput: {
+    flex: 1,
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#000000',
+  },
+  weightUnit: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#8E8E93',
+    marginLeft: 8,
+  },
+  footer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
     backgroundColor: '#FFFFFF',
-    padding: 16,
-    borderRadius: 12,
-    fontSize: 16,
-    fontWeight: '500',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
   },
   continueButton: {
     backgroundColor: '#007AFF',
@@ -205,8 +306,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: 16,
-    borderRadius: 12,
-    marginTop: 'auto',
+    borderRadius: 16,
     gap: 8,
   },
   continueButtonDisabled: {
@@ -214,7 +314,7 @@ const styles = StyleSheet.create({
   },
   continueButtonText: {
     color: '#FFFFFF',
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '600',
   },
 });

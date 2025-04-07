@@ -1,12 +1,10 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
-import { ArrowRight, Dumbbell } from 'lucide-react-native';
+import { ArrowRight, Calendar } from 'lucide-react-native';
 import { supabase } from '@/utils/supabase';
 
 export default function TrainingDaysScreen() {
-  console.log("SCREEN: Training days screen rendering");
-
   const router = useRouter();
   const [selectedDays, setSelectedDays] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
@@ -16,7 +14,7 @@ export default function TrainingDaysScreen() {
 
     try {
       setLoading(true);
-      console.log("NAVIGATION: Saving training days...");
+      console.log("Saving training days and navigating to schedule...");
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
@@ -29,7 +27,7 @@ export default function TrainingDaysScreen() {
 
       if (error) throw error;
       
-      console.log("NAVIGATION: Successfully saved training days, redirecting to schedule...");
+      console.log("Successfully saved training days, navigating to schedule screen");
       router.push("/(onboarding)/schedule");
     } catch (error) {
       console.error('Error saving training days:', error);
@@ -38,46 +36,41 @@ export default function TrainingDaysScreen() {
     }
   };
 
-  const trainingOptions = [
-    { days: 3, label: '3 Days', description: 'Full body workouts' },
-    { days: 4, label: '4 Days', description: 'Upper/Lower split' },
-    { days: 5, label: '5 Days', description: 'Push/Pull/Legs split' },
-    { days: 6, label: '6 Days', description: 'Arnold split' },
-  ];
+  const daysOptions = [2, 3, 4, 5, 6];
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Training Schedule</Text>
-      <Text style={styles.subtitle}>How many days can you commit to training?</Text>
+      <Text style={styles.title}>Training Days</Text>
+      <Text style={styles.subtitle}>How many days per week can you commit to training?</Text>
 
-      <View style={styles.optionsContainer}>
-        {trainingOptions.map((option) => (
+      <View style={styles.cardsContainer}>
+        {daysOptions.map((days) => (
           <TouchableOpacity
-            key={option.days}
+            key={days}
             style={[
-              styles.optionCard,
-              selectedDays === option.days && styles.optionCardSelected
+              styles.card,
+              selectedDays === days && styles.cardSelected
             ]}
-            onPress={() => setSelectedDays(option.days)}
+            onPress={() => setSelectedDays(days)}
           >
-            <View style={styles.optionHeader}>
-              <Dumbbell
-                size={24}
-                color={selectedDays === option.days ? '#FFFFFF' : '#007AFF'}
-              />
+            <Calendar
+              size={24}
+              color={selectedDays === days ? '#FFFFFF' : '#007AFF'}
+            />
+            <View style={styles.cardContent}>
               <Text style={[
-                styles.optionLabel,
-                selectedDays === option.days && styles.optionLabelSelected
+                styles.daysText,
+                selectedDays === days && styles.daysTextSelected
               ]}>
-                {option.label}
+                {days} Days
+              </Text>
+              <Text style={[
+                styles.perWeekText,
+                selectedDays === days && styles.perWeekTextSelected
+              ]}>
+                per week
               </Text>
             </View>
-            <Text style={[
-              styles.optionDescription,
-              selectedDays === option.days && styles.optionDescriptionSelected
-            ]}>
-              {option.description}
-            </Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -104,6 +97,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F2F2F7',
     padding: 20,
+    justifyContent: 'space-between',
   },
   title: {
     fontSize: 32,
@@ -115,38 +109,47 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: '#8E8E93',
     marginBottom: 32,
+    lineHeight: 24,
   },
-  optionsContainer: {
+  cardsContainer: {
+    flex: 1,
+    justifyContent: 'center',
     gap: 16,
+    marginBottom: 32,
   },
-  optionCard: {
+  card: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: '#FFFFFF',
     padding: 20,
     borderRadius: 16,
-    gap: 8,
+    gap: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
   },
-  optionCardSelected: {
+  cardSelected: {
     backgroundColor: '#007AFF',
   },
-  optionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
+  cardContent: {
+    flex: 1,
   },
-  optionLabel: {
-    fontSize: 18,
+  daysText: {
+    fontSize: 20,
     fontWeight: '600',
     color: '#000000',
+    marginBottom: 4,
   },
-  optionLabelSelected: {
+  daysTextSelected: {
     color: '#FFFFFF',
   },
-  optionDescription: {
+  perWeekText: {
     fontSize: 14,
     color: '#8E8E93',
   },
-  optionDescriptionSelected: {
-    color: '#FFFFFF',
+  perWeekTextSelected: {
+    color: 'rgba(255, 255, 255, 0.8)',
   },
   continueButton: {
     backgroundColor: '#007AFF',
@@ -155,8 +158,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: 16,
     borderRadius: 12,
-    marginTop: 'auto',
     gap: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
   },
   continueButtonDisabled: {
     backgroundColor: '#A2A2A2',

@@ -28,12 +28,6 @@ export default function OnboardingLayout() {
         }}
       />
       <Stack.Screen 
-        name="training-days" 
-        options={{ 
-          gestureEnabled: false
-        }}
-      />
-      <Stack.Screen 
         name="schedule" 
         options={{ 
           gestureEnabled: false
