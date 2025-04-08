@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator
 import { useRouter } from 'expo-router';
 import { Check, Dumbbell } from 'lucide-react-native';
 import { supabase } from '@/utils/supabase';
+import { generateWorkoutsFromSchedule } from '@/utils/workout';
 
 const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
@@ -59,6 +60,7 @@ export default function ScheduleScreen() {
       const trainingDaysPerWeek = calculateTrainingDaysPerWeek(schedule);
       console.log(`Saving ${trainingDaysPerWeek} training days per week to the database`);
 
+      // First, update the profile with the schedule and onboarding status
       console.log("Saving schedule, training days, and marking user as onboarded...");
       const { error } = await supabase
         .from('profiles')
@@ -70,6 +72,11 @@ export default function ScheduleScreen() {
         .eq('id', user.id);
 
       if (error) throw error;
+      
+      // Next, generate and save the workouts based on the schedule
+      console.log("Generating workouts based on training split...");
+      const workoutsCreated = await generateWorkoutsFromSchedule(schedule, user.id);
+      console.log(`Created ${workoutsCreated} workout templates from schedule`);
       
       console.log("Successfully completed onboarding, redirecting to tabs...");
       

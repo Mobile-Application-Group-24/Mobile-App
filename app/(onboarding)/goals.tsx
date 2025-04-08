@@ -1,5 +1,5 @@
-import React, { useState, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView } from 'react-native';
+import React, { useState, useRef, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Keyboard, KeyboardAvoidingView, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Scale, TrendingDown, TrendingUp, ArrowRight } from 'lucide-react-native';
 import { supabase } from '@/utils/supabase';
@@ -12,6 +12,32 @@ export default function GoalsScreen() {
   const [selectedGoal, setSelectedGoal] = useState<FitnessGoal | null>(null);
   const [targetWeight, setTargetWeight] = useState('');
   const [loading, setLoading] = useState(false);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
+
+  // Listen for keyboard events
+  useEffect(() => {
+    const keyboardDidShowListener = Keyboard.addListener(
+      'keyboardDidShow',
+      () => {
+        setKeyboardVisible(true);
+        // Scroll to ensure target weight is visible
+        setTimeout(() => {
+          scrollViewRef.current?.scrollToEnd({ animated: true });
+        }, 100);
+      }
+    );
+    const keyboardDidHideListener = Keyboard.addListener(
+      'keyboardDidHide',
+      () => {
+        setKeyboardVisible(false);
+      }
+    );
+
+    return () => {
+      keyboardDidShowListener.remove();
+      keyboardDidHideListener.remove();
+    };
+  }, []);
 
   const handleGoalSelect = (goal: FitnessGoal) => {
     setSelectedGoal(goal);
@@ -85,89 +111,100 @@ export default function GoalsScreen() {
   ];
 
   return (
-    <View style={styles.container}>
-      <ScrollView 
-        ref={scrollViewRef}
-        style={styles.scrollView} 
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.content}>
-          <Text style={styles.title}>What's Your Goal?</Text>
-          <Text style={styles.subtitle}>Select your primary fitness goal</Text>
+    <KeyboardAvoidingView 
+      style={{ flex: 1 }} 
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 30 : 0}
+    >
+      <View style={styles.container}>
+        <ScrollView 
+          ref={scrollViewRef}
+          style={styles.scrollView} 
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{ paddingBottom: 100 }}
+        >
+          <View style={styles.content}>
+            <Text style={styles.title}>What's Your Goal?</Text>
+            <Text style={styles.subtitle}>Select your primary fitness goal</Text>
 
-          <View style={styles.goalsContainer}>
-            {goals.map((goal) => (
-              <TouchableOpacity
-                key={goal.id}
-                style={[
-                  styles.goalCard,
-                  selectedGoal === goal.id && styles.goalCardSelected
-                ]}
-                onPress={() => handleGoalSelect(goal.id)}
-              >
-                <View style={[
-                  styles.iconContainer,
-                  { backgroundColor: selectedGoal === goal.id ? goal.color : `${goal.color}15` }
-                ]}>
-                  <goal.icon
-                    size={32}
-                    color={selectedGoal === goal.id ? '#FFFFFF' : goal.color}
-                  />
-                </View>
-                <View style={styles.goalContent}>
-                  <View style={styles.goalHeader}>
-                    <Text style={[
-                      styles.goalLabel,
-                      selectedGoal === goal.id && { color: goal.color }
-                    ]}>
-                      {goal.label}
-                    </Text>
-                    <Text style={styles.goalDescription}>
-                      {goal.description}
+            <View style={styles.goalsContainer}>
+              {goals.map((goal) => (
+                <TouchableOpacity
+                  key={goal.id}
+                  style={[
+                    styles.goalCard,
+                    selectedGoal === goal.id && styles.goalCardSelected
+                  ]}
+                  onPress={() => handleGoalSelect(goal.id)}
+                >
+                  <View style={[
+                    styles.iconContainer,
+                    { backgroundColor: selectedGoal === goal.id ? goal.color : `${goal.color}15` }
+                  ]}>
+                    <goal.icon
+                      size={32}
+                      color={selectedGoal === goal.id ? '#FFFFFF' : goal.color}
+                    />
+                  </View>
+                  <View style={styles.goalContent}>
+                    <View style={styles.goalHeader}>
+                      <Text style={[
+                        styles.goalLabel,
+                        selectedGoal === goal.id && { color: goal.color }
+                      ]}>
+                        {goal.label}
+                      </Text>
+                      <Text style={styles.goalDescription}>
+                        {goal.description}
+                      </Text>
+                    </View>
+                    <Text style={styles.goalDetails}>
+                      {goal.details}
                     </Text>
                   </View>
-                  <Text style={styles.goalDetails}>
-                    {goal.details}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            ))}
-          </View>
+                </TouchableOpacity>
+              ))}
+            </View>
 
-          <View style={styles.weightSection}>
-            <Text style={styles.weightTitle}>Target Weight</Text>
-            <Text style={styles.weightSubtitle}>What weight do you want to achieve?</Text>
-            <View style={styles.weightInputContainer}>
-              <TextInput
-                style={styles.weightInput}
-                value={targetWeight}
-                onChangeText={setTargetWeight}
-                placeholder="Enter target weight"
-                keyboardType="numeric"
-                placeholderTextColor="#8E8E93"
-              />
-              <Text style={styles.weightUnit}>kg</Text>
+            <View style={styles.weightSection}>
+              <Text style={styles.weightTitle}>Target Weight</Text>
+              <Text style={styles.weightSubtitle}>What weight do you want to achieve?</Text>
+              <View style={styles.weightInputContainer}>
+                <TextInput
+                  style={styles.weightInput}
+                  value={targetWeight}
+                  onChangeText={setTargetWeight}
+                  placeholder="Enter target weight"
+                  keyboardType="numeric"
+                  placeholderTextColor="#8E8E93"
+                />
+                <Text style={styles.weightUnit}>kg</Text>
+              </View>
             </View>
           </View>
-        </View>
-      </ScrollView>
+        </ScrollView>
 
-      <View style={styles.footer}>
-        <TouchableOpacity
-          style={[
-            styles.continueButton,
-            (!selectedGoal || !targetWeight || loading) && styles.continueButtonDisabled
-          ]}
-          onPress={handleContinue}
-          disabled={!selectedGoal || !targetWeight || loading}
-        >
-          <Text style={styles.continueButtonText}>
-            {loading ? 'Saving...' : 'Continue'}
-          </Text>
-          <ArrowRight size={20} color="#FFFFFF" />
-        </TouchableOpacity>
+        <View style={[
+          styles.footer,
+          keyboardVisible && Platform.OS === 'ios' && styles.footerWithKeyboard
+        ]}>
+          <TouchableOpacity
+            style={[
+              styles.continueButton,
+              (!selectedGoal || !targetWeight || loading) && styles.continueButtonDisabled
+            ]}
+            onPress={handleContinue}
+            disabled={!selectedGoal || !targetWeight || loading}
+          >
+            <Text style={styles.continueButtonText}>
+              {loading ? 'Saving...' : 'Continue'}
+            </Text>
+            <ArrowRight size={20} color="#FFFFFF" />
+          </TouchableOpacity>
+        </View>
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -299,6 +336,12 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.1,
     shadowRadius: 12,
+    zIndex: 1,
+  },
+  footerWithKeyboard: {
+    position: 'relative',
+    marginTop: 12,
+    marginBottom: Platform.OS === 'ios' ? 20 : 0,
   },
   continueButton: {
     backgroundColor: '#007AFF',
