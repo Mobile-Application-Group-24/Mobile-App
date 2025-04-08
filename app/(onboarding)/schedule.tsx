@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Check } from 'lucide-react-native';
+import { Check, Dumbbell } from 'lucide-react-native';
 import { supabase } from '@/utils/supabase';
+import { generateWorkoutsFromSchedule } from '@/utils/workout';
 
 const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
@@ -14,65 +15,82 @@ interface TrainingSchedule {
 }
 
 export default function ScheduleScreen() {
-  console.log("SCREEN: Schedule screen rendering");
+  console.log("SCHEDULE SCREEN: Rendering");
+  
   const router = useRouter();
   const [schedule, setSchedule] = useState<TrainingSchedule[]>(
     WEEKDAYS.map(day => ({ day, workout: 'Rest' }))
   );
   const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
 
-  const workoutTypes: WorkoutType[] = ['Push', 'Pull', 'Legs', 'Upper', 'Lower', 'Full Body', 'Rest'];
-
-  const handleWorkoutSelect = (dayIndex: number, workout: WorkoutType) => {
-    setSchedule(prev => {
-      const newSchedule = [...prev];
-      newSchedule[dayIndex] = { ...newSchedule[dayIndex], workout };
-      return newSchedule;
-    });
+  // Calculate training days per week based on non-rest days in the schedule
+  const calculateTrainingDaysPerWeek = (schedule: TrainingSchedule[]): number => {
+    const activeTrainingDays = schedule.filter(day => day.workout !== 'Rest').length;
+    console.log(`Calculated training days: ${activeTrainingDays}`);
+    return activeTrainingDays;
   };
+
+  useEffect(() => {
+    // Show initial loading screen for a short time to ensure component mounts properly
+    const timer = setTimeout(() => {
+      setInitialLoading(false);
+      console.log("SCHEDULE SCREEN: Initial loading completed");
+    }, 500);
+    
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Log training days count whenever schedule changes
+  useEffect(() => {
+    if (!initialLoading) {
+      const daysCount = calculateTrainingDaysPerWeek(schedule);
+      console.log(`Current schedule has ${daysCount} training days`);
+    }
+  }, [schedule, initialLoading]);
 
   const handleComplete = async () => {
     try {
       setLoading(true);
-      console.log("NAVIGATION: Completing onboarding...");
+      console.log("Completing onboarding process...");
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
-      console.log("NAVIGATION: Saving schedule and setting is_onboarded to true...");
-      
-      // First update the profile in the database
+      // Calculate training days based on non-rest days in schedule
+      const trainingDaysPerWeek = calculateTrainingDaysPerWeek(schedule);
+      console.log(`Saving ${trainingDaysPerWeek} training days per week to the database`);
+
+      // First, update the profile with the schedule and onboarding status
+      console.log("Saving schedule, training days, and marking user as onboarded...");
       const { error } = await supabase
         .from('profiles')
         .update({
           training_schedule: schedule,
+          training_days_per_week: trainingDaysPerWeek, 
           is_onboarded: true,
         })
         .eq('id', user.id);
 
-      if (error) {
-        console.error("Error updating profile:", error);
-        throw error;
-      }
+      if (error) throw error;
       
-      // Verify that the update succeeded
-      const { data, error: verifyError } = await supabase
-        .from('profiles')
-        .select('is_onboarded')
-        .eq('id', user.id)
-        .single();
-        
-      if (verifyError) {
-        console.error("Error verifying onboarding status:", verifyError);
-      } else {
-        console.log("Verified onboarding status in database:", data.is_onboarded);
-      }
+      // Next, generate and save the workouts based on the schedule
+      console.log("Generating workouts based on training split...");
+      const workoutsCreated = await generateWorkoutsFromSchedule(schedule, user.id);
+      console.log(`Created ${workoutsCreated} workout templates from schedule`);
       
-      // Force a small delay to ensure the database update has propagated
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      console.log("Successfully completed onboarding, redirecting to tabs...");
       
-      console.log("NAVIGATION: Onboarding completed successfully, redirecting to tabs...");
-      // Redirect explicitly to workouts tab
-      router.replace('/(tabs)/workouts');
+      // Force a delay before navigation to ensure database updates are processed
+      setTimeout(() => {
+        console.log("Executing navigation to tabs with timestamp...");
+        try {
+          // Add a timestamp to force a fresh navigation
+          router.replace(`/(tabs)/workouts?t=${Date.now()}`);
+          console.log("Navigation command issued successfully");
+        } catch (navError) {
+          console.error("Navigation error:", navError);
+        }
+      }, 1000);
     } catch (error) {
       console.error('Error saving schedule:', error);
     } finally {
@@ -80,21 +98,42 @@ export default function ScheduleScreen() {
     }
   };
 
+  const handleWorkoutChange = (dayIndex: number, workout: WorkoutType) => {
+    setSchedule(prev => {
+      const newSchedule = [...prev];
+      newSchedule[dayIndex] = { ...newSchedule[dayIndex], workout };
+      return newSchedule;
+    });
+  };
+  
+  // Display a loading indicator while the component is mounting
+  if (initialLoading) {
+    return (
+      <View style={[styles.container, styles.loadingContainer]}>
+        <ActivityIndicator size="large" color="#007AFF" />
+        <Text style={styles.loadingText}>Loading training schedule...</Text>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Training Schedule</Text>
-      <Text style={styles.subtitle}>Set your weekly workout schedule</Text>
+      <Text style={styles.title}>Training Split</Text>
+      <Text style={styles.subtitle}>Choose your workout for each day</Text>
 
-      <ScrollView style={styles.content}>
+      <ScrollView 
+        style={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
         {WEEKDAYS.map((day, dayIndex) => (
-          <View key={day} style={styles.dayContainer}>
-            <Text style={styles.dayLabel}>{day}</Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.workoutTypes}
-            >
-              {workoutTypes.map((workout) => (
+          <View key={day} style={styles.dayCard}>
+            <View style={styles.dayHeader}>
+              <Text style={styles.dayName}>{day}</Text>
+              <Dumbbell size={20} color="#007AFF" />
+            </View>
+
+            <View style={styles.workoutTypes}>
+              {['Push', 'Pull', 'Legs', 'Upper', 'Lower', 'Full Body', 'Rest'].map((workout) => (
                 <TouchableOpacity
                   key={workout}
                   style={[
@@ -103,7 +142,7 @@ export default function ScheduleScreen() {
                     workout === 'Rest' && styles.restButton,
                     schedule[dayIndex].workout === workout && workout === 'Rest' && styles.restButtonSelected,
                   ]}
-                  onPress={() => handleWorkoutSelect(dayIndex, workout)}
+                  onPress={() => handleWorkoutChange(dayIndex, workout as WorkoutType)}
                 >
                   <Text style={[
                     styles.workoutButtonText,
@@ -113,7 +152,7 @@ export default function ScheduleScreen() {
                   </Text>
                 </TouchableOpacity>
               ))}
-            </ScrollView>
+            </View>
           </View>
         ))}
       </ScrollView>
@@ -152,24 +191,36 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
   },
-  dayContainer: {
-    marginBottom: 24,
+  dayCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
   },
-  dayLabel: {
+  dayHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  dayName: {
     fontSize: 18,
     fontWeight: '600',
-    marginBottom: 12,
   },
   workoutTypes: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 8,
-    paddingRight: 16,
   },
   workoutButton: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F2F2F7',
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
-    marginRight: 8,
   },
   workoutButtonSelected: {
     backgroundColor: '#007AFF',
@@ -184,14 +235,15 @@ const styles = StyleSheet.create({
     borderColor: '#8E8E93',
   },
   workoutButtonText: {
-    fontSize: 16,
+    fontSize: 14,
+    fontWeight: '600',
     color: '#000000',
   },
   workoutButtonTextSelected: {
     color: '#FFFFFF',
   },
   completeButton: {
-    backgroundColor: '#34C759',
+    backgroundColor: '#007AFF', // Changed from #34C759 (green) to #007AFF (blue)
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -199,6 +251,10 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginTop: 16,
     gap: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
   },
   completeButtonDisabled: {
     backgroundColor: '#A2A2A2',
@@ -207,5 +263,14 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 18,
     fontWeight: '600',
+  },
+  loadingContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#8E8E93',
   },
 });

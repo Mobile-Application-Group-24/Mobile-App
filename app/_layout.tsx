@@ -41,7 +41,9 @@ export default function RootLayout() {
         <View style={{ flex: 1, backgroundColor: '#F2F2F7' }}>
           <StatusBar style="dark" backgroundColor="#FFFFFF" />
           <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="index" />
             <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+            <Stack.Screen name="(onboarding)" options={{ headerShown: false }} />
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
             <Stack.Screen name="+not-found" options={{ title: 'Oops!' }} />
           </Stack>

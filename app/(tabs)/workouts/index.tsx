@@ -15,11 +15,19 @@ export default function WorkoutsScreen() {
   const [workouts, setWorkouts] = useState<Workout[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
-  const todaysWorkout = {
-    isRestDay: false,
-    name: 'Upper Body Focus',
-    duration: '60 min',
+  const [todaysWorkout, setTodaysWorkout] = useState<{
+    id?: string;
+    isRestDay: boolean;
+    name: string;
+    duration: string;
+  }>({
+    isRestDay: true,
+    name: 'Rest Day',
+    duration: '0 min',
+  });
+
+  const getCurrentDayOfWeek = (): string => {
+    return new Date().toLocaleDateString('en-US', { weekday: 'long' });
   };
 
   const loadWorkouts = async () => {
@@ -31,9 +39,32 @@ export default function WorkoutsScreen() {
         setWorkouts([]);
         return;
       }
+
       const data = await getWorkouts(session.user.id);
       setWorkouts(data);
       console.log(`Loaded ${data.length} workouts for user ${session.user.id}`);
+
+      const currentDay = getCurrentDayOfWeek();
+      const workoutForToday = data.find(
+        w => w.day_of_week === currentDay && w.workout_type === 'split'
+      );
+
+      if (workoutForToday) {
+        setTodaysWorkout({
+          id: workoutForToday.id,
+          isRestDay: false,
+          name: workoutForToday.title,
+          duration: `${workoutForToday.duration_minutes} min`,
+        });
+        console.log(`Found today's workout: ${workoutForToday.title}`);
+      } else {
+        setTodaysWorkout({
+          isRestDay: true,
+          name: 'Rest Day',
+          duration: '0 min',
+        });
+        console.log(`No workout found for ${currentDay}, it's a rest day`);
+      }
     } catch (error) {
       console.error('Error loading workouts:', error);
       setError('Failed to load workouts. Please try again.');
@@ -44,8 +75,13 @@ export default function WorkoutsScreen() {
 
   const handleStartWorkout = () => {
     if (todaysWorkout.isRestDay) {
-      console.log('Starting rest day activities');
-    } else {
+      console.log('Today is a rest day');
+      Alert.alert(
+        "Rest Day",
+        "Today is your rest day. Take time to recover and prepare for your next workout.",
+        [{ text: "OK", style: "default" }]
+      );
+    } else if (todaysWorkout.id) {
       console.log('Starting workout:', todaysWorkout.name);
     }
   };
@@ -187,29 +223,38 @@ export default function WorkoutsScreen() {
               {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
             </Text>
           </View>
-          
-          <View style={styles.workoutInfo}>
-            <Text style={styles.workoutName}>
-              {todaysWorkout.isRestDay ? 'Rest Day' : todaysWorkout.name}
-            </Text>
-            {!todaysWorkout.isRestDay && (
-              <Text style={styles.workoutDuration}>{todaysWorkout.duration}</Text>
-            )}
-          </View>
 
-          <TouchableOpacity 
-            style={[
-              styles.startButton,
-              todaysWorkout.isRestDay && styles.startButtonRest
-            ]}
-            onPress={handleStartWorkout}
-            activeOpacity={0.7}
-          >
-            <Play size={24} color="#FFFFFF" />
-            <Text style={styles.startButtonText}>
-              {todaysWorkout.isRestDay ? 'Start Recovery Session' : 'Start Workout'}
-            </Text>
-          </TouchableOpacity>
+          {isLoading ? (
+            <ActivityIndicator size="small" color="#007AFF" style={{ marginVertical: 16 }} />
+          ) : (
+            <>
+              <View style={styles.workoutInfo}>
+                <Text style={styles.workoutName}>
+                  {todaysWorkout.isRestDay ? 'Rest Day' : todaysWorkout.name}
+                </Text>
+                {!todaysWorkout.isRestDay && (
+                  <Text style={styles.workoutDuration}>{todaysWorkout.duration}</Text>
+                )}
+                {todaysWorkout.isRestDay && (
+                  <Text style={styles.workoutDuration}>Recovery and muscle growth</Text>
+                )}
+              </View>
+
+              <TouchableOpacity 
+                style={[
+                  styles.startButton,
+                  todaysWorkout.isRestDay && styles.startButtonRest
+                ]}
+                onPress={handleStartWorkout}
+                activeOpacity={0.7}
+              >
+                <Play size={24} color="#FFFFFF" />
+                <Text style={styles.startButtonText}>
+                  {todaysWorkout.isRestDay ? 'View Recovery Tips' : 'Start Workout'}
+                </Text>
+              </TouchableOpacity>
+            </>
+          )}
         </View>
 
         <View style={styles.streakSection}>
@@ -454,10 +499,30 @@ const styles = StyleSheet.create({
   planInfo: {
     flex: 1,
   },
+  planNameRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
   planName: {
     fontSize: 18,
     fontWeight: '600',
-    marginBottom: 4,
+  },
+  typeTag: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  splitTag: {
+    backgroundColor: '#007AFF20',
+  },
+  customTag: {
+    backgroundColor: '#FF9F0A20',
+  },
+  typeTagText: {
+    fontSize: 12,
+    fontWeight: '500',
   },
   detailItem: {
     flexDirection: 'row',
