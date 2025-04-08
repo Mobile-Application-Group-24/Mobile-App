@@ -2,7 +2,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, FlatList, Platform, Alert } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Plus, Minus, Dumbbell, Save, Search, X, Star } from 'lucide-react-native';
-import { saveWorkout } from '@/utils/workout'; // Using workout.ts instead of storage
+import { createWorkout } from '@/utils/workout'; // Korrekter Import
 import { useSession } from '@/utils/auth';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { format } from 'date-fns';
@@ -137,10 +137,8 @@ export default function CreateWorkoutScreen() {
         throw new Error('Failed to get user ID');
       }
       
-      console.log('Confirmed user ID:', userId);
-      
       const formattedExercises = exercises.map(ex => ({
-        id: ex.id || Date.now().toString() + Math.random().toString(36).substring(2),
+        id: ex.id,
         name: ex.name,
         sets: ex.sets,
         reps: 10,
@@ -148,28 +146,25 @@ export default function CreateWorkoutScreen() {
       }));
       
       const workoutData = {
-        title: planName,
+        title: planName,        // Wichtig: title statt name
         date: new Date().toISOString(),
         duration_minutes: 60,
         exercises: formattedExercises,
         notes: '',
         calories_burned: 0,
+        user_id: userId,
+        start_time: null,
+        end_time: null
       };
       
-      console.log('Saving workout to database:', JSON.stringify(workoutData, null, 2));
+      console.log('Creating workout:', workoutData);
+      const savedWorkout = await createWorkout(workoutData);
+      console.log('Workout created successfully:', savedWorkout);
       
-      const savedWorkout = await saveWorkout(workoutData);
-      console.log('Workout saved successfully with ID:', savedWorkout.id);
-      
-      // Navigate back without showing alert
       router.back();
     } catch (error) {
-      console.error('Error saving workout:', error);
-      let errorMessage = 'Failed to save workout.';
-      if (error instanceof Error) {
-        errorMessage += ' ' + error.message;
-      }
-      Alert.alert('Error', errorMessage);
+      console.error('Error creating workout:', error);
+      Alert.alert('Error', 'Failed to create workout. Please try again.');
     } finally {
       setIsSaving(false);
     }

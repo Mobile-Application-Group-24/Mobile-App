@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, StatusBar, SafeAreaView, Alert, Platform } from 'react-native';
-import { Plus, Star, Play, Clock, Calendar, Dumbbell } from 'lucide-react-native';
+import { Plus, Star, Play, Clock, Calendar, Dumbbell, Trash2 } from 'lucide-react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
-import { getWorkouts, Workout } from '@/utils/workout';
+import { getWorkouts, Workout, deleteWorkout } from '@/utils/workout';
 import { useSession } from '@/utils/auth';
 import { format, parseISO } from 'date-fns';
+import { Swipeable } from 'react-native-gesture-handler';
 
 export default function WorkoutsScreen() {
   const router = useRouter();
@@ -49,6 +50,40 @@ export default function WorkoutsScreen() {
     }
   };
 
+  const handleDeleteWorkout = (workoutId: string) => {
+    Alert.alert(
+      'Delete Workout',
+      'Are you sure you want to delete this workout?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteWorkout(workoutId);
+              setWorkouts(prev => prev.filter(w => w.id !== workoutId));
+            } catch (error) {
+              Alert.alert('Error', 'Failed to delete workout');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const renderRightActions = (workoutId: string) => {
+    return (
+      <TouchableOpacity
+        style={styles.deleteAction}
+        onPress={() => handleDeleteWorkout(workoutId)}
+      >
+        <Trash2 size={20} color="#FFFFFF" />
+        <Text style={styles.deleteActionText}>Delete</Text>
+      </TouchableOpacity>
+    );
+  };
+
   const renderWorkoutList = () => {
     if (error) {
       return (
@@ -84,37 +119,42 @@ export default function WorkoutsScreen() {
     }
 
     return workouts.map((workout) => (
-      <TouchableOpacity
+      <Swipeable
         key={workout.id}
-        style={styles.planCard}
-        onPress={() => router.push(`/workouts/${workout.id}`)}
+        renderRightActions={() => renderRightActions(workout.id)}
+        rightThreshold={40}
       >
-        <View style={styles.planInfo}>
-          <Text style={styles.planName}>{workout.title}</Text>
-          <View style={styles.planDetails}>
-            <View style={styles.detailItem}>
-              <Calendar size={14} color="#8E8E93" />
-              <Text style={styles.detailText}>
-                {format(parseISO(workout.date), 'MMM d, yyyy')}
-              </Text>
-            </View>
-            
-            <View style={styles.detailItem}>
-              <Clock size={14} color="#8E8E93" />
-              <Text style={styles.detailText}>
-                {workout.duration_minutes} min
-              </Text>
-            </View>
-            
-            <View style={styles.detailItem}>
-              <Dumbbell size={14} color="#8E8E93" />
-              <Text style={styles.detailText}>
-                {workout.exercises.length} exercises
-              </Text>
+        <TouchableOpacity
+          style={styles.planCard}
+          onPress={() => router.push(`/workouts/${workout.id}`)}
+        >
+          <View style={styles.planInfo}>
+            <Text style={styles.planName}>{workout.title}</Text>
+            <View style={styles.planDetails}>
+              <View style={styles.detailItem}>
+                <Calendar size={14} color="#8E8E93" />
+                <Text style={styles.detailText}>
+                  {format(parseISO(workout.date), 'MMM d, yyyy')}
+                </Text>
+              </View>
+              
+              <View style={styles.detailItem}>
+                <Clock size={14} color="#8E8E93" />
+                <Text style={styles.detailText}>
+                  {workout.duration_minutes} min
+                </Text>
+              </View>
+              
+              <View style={styles.detailItem}>
+                <Dumbbell size={14} color="#8E8E93" />
+                <Text style={styles.detailText}>
+                  {workout.exercises.length} exercises
+                </Text>
+              </View>
             </View>
           </View>
-        </View>
-      </TouchableOpacity>
+        </TouchableOpacity>
+      </Swipeable>
     ));
   };
 
@@ -222,18 +262,23 @@ export default function WorkoutsScreen() {
             </View>
           ) : (
             workouts.map((plan) => (
-              <TouchableOpacity
+              <Swipeable
                 key={plan.id}
-                style={styles.planCard}
-                onPress={() => router.push(`/workouts/${plan.id}`)}
+                renderRightActions={() => renderRightActions(plan.id)}
+                rightThreshold={40}
               >
-                <View style={styles.planInfo}>
-                  <Text style={styles.planName}>{plan.title}</Text>
-                  <Text style={styles.planDetails}>
-                    {plan.exercises.length} exercises
-                  </Text>
-                </View>
-              </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.planCard}
+                  onPress={() => router.push(`/workouts/${plan.id}`)}
+                >
+                  <View style={styles.planInfo}>
+                    <Text style={styles.planName}>{plan.title}</Text>
+                    <Text style={styles.planDetails}>
+                      {plan.exercises.length} exercises
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              </Swipeable>
             ))
           )}
         </View>
@@ -455,5 +500,22 @@ const styles = StyleSheet.create({
     color: '#8E8E93',
     textAlign: 'center',
     marginTop: 8,
+  },
+  deleteAction: {
+    backgroundColor: '#FF3B30',
+    width: 80,
+    height: 80,  // Feste Höhe
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderTopRightRadius: 12,
+    borderBottomRightRadius: 12,
+    flexDirection: 'column',
+    gap: 4,
+    marginBottom: 12,  // Gleicher Abstand wie die Karte
+  },
+  deleteActionText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600',
   },
 });

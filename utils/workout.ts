@@ -26,6 +26,8 @@ export interface Workout {
   notes: string;
   calories_burned: number;
   bodyweight?: number; // Using the correct field name to match DB schema
+  start_time?: string;
+  end_time?: string;
 }
 
 // Get all workouts
@@ -84,9 +86,21 @@ export async function getWorkout(id: string): Promise<Workout> {
 
 // Create a new workout
 export async function createWorkout(workout: Omit<Workout, 'id'>): Promise<Workout> {
+  console.log('Creating workout with data:', workout);
+  
+  const workoutToCreate = {
+    title: workout.title,           // Wichtig: title statt name
+    date: new Date().toISOString(),
+    exercises: workout.exercises,
+    duration_minutes: workout.duration_minutes || 0,
+    calories_burned: workout.calories_burned || 0,
+    notes: workout.notes || '',
+    user_id: workout.user_id       // Wichtig: user_id muss übergeben werden
+  };
+
   const { data, error } = await supabase
     .from('workouts')
-    .insert(workout)
+    .insert(workoutToCreate)
     .select()
     .single();
 
@@ -105,10 +119,16 @@ export async function updateWorkout(id: string, workout: Partial<Workout>): Prom
     
     const { data, error } = await supabase
       .from('workouts')
-      .update(workout)
+      .update({
+        title: workout.name, // Änderung von name zu title
+        notes: workout.notes,
+        bodyweight: workout.bodyweight,
+        exercises: workout.exercises,
+        start_time: workout.start_time,
+        end_time: workout.end_time
+      })
       .eq('id', id)
-      .select()
-      .single();
+      .select();
 
     if (error) {
       console.error('Error in updateWorkout for ID', id, ':', error);

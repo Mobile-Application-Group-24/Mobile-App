@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Platform, StatusBar, SafeAreaView, KeyboardAvoidingView, Keyboard, TouchableWithoutFeedback, Alert, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { X, Clock, ChartBar as BarChart3, Plus, CalendarClock, Scale, File as FileEdit, Dumbbell, Trash, Save, Trash2 } from 'lucide-react-native';
 import { format } from 'date-fns';
 import { getWorkout, deleteWorkout, updateWorkout, Workout, Exercise } from '@/utils/workout';
 import { Swipeable } from 'react-native-gesture-handler';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 type SetType = 'normal' | 'warmup' | 'dropset';
 
@@ -28,6 +29,7 @@ export default function WorkoutDetailScreen() {
   const selectedExercise = params.selectedExercise;
   const router = useRouter();
   const [workout, setWorkout] = useState<Workout | null>(null);
+  const [workoutName, setWorkoutName] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [bodyWeight, setBodyWeight] = useState('');
@@ -35,6 +37,72 @@ export default function WorkoutDetailScreen() {
   const [exercises, setExercises] = useState<ExerciseProgress[]>([]);
   const [showTypeLabel, setShowTypeLabel] = useState<{ id: string, show: boolean }>({ id: '', show: false });
   const [draggingExercise, setDraggingExercise] = useState<string | null>(null);
+  const [showRestTimer, setShowRestTimer] = useState(false);
+  const [restTime, setRestTime] = useState(90); // 90 Sekunden Standard
+  const [isTimerRunning, setIsTimerRunning] = useState(false);
+  const [currentTime, setCurrentTime] = useState(90);
+  const timerRef = useRef<NodeJS.Timeout>();
+  const [isTimerExpanded, setIsTimerExpanded] = useState(false);
+  const [customRestTime, setCustomRestTime] = useState(90);
+  const [workoutStartTime, setWorkoutStartTime] = useState<Date | null>(null);
+  const [workoutEndTime, setWorkoutEndTime] = useState<Date | null>(null);
+  const [isWorkoutActive, setIsWorkoutActive] = useState(false);
+
+  const startRestTimer = () => {
+    setIsTimerRunning(true);
+    timerRef.current = setInterval(() => {
+      setCurrentTime(prev => {
+        if (prev <= 1) {
+          stopRestTimer();
+          return restTime;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  const stopRestTimer = () => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+    }
+    setIsTimerRunning(false);
+  };
+
+  const resetRestTimer = () => {
+    stopRestTimer();
+    setCurrentTime(restTime);
+  };
+
+  const toggleRestTimer = () => {
+    setShowRestTimer(!showRestTimer);
+    resetRestTimer();
+  };
+
+  const handleTimerPress = () => {
+    setIsTimerExpanded(!isTimerExpanded);
+  };
+
+  const handleCustomTimeChange = (time: number) => {
+    setCustomRestTime(time);
+    setRestTime(time);
+    setCurrentTime(time);
+  };
+
+  const adjustTime = (seconds: number) => {
+    const newTime = currentTime + seconds;
+    if (newTime > 0) {
+      setCurrentTime(newTime);
+      setRestTime(newTime);
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+    };
+  }, []);
 
   const handleDragStart = (exerciseId: string) => {
     Keyboard.dismiss();
@@ -96,6 +164,7 @@ export default function WorkoutDetailScreen() {
       setError(null);
       const data = await getWorkout(workoutId);
       setWorkout(data);
+      setWorkoutName(data.title || '');
       setNotes(data.notes || '');
       setBodyWeight(data.bodyweight?.toString() || '');
       setExercises(data.exercises.map(exercise => {
@@ -269,6 +338,17 @@ export default function WorkoutDetailScreen() {
     );
   };
 
+  const renderWorkoutDeleteAction = () => {
+    return (
+      <TouchableOpacity
+        style={styles.workoutDeleteAction}
+        onPress={handleDelete}
+      >
+        <Trash2 size={24} color="#FFFFFF" />
+      </TouchableOpacity>
+    );
+  };
+
   const saveWorkoutChanges = async () => {
     if (!workout || !workoutId) return;
 
@@ -293,6 +373,7 @@ export default function WorkoutDetailScreen() {
 
       const updatedWorkout = {
         ...workout,
+        name: workoutName,
         notes: notes,
         exercises: updatedExercises,
         bodyweight: bodyWeight ? parseFloat(bodyWeight) : undefined,
@@ -328,6 +409,18 @@ export default function WorkoutDetailScreen() {
     });
   };
 
+  const startWorkout = () => {
+    const now = new Date();
+    setWorkoutStartTime(now);
+    setIsWorkoutActive(true);
+  };
+
+  const endWorkout = () => {
+    const now = new Date();
+    setWorkoutEndTime(now);
+    setIsWorkoutActive(false);
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -352,207 +445,313 @@ export default function WorkoutDetailScreen() {
       behavior="padding"
       style={{ flex: 1 }}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}>
-      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-        <SafeAreaView style={styles.container}>
-          <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
-          <ScrollView
-            style={styles.content}
-            keyboardShouldPersistTaps="handled">
-            <View style={styles.header}>
-              <TouchableOpacity onPress={() => router.back()} style={styles.closeButton} activeOpacity={0.7}>
-                <X size={24} color="#007AFF" />
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+        <ScrollView
+          style={styles.content}
+          keyboardShouldPersistTaps="handled">
+          <View style={styles.header}>
+            <TouchableOpacity onPress={() => router.back()} style={styles.closeButton} activeOpacity={0.7}>
+              <X size={24} color="#007AFF" />
+            </TouchableOpacity>
+            <Text style={styles.date}>{format(new Date(), 'dd. MMMM')}</Text>
+            <View style={styles.headerActions}>
+              <TouchableOpacity 
+                style={[styles.headerButton, showRestTimer && styles.headerButtonActive]} 
+                onPress={toggleRestTimer} 
+                activeOpacity={0.7}
+              >
+                <Clock size={24} color={showRestTimer ? "#34C759" : "#007AFF"} />
               </TouchableOpacity>
-              <Text style={styles.date}>{format(new Date(), 'dd. MMMM')}</Text>
-              <View style={styles.headerActions}>
-                <TouchableOpacity style={styles.headerButton} activeOpacity={0.7}>
-                  <Clock size={24} color="#007AFF" />
-                </TouchableOpacity>
-              </View>
             </View>
+          </View>
 
-            <View style={styles.workoutInfo}>
-              <Text style={styles.workoutName}>{workout?.name || 'Workout'}</Text>
-              <View style={styles.infoGrid}>
-                <View style={styles.infoCard}>
-                  <View style={styles.infoIconContainer}>
-                    <Scale size={20} color="#FF9500" />
+          <View style={styles.workoutInfo}>
+            <Swipeable
+              renderRightActions={renderWorkoutDeleteAction}
+              rightThreshold={40}
+            >
+              <View>
+                <TextInput
+                  style={styles.workoutNameInput}
+                  value={workoutName}
+                  onChangeText={setWorkoutName}
+                  placeholder="Workout Name"
+                  placeholderTextColor="#8E8E93"
+                />
+
+                <View style={styles.workoutTimes}>
+                  <View style={styles.timeInfo}>
+                    <Clock size={20} color="#007AFF" />
+                    <Text style={styles.timeText}>
+                      {workoutStartTime 
+                        ? format(workoutStartTime, 'HH:mm')
+                        : 'Not started'} 
+                      {workoutEndTime && ` - ${format(workoutEndTime, 'HH:mm')}`}
+                    </Text>
                   </View>
-                  <View style={styles.infoContent}>
-                    <Text style={styles.infoLabel}>Body Weight</Text>
-                    <TextInput
-                      style={styles.infoInput}
-                      value={bodyWeight}
-                      onChangeText={setBodyWeight}
-                      placeholder="Enter weight"
-                      keyboardType="numeric"
-                      placeholderTextColor="#8E8E93"
-                    />
-                  </View>
+                  <TouchableOpacity
+                    style={[
+                      styles.workoutStateButton,
+                      isWorkoutActive && styles.workoutStateButtonActive
+                    ]}
+                    onPress={isWorkoutActive ? endWorkout : startWorkout}
+                  >
+                    <Text style={styles.workoutStateButtonText}>
+                      {isWorkoutActive ? 'End Workout' : 'Start Workout'}
+                    </Text>
+                  </TouchableOpacity>
                 </View>
-
-                <View style={[styles.infoCard, styles.notesCard]}>
-                  <View style={styles.infoIconContainer}>
-                    <FileEdit size={20} color="#FF3B30" />
-                  </View>
-                  <View style={styles.infoContent}>
-                    <Text style={styles.infoLabel}>Notes</Text>
-                    <TextInput
-                      style={[styles.infoInput, styles.notesInput]}
-                      value={notes}
-                      onChangeText={setNotes}
-                      placeholder="Add workout notes..."
-                      placeholderTextColor="#8E8E93"
-                      multiline
-                    />
-                  </View>
-                </View>
-              </View>
-            </View>
-
-            {exercises.length === 0 ? (
-              <View style={styles.emptyState}>
-                <Dumbbell size={48} color="#8E8E93" />
-                <Text style={styles.emptyStateText}>No exercises found</Text>
-                <Text style={styles.emptyStateSubtext}>
-                  This workout plan doesn't have any exercises yet
-                </Text>
-              </View>
-            ) : (
-              exercises.map((exercise, index) => (
-                <TouchableOpacity 
-                  key={exercise.id}
-                  style={[
-                    styles.exerciseCard,
-                    draggingExercise === exercise.id && styles.exerciseCardDragging
-                  ]}
-                  onLongPress={() => handleDragStart(exercise.id)}
-                  onPress={() => {
-                    if (draggingExercise && draggingExercise !== exercise.id) {
-                      handleMoveExercise(draggingExercise, exercise.id);
-                      handleDragEnd();
-                    }
-                  }}
-                  delayLongPress={200}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.exerciseHeader}>
-                    <Text style={styles.exerciseName}>{exercise.name}</Text>
-                  </View>
-                  {exercise.sets.map((set, setIndex) => (
-                    <Swipeable
-                      key={setIndex}
-                      renderRightActions={() => renderRightActions(exercise.id, set.id)}
-                      rightThreshold={40}
-                    >
-                      <View style={styles.setContainer}>
-                        <TouchableOpacity
-                          onPress={() => toggleSetType(exercise.id, set.id)}
-                          style={[
-                            styles.setNumber,
-                            set.type === 'warmup' && styles.warmupNumber,
-                            set.type === 'dropset' && styles.dropsetNumber,
-                          ]}>
-                          <Text style={[
-                            styles.setNumberText,
-                            showTypeLabel.id === set.id && showTypeLabel.show ? styles.hideNumber : null
-                          ]}>
-                            {showTypeLabel.id === set.id && showTypeLabel.show ?
-                              (set.type === 'warmup' ? 'W' : set.type === 'dropset' ? 'D' : 'N') :
-                              (setIndex + 1)
-                            }
-                          </Text>
-                        </TouchableOpacity>
-                        <View style={styles.setInputs}>
-                          <View style={styles.inputGroup}>
-                            <Text style={styles.inputLabel}>Weight</Text>
-                            <TextInput
-                              style={styles.input}
-                              keyboardType="numeric"
-                              value={set.weight}
-                              onChangeText={(text) => updateSet(exercise.id, set.id, 'weight', text)}
-                              placeholder={set.weight || "kg"}
-                              placeholderTextColor="#C7C7CC"
-                            />
-                          </View>
-
-                          <View style={[styles.inputGroup, styles.smallInputGroup]}>
-                            <Text style={styles.inputLabel}>Reps</Text>
-                            <TextInput
-                              style={styles.input}
-                              keyboardType="numeric"
-                              value={set.reps}
-                              onChangeText={(text) => updateSet(exercise.id, set.id, 'reps', text)}
-                              placeholder={set.reps || "#"}
-                              placeholderTextColor="#C7C7CC"
-                            />
-                          </View>
-
-                          <View style={[styles.inputGroup, styles.notesGroup]}>
-                            <Text style={styles.inputLabel}>Notes</Text>
-                            <TextInput
-                              style={[styles.input, styles.multilineInput]}
-                              value={set.notes}
-                              onChangeText={(text) => updateSet(exercise.id, set.id, 'notes', text)}
-                              placeholder={set.notes || "Notes"}
-                              placeholderTextColor="#C7C7CC"
-                              multiline
-                              numberOfLines={1}
-                            />
-                          </View>
-                        </View>
-                      </View>
-                    </Swipeable>
-                  ))}
-
-                  <View style={styles.setActions}>
-                    <TouchableOpacity
-                      style={styles.addSetButton}
-                      onPress={() => addSet(exercise.id)}
-                      activeOpacity={0.7}>
-                      <Plus size={20} color="#FFFFFF" />
-                      <Text style={styles.addSetText}>Add Set</Text>
-                    </TouchableOpacity>
-
-                    <View style={styles.setActionButtons}>
-                      <TouchableOpacity style={styles.actionButton} activeOpacity={0.7}>
-                        <Clock size={20} color="#007AFF" />
-                      </TouchableOpacity>
-                      <TouchableOpacity style={styles.actionButton} activeOpacity={0.7}>
-                        <BarChart3 size={20} color="#007AFF" />
-                      </TouchableOpacity>
-                      <TouchableOpacity 
-                        style={[styles.actionButton, styles.deleteButton]} 
-                        onPress={() => handleDeleteExercise(exercise.id)}
-                        activeOpacity={0.7}
-                      >
-                        <Trash2 size={20} color="#FF3B30" />
-                      </TouchableOpacity>
+                
+                <View style={styles.infoGrid}>
+                  <View style={styles.infoCard}>
+                    <View style={styles.infoIconContainer}>
+                      <Scale size={20} color="#FF9500" />
+                    </View>
+                    <View style={styles.infoContent}>
+                      <Text style={styles.infoLabel}>Body Weight</Text>
+                      <TextInput
+                        style={styles.infoInput}
+                        value={bodyWeight}
+                        onChangeText={setBodyWeight}
+                        placeholder="Enter weight"
+                        keyboardType="numeric"
+                        placeholderTextColor="#8E8E93"
+                      />
                     </View>
                   </View>
-                </TouchableOpacity>
-              ))
-            )}
 
-            <View style={styles.bottomButtonsContainer}>
-              <TouchableOpacity
-                style={styles.addExerciseButtonInline}
-                onPress={addExercise}
-                activeOpacity={0.7}>
-                <Dumbbell size={20} color="#FFFFFF" />
-                <Text style={styles.addExerciseText}>Add Exercise</Text>
-              </TouchableOpacity>
+                  <View style={[styles.infoCard, styles.notesCard]}>
+                    <View style={styles.infoIconContainer}>
+                      <FileEdit size={20} color="#FF3B30" />
+                    </View>
+                    <View style={styles.infoContent}>
+                      <Text style={styles.infoLabel}>Notes</Text>
+                      <TextInput
+                        style={[styles.infoInput, styles.notesInput]}
+                        value={notes}
+                        onChangeText={setNotes}
+                        placeholder="Add workout notes..."
+                        placeholderTextColor="#8E8E93"
+                        multiline
+                      />
+                    </View>
+                  </View>
+                </View>
+              </View>
+            </Swipeable>
+          </View>
 
-              <TouchableOpacity
-                style={styles.saveWorkoutButtonInline}
-                onPress={saveWorkoutChanges}
-                activeOpacity={0.7}>
-                <Save size={24} color="#FFFFFF" />
-                <Text style={styles.saveWorkoutText}>Save</Text>
-              </TouchableOpacity>
+          {exercises.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Dumbbell size={48} color="#8E8E93" />
+              <Text style={styles.emptyStateText}>No exercises found</Text>
+              <Text style={styles.emptyStateSubtext}>
+                This workout plan doesn't have any exercises yet
+              </Text>
             </View>
-          </ScrollView>
-        </SafeAreaView>
-      </TouchableWithoutFeedback>
+          ) : (
+            exercises.map((exercise, index) => (
+              <TouchableOpacity 
+                key={exercise.id}
+                style={[
+                  styles.exerciseCard,
+                  draggingExercise === exercise.id && styles.exerciseCardDragging
+                ]}
+                onLongPress={() => handleDragStart(exercise.id)}
+                onPress={() => {
+                  if (draggingExercise && draggingExercise !== exercise.id) {
+                    handleMoveExercise(draggingExercise, exercise.id);
+                    handleDragEnd();
+                  }
+                }}
+                delayLongPress={200}
+                activeOpacity={0.7}
+              >
+                <View style={styles.exerciseHeader}>
+                  <Text style={styles.exerciseName}>{exercise.name}</Text>
+                </View>
+                {exercise.sets.map((set, setIndex) => (
+                  <Swipeable
+                    key={setIndex}
+                    renderRightActions={() => renderRightActions(exercise.id, set.id)}
+                    rightThreshold={40}
+                  >
+                    <View style={styles.setContainer}>
+                      <TouchableOpacity
+                        onPress={() => toggleSetType(exercise.id, set.id)}
+                        style={[
+                          styles.setNumber,
+                          set.type === 'warmup' && styles.warmupNumber,
+                          set.type === 'dropset' && styles.dropsetNumber,
+                        ]}>
+                        <Text style={[
+                          styles.setNumberText,
+                          showTypeLabel.id === set.id && showTypeLabel.show ? styles.hideNumber : null
+                        ]}>
+                          {showTypeLabel.id === set.id && showTypeLabel.show ?
+                            (set.type === 'warmup' ? 'W' : set.type === 'dropset' ? 'D' : 'N') :
+                            (setIndex + 1)
+                          }
+                        </Text>
+                      </TouchableOpacity>
+                      <View style={styles.setInputs}>
+                        <View style={styles.inputGroup}>
+                          <Text style={styles.inputLabel}>Weight</Text>
+                          <TextInput
+                            style={styles.input}
+                            keyboardType="numeric"
+                            value={set.weight}
+                            onChangeText={(text) => updateSet(exercise.id, set.id, 'weight', text)}
+                            placeholder={set.weight || "kg"}
+                            placeholderTextColor="#C7C7CC"
+                          />
+                        </View>
+
+                        <View style={[styles.inputGroup, styles.smallInputGroup]}>
+                          <Text style={styles.inputLabel}>Reps</Text>
+                          <TextInput
+                            style={styles.input}
+                            keyboardType="numeric"
+                            value={set.reps}
+                            onChangeText={(text) => updateSet(exercise.id, set.id, 'reps', text)}
+                            placeholder={set.reps || "#"}
+                            placeholderTextColor="#C7C7CC"
+                          />
+                        </View>
+
+                        <View style={[styles.inputGroup, styles.notesGroup]}>
+                          <Text style={styles.inputLabel}>Notes</Text>
+                          <TextInput
+                            style={[styles.input, styles.multilineInput]}
+                            value={set.notes}
+                            onChangeText={(text) => updateSet(exercise.id, set.id, 'notes', text)}
+                            placeholder={set.notes || "Notes"}
+                            placeholderTextColor="#C7C7CC"
+                            multiline
+                            numberOfLines={1}
+                          />
+                        </View>
+                      </View>
+                    </View>
+                  </Swipeable>
+                ))}
+
+                <View style={styles.setActions}>
+                  <TouchableOpacity
+                    style={styles.addSetButton}
+                    onPress={() => addSet(exercise.id)}
+                    activeOpacity={0.7}>
+                    <Plus size={20} color="#FFFFFF" />
+                    <Text style={styles.addSetText}>Add Set</Text>
+                  </TouchableOpacity>
+
+                  <View style={styles.setActionButtons}>
+                    <TouchableOpacity style={styles.actionButton} activeOpacity={0.7}>
+                      <Clock size={20} color="#007AFF" />
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.actionButton} activeOpacity={0.7}>
+                      <BarChart3 size={20} color="#007AFF" />
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                      style={[styles.actionButton, styles.deleteButton]} 
+                      onPress={() => handleDeleteExercise(exercise.id)}
+                      activeOpacity={0.7}
+                    >
+                      <Trash2 size={20} color="#FF3B30" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </TouchableOpacity>
+            ))
+          )}
+
+          <View style={styles.bottomButtonsContainer}>
+            <TouchableOpacity
+              style={styles.addExerciseButtonInline}
+              onPress={addExercise}
+              activeOpacity={0.7}>
+              <Dumbbell size={20} color="#FFFFFF" />
+              <Text style={styles.addExerciseText}>Add Exercise</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.saveWorkoutButtonInline}
+              onPress={saveWorkoutChanges}
+              activeOpacity={0.7}>
+              <Save size={24} color="#FFFFFF" />
+              <Text style={styles.saveWorkoutText}>Save</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+
+        {/* Timer Mini-Player */}
+        {showRestTimer && (
+          <View style={styles.miniPlayer}>
+            <TouchableOpacity 
+              style={styles.timerMainContent}
+              onPress={() => {
+                if (!isTimerRunning) {
+                  setIsTimerExpanded(!isTimerExpanded);
+                }
+              }}
+              activeOpacity={0.9}
+            >
+              <Text style={styles.timerText}>
+                {Math.floor(currentTime / 60)}:{(currentTime % 60).toString().padStart(2, '0')}
+              </Text>
+              <View style={styles.timerRightContent}>
+                <TouchableOpacity 
+                  style={styles.timerButton} 
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    isTimerRunning ? stopRestTimer() : startRestTimer();
+                  }}
+                >
+                  <Text style={styles.timerButtonText}>
+                    {isTimerRunning ? 'Pause' : 'Start'}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={styles.timerButton} 
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    resetRestTimer();
+                  }}
+                >
+                  <Text style={styles.timerButtonText}>Reset</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={styles.miniPlayerClose} 
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    toggleRestTimer();
+                  }}
+                >
+                  <X size={20} color="#8E8E93" />
+                </TouchableOpacity>
+              </View>
+            </TouchableOpacity>
+
+            {isTimerExpanded && !isTimerRunning && (
+              <View style={styles.timeAdjustment}>
+                <TouchableOpacity 
+                  style={styles.timeAdjustButton}
+                  onPress={() => adjustTime(-15)}
+                >
+                  <Text style={styles.timeAdjustButtonText}>-15s</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={styles.timeAdjustButton}
+                  onPress={() => adjustTime(15)}
+                >
+                  <Text style={styles.timeAdjustButtonText}>+15s</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        )}
+      </SafeAreaView>
     </KeyboardAvoidingView>
   );
 }
@@ -590,6 +789,9 @@ const styles = StyleSheet.create({
   headerButton: {
     padding: 8,
   },
+  headerButtonActive: {
+    backgroundColor: '#E6FEE9',
+  },
   workoutInfo: {
     backgroundColor: '#FFFFFF',
     margin: 12,
@@ -601,11 +803,48 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 2,
   },
-  workoutName: {
-    fontSize: 20,
+  workoutNameInput: {
+    fontSize: 24,
     fontWeight: 'bold',
     color: '#000000',
-    marginBottom: 16,
+    marginBottom: 20,
+    padding: 0,
+  },
+  workoutTimes: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    marginBottom: 12,
+  },
+  timeInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  timeLabel: {
+    fontSize: 16,
+    color: '#8E8E93',
+    fontWeight: '500',
+  },
+  timeText: {
+    fontSize: 16,
+    color: '#000000',
+    fontWeight: '600',
+  },
+  workoutStateButton: {
+    backgroundColor: '#34C759',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+  },
+  workoutStateButtonActive: {
+    backgroundColor: '#FF3B30',
+  },
+  workoutStateButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
   },
   infoGrid: {
     flexDirection: 'row',
@@ -854,6 +1093,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
   },
+  addExerciseText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  saveWorkoutText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -886,11 +1135,86 @@ const styles = StyleSheet.create({
     backgroundColor: '#FF3B30',
     justifyContent: 'center',
     alignItems: 'center',
-    height: 40,
+    height: 36,
     marginTop: 21,
     borderRadius: 8,
     width: 100,
     marginLeft: 8,
     marginBottom: 12,
+  },
+  miniPlayer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  timerMainContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  timerRightContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  timerButton: {
+    backgroundColor: '#007AFF',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+  },
+  timerButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  timerText: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#000000',
+  },
+  miniPlayerClose: {
+    padding: 8,
+    backgroundColor: '#F2F2F7',
+    borderRadius: 8,
+  },
+  timeAdjustment: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 16,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E5EA',
+    marginTop: 12,
+  },
+  timeAdjustButton: {
+    backgroundColor: '#F2F2F7',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+  },
+  timeAdjustButtonText: {
+    color: '#007AFF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  workoutDeleteAction: {
+    backgroundColor: '#FF3B30',
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 80,
+    height: '100%',
+    borderTopRightRadius: 16,
+    borderBottomRightRadius: 16,
   },
 });
