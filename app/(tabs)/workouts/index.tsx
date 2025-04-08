@@ -86,75 +86,6 @@ export default function WorkoutsScreen() {
     }
   };
 
-  const renderWorkoutList = () => {
-    if (error) {
-      return (
-        <View style={styles.emptyState}>
-          <Text style={styles.emptyStateText}>{error}</Text>
-          {session?.user && (
-            <TouchableOpacity style={styles.createButton} onPress={loadWorkouts}>
-              <Text style={styles.createButtonText}>Try Again</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      );
-    }
-
-    if (isLoading) {
-      return (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#007AFF" />
-        </View>
-      );
-    }
-
-    if (workouts.length === 0) {
-      return (
-        <View style={styles.emptyState}>
-          <Dumbbell size={64} color="#CCCCCC" />
-          <Text style={styles.emptyText}>No workouts yet</Text>
-          <Text style={styles.emptySubtext}>
-            Create your first workout to get started!
-          </Text>
-        </View>
-      );
-    }
-
-    return workouts.map((workout) => (
-      <TouchableOpacity
-        key={workout.id}
-        style={styles.planCard}
-        onPress={() => router.push(`/workouts/${workout.id}`)}
-      >
-        <View style={styles.planInfo}>
-          <Text style={styles.planName}>{workout.title}</Text>
-          <View style={styles.planDetails}>
-            <View style={styles.detailItem}>
-              <Calendar size={14} color="#8E8E93" />
-              <Text style={styles.detailText}>
-                {format(parseISO(workout.date), 'MMM d, yyyy')}
-              </Text>
-            </View>
-
-            <View style={styles.detailItem}>
-              <Clock size={14} color="#8E8E93" />
-              <Text style={styles.detailText}>
-                {workout.duration_minutes} min
-              </Text>
-            </View>
-
-            <View style={styles.detailItem}>
-              <Dumbbell size={14} color="#8E8E93" />
-              <Text style={styles.detailText}>
-                {workout.exercises.length} exercises
-              </Text>
-            </View>
-          </View>
-        </View>
-      </TouchableOpacity>
-    ));
-  };
-
   useFocusEffect(
     useCallback(() => {
       if (session?.user?.id) {
@@ -274,10 +205,26 @@ export default function WorkoutsScreen() {
                 onPress={() => router.push(`/workouts/${plan.id}`)}
               >
                 <View style={styles.planInfo}>
-                  <Text style={styles.planName}>{plan.title}</Text>
-                  <Text style={styles.planDetails}>
-                    {plan.exercises.length} exercises
-                  </Text>
+                  <View style={styles.planNameRow}>
+                    <Text style={styles.planName}>{plan.title}</Text>
+                    <View style={[
+                      styles.typeTag, 
+                      plan.workout_type === 'split' ? styles.splitTag : styles.customTag
+                    ]}>
+                      <Text style={[
+                        styles.typeTagText,
+                        plan.workout_type === 'split' ? { color: '#007AFF' } : { color: '#FF9F0A' }
+                      ]}>
+                        {plan.workout_type === 'split' ? 'Split' : 'Custom'}
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={styles.planDetails}>
+                    <View style={styles.detailItem}>
+                      <Dumbbell size={14} color="#8E8E93" />
+                      <Text style={styles.detailText}>{plan.exercises.length} exercises</Text>
+                    </View>
+                  </View>
                 </View>
               </TouchableOpacity>
             ))
@@ -455,10 +402,30 @@ const styles = StyleSheet.create({
   planInfo: {
     flex: 1,
   },
+  planNameRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
   planName: {
     fontSize: 18,
     fontWeight: '600',
-    marginBottom: 4,
+  },
+  typeTag: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  splitTag: {
+    backgroundColor: '#007AFF20',
+  },
+  customTag: {
+    backgroundColor: '#FF9F0A20',
+  },
+  typeTagText: {
+    fontSize: 12,
+    fontWeight: '500',
   },
   detailItem: {
     flexDirection: 'row',
