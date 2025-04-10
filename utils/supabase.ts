@@ -320,37 +320,80 @@ export async function removeMember(groupId: string, userId: string) {
   if (error) throw error;
 }
 
-// Nutrition Settings functions
-export async function getNutritionSettings(): Promise<NutritionSettings> {
-  const { data: userData, error: userError } = await supabase.auth.getUser();
-  if (userError || !userData.user) throw new Error('User not authenticated');
+// Enhanced function to get current user with session refresh
+export async function getCurrentUser() {
+  try {
+    // First try to get the user normally
+    const { data: userData, error } = await supabase.auth.getUser();
+    
+    // If there's an error or no user, try to refresh the session
+    if (error || !userData?.user) {
+      console.log('Session may have expired, attempting to refresh...');
+      const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+      
+      if (refreshError || !refreshData?.user) {
+        console.error('Failed to refresh authentication session:', refreshError);
+        throw new Error('Not authenticated');
+      }
+      
+      console.log('Session successfully refreshed');
+      return refreshData.user;
+    }
+    
+    return userData.user;
+  } catch (error) {
+    console.error('Error getting current user:', error);
+    throw new Error('Not authenticated');
+  }
+}
 
-  const { data, error } = await supabase
+// Nutrition Settings functions with enhanced authentication
+export async function getNutritionSettings(): Promise<NutritionSettings> {
+  try {
+    const user = await getCurrentUser();
+    
+    const { data, error } = await supabase
       .from('nutrition_settings')
       .select('*')
-      .eq('user_id', userData.user.id)
+      .eq('user_id', user.id)
       .single();
 
-  if (error) throw error;
-  return data;
+    if (error) {
+      console.error('Error fetching nutrition settings:', error);
+      throw error;
+    }
+    
+    return data;
+  } catch (error) {
+    console.error('Failed to get nutrition settings:', error);
+    throw error;
+  }
 }
 
 export async function updateNutritionSettings(updates: Partial<Omit<NutritionSettings, 'user_id' | 'updated_at'>>) {
-  const { data: userData, error: userError } = await supabase.auth.getUser();
-  if (userError || !userData.user) throw new Error('User not authenticated');
-
-  const { data, error } = await supabase
+  try {
+    const user = await getCurrentUser();
+    
+    const { data, error } = await supabase
       .from('nutrition_settings')
       .update({
         ...updates,
         updated_at: new Date().toISOString(),
       })
-      .eq('user_id', userData.user.id)
+      .eq('user_id', user.id)
       .select()
       .single();
 
-  if (error) throw error;
-  return data;
+    if (error) {
+      console.error('Error updating nutrition settings:', error);
+      throw error;
+    }
+    
+    return data;
+  } catch (error) {
+    console.error('Failed to update nutrition settings:', error);
+    throw error;
+  }
 }
 
 // Meal tracking functions

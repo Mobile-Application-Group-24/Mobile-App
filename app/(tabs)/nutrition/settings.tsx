@@ -12,7 +12,8 @@ import {
   sendTestNotification,
   sendImmediateTestNotification,
   listScheduledNotifications,
-  setupNotificationChannels
+  setupNotificationChannels,
+  testExactTimeNotification
 } from '@/utils/notifications';
 
 const defaultSettings: Omit<NutritionSettings, 'user_id' | 'updated_at'> = {
@@ -36,7 +37,6 @@ export default function NutritionSettingsScreen() {
   const [isNewUser, setIsNewUser] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState<number | null>(null);
   const [notificationsPermission, setNotificationsPermission] = useState(false);
-  const [showDebugInfo, setShowDebugInfo] = useState(false);
   const [scheduledNotifications, setScheduledNotifications] = useState<any[]>([]);
 
   useEffect(() => {
@@ -69,28 +69,60 @@ export default function NutritionSettingsScreen() {
   const loadSettings = async () => {
     try {
       setLoading(true);
-      const { data: userData } = await supabase.auth.getUser();
-      if (!userData.user) throw new Error('Not authenticated');
-
+      
       try {
         const data = await getNutritionSettings();
         setSettings(data);
         setIsNewUser(false);
       } catch (error: any) {
+        console.error('Error loading settings:', error);
+        
         if (error?.message?.includes('JSON object requested, multiple (or no) rows returned')) {
-          setSettings({
-            user_id: userData.user.id,
-            updated_at: new Date().toISOString(),
-            ...defaultSettings,
-          });
+          // Handle new user case
+          const { data: userData } = await supabase.auth.getUser();
+          if (!userData.user) {
+            // If still no user after checking, try session refresh
+            const { data: refreshData } = await supabase.auth.refreshSession();
+            if (!refreshData.user) {
+              throw new Error('Authentication failed. Please log in again.');
+            }
+            
+            setSettings({
+              user_id: refreshData.user.id,
+              updated_at: new Date().toISOString(),
+              ...defaultSettings,
+            });
+          } else {
+            setSettings({
+              user_id: userData.user.id,
+              updated_at: new Date().toISOString(),
+              ...defaultSettings,
+            });
+          }
           setIsNewUser(true);
+        } else if (error?.message?.includes('Not authenticated')) {
+          // Handle authentication error
+          const { data: refreshData } = await supabase.auth.refreshSession();
+          if (!refreshData.user) {
+            Alert.alert(
+              "Authentication Error",
+              "Your session has expired. Please log in again.",
+              [{ text: "OK", onPress: () => router.replace('/login') }]
+            );
+            return;
+          } else {
+            // Try again after refresh
+            const data = await getNutritionSettings();
+            setSettings(data);
+            setIsNewUser(false);
+          }
         } else {
           throw error;
         }
       }
     } catch (error) {
       console.error('Error loading settings:', error);
-      Alert.alert('Error', 'Failed to load settings');
+      Alert.alert('Error', 'Failed to load settings. Please check your connection and try again.');
     } finally {
       setLoading(false);
     }
@@ -161,9 +193,24 @@ export default function NutritionSettingsScreen() {
 
     try {
       setSaving(true);
-      const { data: userData } = await supabase.auth.getUser();
-      if (!userData.user) throw new Error('Not authenticated');
+      
+      // First check authentication
+      try {
+        await getCurrentUser();
+      } catch (error) {
+        // Try to refresh the session
+        const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+        if (refreshError || !refreshData.user) {
+          Alert.alert(
+            "Authentication Error",
+            "Your session has expired. Please log in again.",
+            [{ text: "OK", onPress: () => router.replace('/login') }]
+          );
+          return;
+        }
+      }
 
+      // Normalize settings first
       const normalizedSettings = {
         ...settings,
         calorie_goal:
@@ -186,49 +233,116 @@ export default function NutritionSettingsScreen() {
             : settings.water_interval,
       };
 
-      if (isNewUser) {
-        const { error: insertError } = await supabase.from('nutrition_settings').insert({
-          user_id: userData.user.id,
-          calorie_goal: normalizedSettings.calorie_goal,
-          water_goal: normalizedSettings.water_goal,
-          water_notifications: normalizedSettings.water_notifications,
-          water_interval: normalizedSettings.water_interval,
-          meal_times: normalizedSettings.meal_times,
-          updated_at: new Date().toISOString(),
-        });
+      // First, save to database
+      try {
+        if (isNewUser) {
+          const { error: insertError } = await supabase.from('nutrition_settings').insert({
+            user_id: userData.user.id,
+            calorie_goal: normalizedSettings.calorie_goal,
+            water_goal: normalizedSettings.water_goal,
+            water_notifications: normalizedSettings.water_notifications,
+            water_interval: normalizedSettings.water_interval,
+            meal_times: normalizedSettings.meal_times,
+            updated_at: new Date().toISOString(),
+          });
 
-        if (insertError) throw insertError;
-      } else {
-        await updateNutritionSettings({
-          calorie_goal: normalizedSettings.calorie_goal,
-          water_goal: normalizedSettings.water_goal,
-          water_notifications: normalizedSettings.water_notifications,
-          water_interval: normalizedSettings.water_interval,
-          meal_times: normalizedSettings.meal_times,
-        });
-      }
-
-      if (notificationsPermission) {
-        console.log('Setting up notifications with settings:', normalizedSettings);
-        
-        const mealNotificationIds = await scheduleMealNotifications(normalizedSettings);
-        console.log('Meal notification IDs:', mealNotificationIds);
-        
-        if (normalizedSettings.water_notifications) {
-          const waterReminderId = await scheduleWaterReminders(
-            normalizedSettings.water_notifications,
-            normalizedSettings.water_interval
-          );
-          console.log('Water reminder ID:', waterReminderId);
+          if (insertError) throw insertError;
+        } else {
+          await updateNutritionSettings({
+            calorie_goal: normalizedSettings.calorie_goal,
+            water_goal: normalizedSettings.water_goal,
+            water_notifications: normalizedSettings.water_notifications,
+            water_interval: normalizedSettings.water_interval,
+            meal_times: normalizedSettings.meal_times,
+          });
         }
         
-        const notifications = await listScheduledNotifications();
-        setScheduledNotifications(notifications);
-        
-        if (notifications.length === 0) {
+        console.log('Settings saved successfully to database');
+      } catch (dbError) {
+        console.error('Database error while saving settings:', dbError);
+        throw new Error('Failed to save settings to database. Please try again.');
+      }
+
+      // Then, handle notifications if permission is granted
+      if (notificationsPermission) {
+        try {
+          console.log('Setting up notifications with saved settings:', JSON.stringify(normalizedSettings, null, 2));
+          
+          // Verify meal_times structure before scheduling
+          if (!normalizedSettings.meal_times || !Array.isArray(normalizedSettings.meal_times)) {
+            console.error('Invalid meal_times structure:', normalizedSettings.meal_times);
+            throw new Error('Invalid meal times settings. Please check your configuration.');
+          }
+          
+          const enabledMealTimes = normalizedSettings.meal_times.filter(meal => meal.enabled);
+          console.log(`Found ${enabledMealTimes.length} enabled meal times`);
+          
+          // Validate each meal time format before scheduling
+          enabledMealTimes.forEach(meal => {
+            const [hours, minutes] = meal.time.split(':').map(Number);
+            if (isNaN(hours) || isNaN(minutes)) {
+              console.error(`Invalid time format for ${meal.name}: ${meal.time}`);
+              throw new Error(`Invalid time format for ${meal.name}: ${meal.time}`);
+            }
+            console.log(`Validated meal time: ${meal.name} at ${hours}:${minutes}`);
+          });
+          
+          // Schedule meal notifications
+          const mealNotificationIds = await scheduleMealNotifications(normalizedSettings);
+          console.log('Meal notification IDs:', mealNotificationIds);
+          
+          // Schedule water reminders if enabled
+          if (normalizedSettings.water_notifications) {
+            const waterReminderId = await scheduleWaterReminders(
+              normalizedSettings.water_notifications,
+              normalizedSettings.water_interval
+            );
+            console.log('Water reminder ID:', waterReminderId);
+          }
+          
+          // Prepare message about when notifications will appear
+          const mealTimes = enabledMealTimes.map(meal => {
+            const [hours, minutes] = meal.time.split(':').map(Number);
+            const scheduledTime = new Date();
+            scheduledTime.setHours(hours, minutes, 0, 0);
+            
+            // If time has passed today, show as tomorrow
+            if (scheduledTime <= new Date()) {
+              scheduledTime.setDate(scheduledTime.getDate() + 1);
+              return `${meal.name} (tomorrow at ${hours}:${String(minutes).padStart(2, '0')})`;
+            }
+            
+            return `${meal.name} (today at ${hours}:${String(minutes).padStart(2, '0')})`;
+          }).join(', ');
+          
+          if (enabledMealTimes.length > 0) {
+            // Show specific info about meal times from database
+            const waterMessage = normalizedSettings.water_notifications 
+              ? `\n\nWater reminders will occur every ${normalizedSettings.water_interval} hour(s).` 
+              : '';
+              
+            Alert.alert(
+              "Settings Saved",
+              `Your settings have been saved successfully.\n\nMeal reminders will appear for: ${mealTimes}${waterMessage}`,
+              [{ text: "OK" }]
+            );
+          } else {
+            // No meal times enabled
+            const waterMessage = normalizedSettings.water_notifications 
+              ? `Water reminders will occur every ${normalizedSettings.water_interval} hour(s).` 
+              : 'No meal or water notifications are currently enabled.';
+              
+            Alert.alert(
+              "Settings Saved",
+              `Your settings have been saved successfully.\n\n${waterMessage}`,
+              [{ text: "OK" }]
+            );
+          }
+        } catch (notificationError) {
+          console.error('Error scheduling notifications:', notificationError);
           Alert.alert(
-            "Notification Warning",
-            "Your settings were saved, but no notifications could be scheduled. This might be due to system restrictions.",
+            "Settings Saved with Warning",
+            `Your settings were saved, but there was an error scheduling notifications: ${notificationError.message}`,
             [{ text: "OK" }]
           );
         }
@@ -246,7 +360,17 @@ export default function NutritionSettingsScreen() {
       router.replace('/nutrition/index-with-data');
     } catch (error) {
       console.error('Error saving settings:', error);
-      Alert.alert('Error', 'Failed to save settings');
+      
+      // Check if this is an auth error
+      if (error.message?.includes('Not authenticated') || error.message?.includes('JWT expired')) {
+        Alert.alert(
+          "Authentication Error",
+          "Your session has expired. Please log in again.",
+          [{ text: "OK", onPress: () => router.replace('/login') }]
+        );
+      } else {
+        Alert.alert('Error', `Failed to save settings: ${error.message}`);
+      }
     } finally {
       setSaving(false);
     }
@@ -305,54 +429,6 @@ export default function NutritionSettingsScreen() {
     }
 
     return date;
-  };
-
-  const handleTestNotification = async () => {
-    try {
-      const notificationId = await sendTestNotification();
-      if (notificationId) {
-        Alert.alert(
-          "Test Notification Sent",
-          "You should receive a test notification in a few seconds. If not, please check your notification settings."
-        );
-      } else {
-        Alert.alert(
-          "Notification Failed",
-          "The test notification could not be sent. Please check your notification permissions."
-        );
-      }
-    } catch (error) {
-      console.error('Error sending test notification:', error);
-      Alert.alert("Error", "Failed to send test notification");
-    }
-  };
-
-  const handleImmediateNotification = async () => {
-    try {
-      const notificationId = await sendImmediateTestNotification();
-      if (notificationId) {
-        Alert.alert(
-          "Immediate Notification Sent",
-          "You should receive a notification immediately. If not, there's a problem with your notification settings."
-        );
-      } else {
-        Alert.alert(
-          "Notification Failed",
-          "The immediate notification could not be sent. Please check your notification permissions."
-        );
-      }
-    } catch (error) {
-      console.error('Error sending immediate notification:', error);
-      Alert.alert("Error", "Failed to send immediate notification");
-    }
-  };
-
-  const toggleDebugInfo = async () => {
-    setShowDebugInfo(!showDebugInfo);
-    if (!showDebugInfo) {
-      const notifications = await listScheduledNotifications();
-      setScheduledNotifications(notifications);
-    }
   };
 
   if (loading) {
@@ -502,45 +578,6 @@ export default function NutritionSettingsScreen() {
           </View>
         ))}
         <Text style={styles.hint}>Set reminders to log your meals at specific times</Text>
-        
-        <TouchableOpacity 
-          style={styles.testButton}
-          onPress={handleTestNotification}
-        >
-          <Bell size={20} color="#FFFFFF" />
-          <Text style={styles.testButtonText}>Test Delayed Notification (5s)</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={[styles.testButton, { backgroundColor: '#FF9500', marginTop: 8 }]}
-          onPress={handleImmediateNotification}
-        >
-          <Bell size={20} color="#FFFFFF" />
-          <Text style={styles.testButtonText}>Test Immediate Notification</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={styles.debugButton}
-          onPress={toggleDebugInfo}
-        >
-          <Text style={styles.debugButtonText}>{showDebugInfo ? "Hide Debug Info" : "Show Notification Debug Info"}</Text>
-        </TouchableOpacity>
-        
-        {showDebugInfo && (
-          <View style={styles.debugInfo}>
-            <Text style={styles.debugTitle}>Notification Status</Text>
-            <Text style={styles.debugText}>Permission: {notificationsPermission ? "Granted" : "Denied"}</Text>
-            <Text style={styles.debugText}>Platform: {Platform.OS}</Text>
-            <Text style={styles.debugText}>Scheduled Notifications: {scheduledNotifications.length}</Text>
-            {scheduledNotifications.map((notification, index) => (
-              <View key={index} style={styles.debugItem}>
-                <Text style={styles.debugText}>ID: {notification.identifier}</Text>
-                <Text style={styles.debugText}>Title: {notification.content.title}</Text>
-                <Text style={styles.debugText}>Trigger: {JSON.stringify(notification.trigger)}</Text>
-              </View>
-            ))}
-          </View>
-        )}
       </View>
 
       <TouchableOpacity
@@ -730,52 +767,6 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
-  },
-  testButton: {
-    backgroundColor: '#34C759',
-    padding: 12,
-    borderRadius: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 16,
-    gap: 8,
-  },
-  testButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  debugButton: {
-    padding: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  debugButtonText: {
-    color: '#8E8E93',
-    fontSize: 14,
-  },
-  debugInfo: {
-    backgroundColor: '#F2F2F7',
-    padding: 12,
-    borderRadius: 8,
-    marginTop: 8,
-  },
-  debugTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  debugText: {
-    fontSize: 12,
-    color: '#8E8E93',
-  },
-  debugItem: {
-    borderTopWidth: 1,
-    borderTopColor: '#E5E5EA',
-    paddingTop: 8,
-    marginTop: 8,
   },
   permissionWarning: {
     backgroundColor: '#FFF9EB',
