@@ -1,56 +1,96 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, FlatList, Platform, Alert } from 'react-native';
-import { useRouter } from 'expo-router';
-import { Plus, Minus, Dumbbell, Save, Search, X, Star } from 'lucide-react-native';
-import { saveWorkout } from '@/utils/workout'; // Using workout.ts instead of storage
+import { useRouter, useLocalSearchParams } from 'expo-router';
+import { Plus, Minus, Dumbbell, Save, Search, X } from 'lucide-react-native';
+import { createWorkoutPlan } from '@/utils/supabase';
 import { useSession } from '@/utils/auth';
-import DateTimePicker from '@react-native-community/datetimepicker';
-import { format } from 'date-fns';
 import { supabase } from '@/utils/supabase';
 import type { Exercise } from '@/utils/storage';
+import { Picker } from '@react-native-picker/picker';
 
 const commonExercises = [
-  // Chest
   "Bench Press", "Incline Bench Press", "Decline Bench Press", "Dumbbell Press",
   "Push-Ups", "Dips", "Cable Flyes", "Dumbbell Flyes",
-  
-  // Back
   "Pull-Ups", "Lat Pulldowns", "Barbell Rows", "Dumbbell Rows",
   "T-Bar Rows", "Face Pulls", "Deadlifts",
-  
-  // Shoulders
   "Military Press", "Arnold Press", "Lateral Raises", "Front Raises",
   "Reverse Flyes", "Upright Rows", "Shrugs", "Pike Push-Ups",
-  
-  // Arms
   "Bicep Curls", "Hammer Curls", "Tricep Extensions", "Skull Crushers",
   "Preacher Curls", "Diamond Push-Ups", "Tricep Pushdowns", "Concentration Curls",
-  
-  // Legs
   "Squats", "Front Squats", "Leg Press", "Lunges",
   "Romanian Deadlifts", "Leg Extensions", "Leg Curls", "Calf Raises",
-  
-  // Core
   "Planks", "Russian Twists", "Crunches", "Leg Raises",
   "Wood Chops", "Ab Rollouts", "Mountain Climbers", "Dead Bugs",
-  
-  // Olympic/Compound
   "Clean and Jerk", "Power Cleans", "Snatch", "Overhead Squats",
   "Turkish Get-Ups", "Thrusters", "Kettlebell Swings", "Box Jumps",
-  
-  // Functional/Other
   "Burpees", "Battle Ropes", "Medicine Ball Slams", "Farmer's Walks"
 ].sort();
 
+const DAYS_OF_WEEK = [
+  'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'
+];
+
 export default function CreateWorkoutScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams();
+  const showExerciseSearch = params.showExerciseSearch === 'true';
+  const callbackRoute = params.callbackRoute as string;
+  const previousState = params.state ? JSON.parse(params.state as string) : null;
   const { session, isLoading } = useSession();
   const [planName, setPlanName] = useState('');
   const [exercises, setExercises] = useState<Exercise[]>([]);
-  const [showExerciseSearch, setShowExerciseSearch] = useState(false);
+  const [showExerciseSearchState, setShowExerciseSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSaving, setIsSaving] = useState(false);
-  const [isFavorite, setIsFavorite] = useState(false);
+  const [workoutType, setWorkoutType] = useState<'custom' | 'split'>('custom');
+  const [selectedDay, setSelectedDay] = useState(DAYS_OF_WEEK[0]);
+  const [dayError, setDayError] = useState<string | null>(null);
+  const [availableDays, setAvailableDays] = useState<string[]>(DAYS_OF_WEEK);
+
+  useEffect(() => {
+    if (showExerciseSearch) {
+      setShowExerciseSearch(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (session?.user?.id) {
+      fetchAvailableDays();
+    }
+  }, [session?.user?.id]);
+
+  const fetchAvailableDays = async () => {
+    try {
+      if (!session?.user?.id) return;
+      
+      const { data: existingWorkouts, error } = await supabase
+        .from('workout_plans')  // Fixed table name
+        .select('*')
+        .eq('user_id', session.user.id)
+        .eq('workout_type', 'split');
+
+      if (error) {
+        console.error('Error fetching workout plans:', error);
+        return;
+      }
+
+      const daysWithWorkouts = existingWorkouts
+        ?.filter(workout => workout.day_of_week)
+        .map(workout => workout.day_of_week);
+      
+      const filteredDays = DAYS_OF_WEEK.filter(day => !daysWithWorkouts.includes(day));
+      
+      setAvailableDays(filteredDays.length > 0 ? filteredDays : DAYS_OF_WEEK);
+      
+      if (filteredDays.length === 0) {
+        setDayError('You already have workouts for all days of the week');
+      } else {
+        setSelectedDay(filteredDays[0]);
+      }
+    } catch (error) {
+      console.error('Error fetching available days:', error);
+    }
+  };
 
   const filteredExercises = commonExercises.filter(exercise =>
     exercise.toLowerCase().includes(searchQuery.toLowerCase())
@@ -81,10 +121,58 @@ export default function CreateWorkoutScreen() {
     );
   };
 
+  const checkDayAvailability = async (day: string) => {
+    try {
+      if (!session?.user?.id) return;
+      
+      const { data: existingWorkouts, error } = await supabase
+        .from('workout_plans')  // Fixed table name
+        .select('*')
+        .eq('user_id', session.user.id);
+
+      if (error) {
+        console.error('Error fetching workout plans:', error);
+        return false;
+      }
+
+      const existingDayWorkout = existingWorkouts?.find(
+        workout => workout.day_of_week === day && workout.workout_type === 'split'
+      );
+
+      if (existingDayWorkout) {
+        setDayError(`You already have a workout plan for ${day}: "${existingDayWorkout.title}"`);
+        return false;
+      } else {
+        setDayError(null);
+        return true;
+      }
+    } catch (error) {
+      console.error('Error checking day availability:', error);
+      return false;
+    }
+  };
+
+  const handleDayChange = async (day: string) => {
+    setSelectedDay(day);
+    if (workoutType === 'split') {
+      await checkDayAvailability(day);
+    }
+  };
+
+  const handleWorkoutTypeToggle = () => {
+    const newType = workoutType === 'custom' ? 'split' : 'custom';
+    setWorkoutType(newType);
+
+    if (newType === 'split') {
+      fetchAvailableDays();
+    } else {
+      setDayError(null);
+    }
+  };
+
   const handleSave = async () => {
     if (isSaving) return;
 
-    // Validate inputs
     if (!planName) {
       Alert.alert('Error', 'Please enter a workout title');
       return;
@@ -95,9 +183,14 @@ export default function CreateWorkoutScreen() {
       return;
     }
 
-    console.log('Current session state:', session ? 'Logged in' : 'Not logged in');
-    console.log('Session loading state:', isLoading ? 'Loading' : 'Loaded');
-    
+    if (workoutType === 'split') {
+      const isDayAvailable = await checkDayAvailability(selectedDay);
+      if (!isDayAvailable) {
+        Alert.alert('Error', `You already have a workout set for ${selectedDay}`);
+        return;
+      }
+    }
+
     if (isLoading) {
       Alert.alert('Please wait', 'Verifying your login status...');
       return;
@@ -107,13 +200,9 @@ export default function CreateWorkoutScreen() {
       console.error('Session validation failed:', { session, isLoading });
       
       const { data: userData, error: userError } = await supabase.auth.getUser();
-      console.log('Direct auth check:', userData?.user ? 'User found' : 'No user');
-      
       if (userError || !userData.user) {
         Alert.alert('Authentication Error', 'You must be logged in to save workouts. Please log out and log in again.');
         return;
-      } else {
-        console.log('Session hook not working but user is authenticated, proceeding...');
       }
     }
 
@@ -127,51 +216,59 @@ export default function CreateWorkoutScreen() {
         throw new Error('Failed to get user ID');
       }
       
-      console.log('Confirmed user ID:', userId);
-      
       const formattedExercises = exercises.map(ex => ({
-        id: ex.id || Date.now().toString() + Math.random().toString(36).substring(2),
+        id: ex.id,
         name: ex.name,
         sets: ex.sets,
         reps: 10,
         weight: undefined,
       }));
       
-      const workoutData = {
+      const workoutPlanData = {
         title: planName,
-        date: new Date().toISOString(),
+        description: '',
+        workout_type: workoutType,
+        day_of_week: workoutType === 'split' ? selectedDay : null,
         duration_minutes: 60,
         exercises: formattedExercises,
-        notes: '',
-        calories_burned: 0,
+        user_id: userId,
       };
       
-      console.log('Saving workout to database:', JSON.stringify(workoutData, null, 2));
+      console.log('Creating workout plan with data:', JSON.stringify(workoutPlanData));
       
-      const savedWorkout = await saveWorkout(workoutData);
-      console.log('Workout saved successfully with ID:', savedWorkout.id);
+      const savedWorkoutPlan = await createWorkoutPlan(workoutPlanData);
+      console.log('Successfully created workout plan:', savedWorkoutPlan.id);
       
-      Alert.alert(
-        'Success',
-        'Workout saved to database successfully',
-        [{ text: 'OK', onPress: () => router.back() }]
-      );
+      router.back();
     } catch (error) {
-      console.error('Error saving workout:', error);
-      let errorMessage = 'Failed to save workout.';
-      if (error instanceof Error) {
-        errorMessage += ' ' + error.message;
-      }
-      Alert.alert('Error', errorMessage);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error('Error creating workout plan:', errorMessage);
+      console.error('Full error:', JSON.stringify(error));
+      Alert.alert('Error', 'Failed to create workout plan. Please try again.');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleExerciseSelect = (exerciseName: string) => {
+    const callbackId = params.callbackId;
+    if (callbackId) {
+      router.back();
+      setTimeout(() => {
+        router.setParams({
+          id: callbackId,
+          selectedExercise: exerciseName
+        });
+      }, 100);
+    } else {
+      addExercise(exerciseName);
     }
   };
 
   const renderExerciseItem = useCallback(({ item }: { item: string }) => (
     <TouchableOpacity
       style={styles.exerciseSearchItem}
-      onPress={() => addExercise(item)}
+      onPress={() => handleExerciseSelect(item)}
     >
       <Dumbbell size={20} color="#007AFF" />
       <Text style={styles.exerciseSearchText}>{item}</Text>
@@ -186,27 +283,73 @@ export default function CreateWorkoutScreen() {
         contentContainerStyle={styles.scrollContent}
       >
         <View style={styles.section}>
-          <View style={styles.planNameContainer}>
-            <View style={styles.inputWrapper}>
-              <Text style={styles.label}>Plan Name</Text>
-              <TextInput
-                style={styles.input}
-                value={planName}
-                onChangeText={setPlanName}
-                placeholder="Enter plan name"
-              />
-            </View>
-            <TouchableOpacity
-              style={[styles.favoriteButton, isFavorite && styles.favoriteButtonActive]}
-              onPress={() => setIsFavorite(!isFavorite)}
+          <Text style={styles.sectionTitle}>Workout Details</Text>
+          
+          <View style={styles.formGroup}>
+            <Text style={styles.label}>Plan Name</Text>
+            <TextInput
+              style={styles.input}
+              value={planName}
+              onChangeText={setPlanName}
+              placeholder="Enter plan name"
+              placeholderTextColor="#8E8E93"
+            />
+          </View>
+          
+          <View style={styles.formGroup}>
+            <Text style={styles.label}>Workout Type</Text>
+            <TouchableOpacity 
+              style={styles.typeToggle}
+              onPress={handleWorkoutTypeToggle}
             >
-              <Star
-                size={24}
-                color={isFavorite ? '#FFB100' : '#8E8E93'}
-                fill={isFavorite ? '#FFB100' : 'none'}
-              />
+              <View style={[
+                styles.typeOption,
+                workoutType === 'custom' ? styles.selectedType : null
+              ]}>
+                <Text style={[
+                  styles.typeOptionText,
+                  workoutType === 'custom' ? styles.selectedTypeText : null
+                ]}>Custom</Text>
+              </View>
+              <View style={[
+                styles.typeOption,
+                workoutType === 'split' ? styles.selectedType : null
+              ]}>
+                <Text style={[
+                  styles.typeOptionText,
+                  workoutType === 'split' ? styles.selectedTypeText : null
+                ]}>Split</Text>
+              </View>
             </TouchableOpacity>
           </View>
+          
+          {workoutType === 'split' && (
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Assign to day</Text>
+              {availableDays.length === 0 ? (
+                <Text style={styles.errorText}>
+                  You already have workouts for all days of the week. 
+                  Delete an existing workout to create a new split.
+                </Text>
+              ) : (
+                <View style={styles.pickerContainer}>
+                  <Picker
+                    selectedValue={selectedDay}
+                    onValueChange={(itemValue) => handleDayChange(itemValue)}
+                    style={styles.picker}
+                    itemStyle={styles.pickerItem}
+                  >
+                    {availableDays.map(day => (
+                      <Picker.Item key={day} label={day} value={day} />
+                    ))}
+                  </Picker>
+                </View>
+              )}
+              {dayError && (
+                <Text style={styles.errorText}>{dayError}</Text>
+              )}
+            </View>
+          )}
         </View>
 
         <View style={styles.section}>
@@ -216,7 +359,7 @@ export default function CreateWorkoutScreen() {
               style={styles.addButton} 
               onPress={() => setShowExerciseSearch(true)}
             >
-              <Plus size={24} color="#FFFFFF" />
+              <Plus size={20} color="#FFFFFF" />
               <Text style={styles.addButtonText}>Add Exercise</Text>
             </TouchableOpacity>
           </View>
@@ -266,7 +409,7 @@ export default function CreateWorkoutScreen() {
         </View>
       </ScrollView>
 
-      {showExerciseSearch ? (
+      {showExerciseSearchState ? (
         <View style={styles.searchOverlay}>
           <View style={styles.searchHeader}>
             <View style={styles.searchInputContainer}>
@@ -301,13 +444,13 @@ export default function CreateWorkoutScreen() {
         <TouchableOpacity 
           style={[
             styles.saveButton,
-            (!planName || exercises.length === 0 || isSaving) && styles.saveButtonDisabled
+            (!planName || exercises.length === 0 || isSaving || (workoutType === 'split' && dayError)) && styles.saveButtonDisabled
           ]}
           onPress={handleSave}
-          disabled={!planName || exercises.length === 0 || isSaving}>
+          disabled={!planName || exercises.length === 0 || isSaving || (workoutType === 'split' && !!dayError)}>
           <Save size={24} color="#FFFFFF" />
           <Text style={styles.saveButtonText}>
-            {isSaving ? 'Saving to DB...' : 'Save to Database'}
+            {isSaving ? 'Saving...' : 'Save Workout'}
           </Text>
         </TouchableOpacity>
       )}
@@ -324,43 +467,81 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: Platform.OS === 'android' ? 120 : 0,
+    paddingBottom: 90,
   },
   section: {
     backgroundColor: '#FFFFFF',
     margin: 16,
+    marginBottom: 12,
     padding: 16,
     borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
-  planNameContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 12,
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 16,
+    color: '#1C1C1E',
   },
-  inputWrapper: {
-    flex: 1,
-  },
-  favoriteButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    backgroundColor: '#F2F2F7',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  favoriteButtonActive: {
-    backgroundColor: '#FFF9E6',
+  formGroup: {
+    marginBottom: 16,
   },
   label: {
-    fontSize: 14,
-    color: '#8E8E93',
+    fontSize: 16,
+    fontWeight: '500',
     marginBottom: 8,
+    color: '#1C1C1E',
   },
   input: {
     backgroundColor: '#F2F2F7',
-    padding: 12,
-    borderRadius: 8,
+    padding: 14,
+    borderRadius: 10,
     fontSize: 16,
+    color: '#1C1C1E',
+  },
+  typeToggle: {
+    flexDirection: 'row',
+    backgroundColor: '#F2F2F7',
+    borderRadius: 10,
+    overflow: 'hidden',
+  },
+  typeOption: {
+    flex: 1,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  selectedType: {
+    backgroundColor: '#007AFF',
+  },
+  typeOptionText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#8E8E93',
+  },
+  selectedTypeText: {
+    color: '#FFFFFF',
+  },
+  pickerContainer: {
+    backgroundColor: '#F2F2F7',
+    borderRadius: 10,
+    overflow: 'hidden',
+  },
+  picker: {
+    height: 50,
+  },
+  pickerItem: {
+    textAlign: 'center',
+    fontSize: 16,
+  },
+  errorText: {
+    color: '#FF3B30',
+    fontSize: 14,
+    marginTop: 8,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -368,18 +549,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 16,
   },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
   addButton: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#007AFF',
-    padding: 8,
-    paddingHorizontal: 12,
+    padding: 10,
+    paddingHorizontal: 14,
     borderRadius: 8,
-    gap: 4,
+    gap: 6,
   },
   addButtonText: {
     color: '#FFFFFF',
@@ -388,12 +565,12 @@ const styles = StyleSheet.create({
   },
   emptyState: {
     alignItems: 'center',
-    padding: 32,
-    backgroundColor: '#F2F2F7',
-    borderRadius: 12,
+    padding: 28,
+    backgroundColor: '#F8F8F8',
+    borderRadius: 10,
   },
   emptyStateText: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '600',
     color: '#8E8E93',
     marginTop: 16,
@@ -402,21 +579,22 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#8E8E93',
     textAlign: 'center',
-    marginTop: 8,
+    marginTop: 6,
+    paddingHorizontal: 20,
   },
   exerciseCard: {
-    backgroundColor: '#F2F2F7',
-    borderRadius: 12,
+    backgroundColor: '#F8F8F8',
+    borderRadius: 10,
     marginBottom: 12,
     overflow: 'hidden',
   },
   exerciseHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
+    padding: 14,
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
+    borderBottomColor: '#F2F2F7',
   },
   exerciseNumberBadge: {
     width: 28,
@@ -425,7 +603,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#007AFF',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
+    marginRight: 10,
   },
   exerciseNumberText: {
     color: '#FFFFFF',
@@ -436,6 +614,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     fontWeight: '500',
+    color: '#1C1C1E',
   },
   removeButton: {
     padding: 8,
@@ -443,14 +622,15 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   exerciseContent: {
-    padding: 16,
+    padding: 14,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
   setsLabel: {
-    fontSize: 14,
-    color: '#8E8E93',
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#1C1C1E',
   },
   setsContainer: {
     flexDirection: 'row',
@@ -460,16 +640,20 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   setButton: {
-    padding: 8,
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
     backgroundColor: '#F2F2F7',
     borderRadius: 8,
   },
   setsNumber: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginHorizontal: 24,
+    fontSize: 18,
+    fontWeight: '600',
+    marginHorizontal: 20,
     minWidth: 24,
     textAlign: 'center',
+    color: '#1C1C1E',
   },
   searchOverlay: {
     position: 'absolute',
@@ -492,14 +676,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#F2F2F7',
-    borderRadius: 8,
-    padding: 8,
-    paddingHorizontal: 12,
+    borderRadius: 10,
+    padding: 10,
+    paddingHorizontal: 14,
   },
   searchInput: {
     flex: 1,
-    marginLeft: 8,
+    marginLeft: 10,
     fontSize: 16,
+    color: '#1C1C1E',
   },
   closeButton: {
     padding: 8,
@@ -517,23 +702,32 @@ const styles = StyleSheet.create({
   exerciseSearchText: {
     fontSize: 16,
     marginLeft: 12,
+    color: '#1C1C1E',
   },
   saveButton: {
+    position: 'absolute',
+    bottom: 16,
+    left: 16,
+    right: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#007AFF',
-    margin: 16,
     padding: 16,
     borderRadius: 12,
     gap: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   saveButtonDisabled: {
     backgroundColor: '#A2A2A2',
   },
   saveButtonText: {
     color: '#FFFFFF',
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '600',
   },
 });

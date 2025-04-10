@@ -1,9 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Platform, StatusBar, SafeAreaView, KeyboardAvoidingView, Keyboard, TouchableWithoutFeedback, Alert, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { X, Clock, ChartBar as BarChart3, Star, Plus, MoveVertical as MoreVertical, CalendarClock, Scale, File as FileEdit, Dumbbell, Trash } from 'lucide-react-native';
-import { format, parseISO } from 'date-fns';
-import { getWorkout, deleteWorkout, updateWorkout, Workout, Exercise } from '@/utils/workout';
+import { X, Clock, ChartBar as BarChart3, Plus, CalendarClock, Scale, File as FileEdit, Dumbbell, Trash, Save, Trash2 } from 'lucide-react-native';
+import { format } from 'date-fns';
+import { getWorkoutPlan, getWorkouts, deleteWorkoutPlan, updateWorkoutPlan, WorkoutPlan, Workout, createWorkout } from '@/utils/workout';
+import { Swipeable } from 'react-native-gesture-handler';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 type SetType = 'normal' | 'warmup' | 'dropset';
 
@@ -22,51 +24,205 @@ interface ExerciseProgress {
 }
 
 export default function WorkoutDetailScreen() {
-  const { id } = useLocalSearchParams();
+  const params = useLocalSearchParams();
+  const workoutId = params.id as string;
+  const selectedExercise = params.selectedExercise;
   const router = useRouter();
-  const [workout, setWorkout] = useState<Workout | null>(null);
+  const [workoutPlan, setWorkoutPlan] = useState<WorkoutPlan | null>(null);
+  const [previousWorkout, setPreviousWorkout] = useState<Workout | null>(null);
+  const [hasPreviousData, setHasPreviousData] = useState(false);
+  const [workoutName, setWorkoutName] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [bodyWeight, setBodyWeight] = useState('');
   const [notes, setNotes] = useState('');
   const [exercises, setExercises] = useState<ExerciseProgress[]>([]);
+  const [showTypeLabel, setShowTypeLabel] = useState<{ id: string, show: boolean }>({ id: '', show: false });
+  const [draggingExercise, setDraggingExercise] = useState<string | null>(null);
+  const [showRestTimer, setShowRestTimer] = useState(false);
+  const [restTime, setRestTime] = useState(90); // 90 Sekunden Standard
+  const [isTimerRunning, setIsTimerRunning] = useState(false);
+  const [currentTime, setCurrentTime] = useState(90);
+  const timerRef = useRef<NodeJS.Timeout>();
+  const [isTimerExpanded, setIsTimerExpanded] = useState(false);
+  const [customRestTime, setCustomRestTime] = useState(90);
+  const [workoutStartTime, setWorkoutStartTime] = useState<Date | null>(null);
+  const [workoutEndTime, setWorkoutEndTime] = useState<Date | null>(null);
+  const [isWorkoutActive, setIsWorkoutActive] = useState(false);
+
+  const startRestTimer = () => {
+    setIsTimerRunning(true);
+    timerRef.current = setInterval(() => {
+      setCurrentTime(prev => {
+        if (prev <= 1) {
+          stopRestTimer();
+          return restTime;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  const stopRestTimer = () => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+    }
+    setIsTimerRunning(false);
+  };
+
+  const resetRestTimer = () => {
+    stopRestTimer();
+    setCurrentTime(restTime);
+  };
+
+  const toggleRestTimer = () => {
+    setShowRestTimer(!showRestTimer);
+    resetRestTimer();
+  };
+
+  const handleTimerPress = () => {
+    setIsTimerExpanded(!isTimerExpanded);
+  };
+
+  const handleCustomTimeChange = (time: number) => {
+    setCustomRestTime(time);
+    setRestTime(time);
+    setCurrentTime(time);
+  };
+
+  const adjustTime = (seconds: number) => {
+    const newTime = currentTime + seconds;
+    if (newTime > 0) {
+      setCurrentTime(newTime);
+      setRestTime(newTime);
+    }
+  };
 
   useEffect(() => {
-    if (id) {
-      loadWorkout(id as string);
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+    };
+  }, []);
+
+  const handleDragStart = (exerciseId: string) => {
+    Keyboard.dismiss();
+    setDraggingExercise(exerciseId);
+  };
+
+  const handleDragEnd = () => {
+    setDraggingExercise(null);
+  };
+
+  const handleMoveExercise = (draggedId: string, targetId: string) => {
+    if (draggedId === targetId) return;
+
+    setExercises(prev => {
+      const newExercises = [...prev];
+      const draggedIndex = newExercises.findIndex(e => e.id === draggedId);
+      const targetIndex = newExercises.findIndex(e => e.id === targetId);
+
+      const [draggedExercise] = newExercises.splice(draggedIndex, 1);
+      newExercises.splice(targetIndex, 0, draggedExercise);
+
+      return newExercises;
+    });
+  };
+
+  const handleDeleteExercise = (exerciseId: string) => {
+    Alert.alert(
+      'Delete Exercise',
+      'Are you sure you want to delete this exercise?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            setExercises(prev => prev.filter(e => e.id !== exerciseId));
+          },
+        },
+      ],
+      { cancelable: true }
+    );
+  };
+
+  useEffect(() => {
+    if (workoutId) {
+      loadWorkoutPlan(workoutId);
     } else {
-      setError('Workout ID not found');
+      setError('Workout plan ID not found');
       setLoading(false);
     }
-  }, [id]);
+  }, [workoutId]);
 
-  const loadWorkout = async (workoutId: string) => {
+  const loadWorkoutPlan = async (workoutPlanId: string) => {
     try {
       setLoading(true);
       setError(null);
-      const data = await getWorkout(workoutId);
-      setWorkout(data);
-      setNotes(data.notes || '');
-
-      // Initialize exercises from the workout data
-      setExercises(data.exercises.map(exercise => ({
-        id: exercise.id,
-        name: exercise.name,
-        sets: Array(exercise.sets).fill(null).map((_, index) => ({
-          id: (index + 1).toString(),
-          weight: exercise.weight?.toString() || '',
-          reps: exercise.reps.toString() || '',
-          type: 'normal'
-        }))
-      })));
+      
+      // Get the workout plan from workout_plans table
+      const plan = await getWorkoutPlan(workoutPlanId);
+      setWorkoutPlan(plan);
+      setWorkoutName(plan.title || '');
+      setNotes(plan.description || '');
+      
+      // Initialize exercises from the workout plan only, don't load previous workouts
+      const planExercises = plan.exercises?.map(exercise => {
+        return {
+          id: exercise.id,
+          name: exercise.name,
+          // Create empty sets based on the number specified in the plan
+          sets: Array(exercise.sets || 3).fill(null).map((_, index) => ({
+            id: `new-${exercise.id}-${index}`,
+            weight: '',
+            reps: '',
+            type: 'normal',
+            notes: ''
+          }))
+        };
+      }) || [];
+      
+      // Set exercises directly from plan without checking previous workouts
+      setExercises(planExercises);
+      setHasPreviousData(false);
       
     } catch (error) {
-      console.error('Error loading workout:', error);
+      console.error('Error loading workout plan:', error);
       setError('Failed to load workout details');
     } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (selectedExercise && typeof selectedExercise === 'string') {
+      const timestamp = Date.now();
+      const exerciseToAdd: ExerciseProgress = {
+        id: `${timestamp}-${Math.random().toString(36).substr(2, 9)}`,
+        name: selectedExercise,
+        sets: [{
+          id: `${timestamp}-set1`,
+          weight: '',
+          reps: '',
+          type: 'normal',
+          notes: ''
+        }]
+      };
+
+      setExercises(prev => [...prev, exerciseToAdd]);
+
+      const timeout = setTimeout(() => {
+        router.setParams({ id: workoutId });
+      }, 0);
+
+      return () => clearTimeout(timeout);
+    }
+  }, [selectedExercise, workoutId]);
 
   const handleDelete = () => {
     Alert.alert(
@@ -82,8 +238,8 @@ export default function WorkoutDetailScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              if (id) {
-                await deleteWorkout(id as string);
+              if (workoutId) {
+                await deleteWorkoutPlan(workoutId);
                 router.back();
               }
             } catch (error) {
@@ -99,11 +255,10 @@ export default function WorkoutDetailScreen() {
   const addSet = (exerciseId: string) => {
     setExercises(prev => prev.map(exercise => {
       if (exercise.id === exerciseId) {
-        const lastSet = exercise.sets[exercise.sets.length - 1];
         const newSet: WorkoutSet = {
-          id: (exercise.sets.length + 1).toString(),
-          weight: lastSet?.weight || '',
-          reps: lastSet?.reps || '',
+          id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          weight: '',
+          reps: '',
           type: 'normal'
         };
         return {
@@ -142,6 +297,12 @@ export default function WorkoutDetailScreen() {
               const types: SetType[] = ['normal', 'warmup', 'dropset'];
               const currentIndex = types.indexOf(set.type);
               const nextType = types[(currentIndex + 1) % types.length];
+
+              setShowTypeLabel({ id: setId, show: true });
+              setTimeout(() => {
+                setShowTypeLabel({ id: '', show: false });
+              }, 2000);
+
               return { ...set, type: nextType };
             }
             return set;
@@ -152,22 +313,146 @@ export default function WorkoutDetailScreen() {
     }));
   };
 
+  const deleteSet = (exerciseId: string, setId: string) => {
+    setExercises(prev => prev.map(exercise => {
+      if (exercise.id === exerciseId) {
+        return {
+          ...exercise,
+          sets: exercise.sets.filter(set => set.id !== setId)
+        };
+      }
+      return exercise;
+    }));
+  };
+
+  const renderRightActions = (exerciseId: string, setId: string) => {
+    return (
+      <TouchableOpacity
+        style={styles.deleteAction}
+        onPress={() => deleteSet(exerciseId, setId)}
+      >
+        <Trash2 size={24} color="#FFFFFF" />
+      </TouchableOpacity>
+    );
+  };
+
+  const renderWorkoutDeleteAction = () => {
+    return (
+      <TouchableOpacity
+        style={styles.workoutDeleteAction}
+        onPress={handleDelete}
+      >
+        <Trash2 size={24} color="#FFFFFF" />
+      </TouchableOpacity>
+    );
+  };
+
   const saveWorkoutChanges = async () => {
-    if (!workout || !id) return;
+    if (!workoutPlan || !workoutId) return;
 
     try {
-      const updatedWorkout = {
-        ...workout,
-        notes: notes
-        // Add other fields you want to update
-      };
+      // Format exercises for workout plan (no reps/weight)
+      // Make sure we preserve the set count from the original exercises
+      const planExercises = exercises.map(exercise => ({
+        id: exercise.id,
+        name: exercise.name,
+        sets: exercise.sets.length
+      }));
 
-      await updateWorkout(id as string, updatedWorkout);
-      Alert.alert('Success', 'Workout updated successfully');
+      // Format exercises for workout tracking (with reps/weight/setDetails)
+      const workoutExercises = exercises.map(exercise => {
+        return {
+          id: exercise.id,
+          name: exercise.name,
+          sets: exercise.sets.length,
+          setDetails: exercise.sets.map(set => ({
+            id: set.id,
+            weight: set.weight ? parseFloat(set.weight) : undefined,
+            reps: set.reps ? parseInt(set.reps, 10) : undefined,
+            type: set.type,
+            notes: set.notes || ''
+          }))
+        };
+      });
+
+      // First, update the workout plan if needed
+      if (workoutName !== workoutPlan.title || notes !== workoutPlan.description) {
+        await updateWorkoutPlan(workoutId, {
+          title: workoutName,
+          description: notes,
+          exercises: planExercises // Store only exercise structure in workout_plans table
+        });
+      }
+
+      // If the workout is active (user started it), or if there's data entered,
+      // create a new workout entry
+      if (isWorkoutActive || bodyWeight || exercises.some(ex => 
+        ex.sets.some(set => set.weight || set.reps)
+      )) {
+        // Mark the workout as done whenever the save button is pressed
+        // If the workout has been explicitly ended, use that end time
+        // Otherwise, if it was started but not explicitly ended, set the current time as end time
+        const endTimeToUse = workoutEndTime || (isWorkoutActive ? new Date() : undefined);
+        
+        // Consider a workout done if it's been started (regardless of whether it has an explicit end time)
+        const isDone = isWorkoutActive || !!workoutEndTime;
+        
+        const workoutData = {
+          workout_plan_id: workoutId,
+          title: workoutName,
+          date: new Date().toISOString(),
+          start_time: workoutStartTime?.toISOString(),
+          end_time: endTimeToUse?.toISOString(),
+          notes: notes,
+          exercises: workoutExercises, // Include complete exercise data with sets and reps
+          bodyweight: bodyWeight ? parseFloat(bodyWeight) : undefined,
+          user_id: workoutPlan.user_id,
+          calories_burned: 0, // Calculate or leave as default
+          done: isDone // Mark as done if it was started or has an end time
+        };
+        
+        const savedWorkout = await createWorkout(workoutData);
+        console.log("Successfully created workout:", savedWorkout.id, "Done status:", isDone);
+      }
+      
+      router.back();
     } catch (error) {
       console.error('Error updating workout:', error);
-      Alert.alert('Error', 'Failed to update workout');
+      Alert.alert('Error', 'Failed to save workout data');
     }
+  };
+
+  const showFullText = (text: string, label: string) => {
+    if (text) {
+      Alert.alert(
+        label,
+        text,
+        [{ text: 'OK' }],
+        { cancelable: true }
+      );
+    }
+  };
+
+  const addExercise = () => {
+    router.push({
+      pathname: "/(tabs)/workouts/create",
+      params: {
+        showExerciseSearch: true,
+        callbackId: workoutId
+      }
+    });
+  };
+
+  const startWorkout = () => {
+    const now = new Date();
+    setWorkoutStartTime(now);
+    setIsWorkoutActive(true);
+  };
+
+  const endWorkout = () => {
+    const now = new Date();
+    setWorkoutEndTime(now);
+    setIsWorkoutActive(false);
   };
 
   if (loading) {
@@ -178,7 +463,7 @@ export default function WorkoutDetailScreen() {
     );
   }
 
-  if (error || !workout) {
+  if (error || !workoutPlan) {
     return (
       <View style={styles.errorContainer}>
         <Text style={styles.errorText}>{error || 'Workout not found'}</Text>
@@ -190,87 +475,178 @@ export default function WorkoutDetailScreen() {
   }
 
   return (
-    <KeyboardAvoidingView 
+    <KeyboardAvoidingView
       behavior="padding"
       style={{ flex: 1 }}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}>
-      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-        <SafeAreaView style={styles.container}>
-          <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
-          <ScrollView 
-            style={styles.content}
-            keyboardShouldPersistTaps="handled">
-            <View style={styles.header}>
-              <TouchableOpacity onPress={() => router.back()} style={styles.closeButton} activeOpacity={0.7}>
-                <X size={24} color="#007AFF" />
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+        <ScrollView
+          style={styles.content}
+          keyboardShouldPersistTaps="handled">
+          <View style={styles.header}>
+            <TouchableOpacity onPress={() => router.back()} style={styles.closeButton} activeOpacity={0.7}>
+              <X size={24} color="#007AFF" />
+            </TouchableOpacity>
+            <Text style={styles.date}>
+              {(() => {
+                try {
+                  return format(new Date(), 'dd. MMMM');
+                } catch (error) {
+                  console.warn('Error formatting header date:', error);
+                  return 'Today';
+                }
+              })()}
+            </Text>
+            <View style={styles.headerActions}>
+              <TouchableOpacity 
+                style={[styles.headerButton, showRestTimer && styles.headerButtonActive]} 
+                onPress={toggleRestTimer} 
+                activeOpacity={0.7}
+              >
+                <Clock size={24} color={showRestTimer ? "#34C759" : "#007AFF"} />
               </TouchableOpacity>
-              <Text style={styles.date}>{format(new Date(), 'dd. MMMM')}</Text>
-              <View style={styles.headerActions}>
-                <TouchableOpacity style={styles.headerButton} activeOpacity={0.7}>
-                  <Clock size={24} color="#007AFF" />
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.headerButton} activeOpacity={0.7}>
-                  <MoreVertical size={24} color="#007AFF" />
-                </TouchableOpacity>
-              </View>
             </View>
+          </View>
 
-            <View style={styles.workoutInfo}>
-              <Text style={styles.workoutName}>{workout?.name || 'Workout'}</Text>
-              <View style={styles.infoGrid}>
-                <View style={styles.infoCard}>
-                  <View style={styles.infoIconContainer}>
-                    <Scale size={20} color="#FF9500" />
+          <View style={styles.workoutInfo}>
+            <Swipeable
+              renderRightActions={renderWorkoutDeleteAction}
+              rightThreshold={40}
+            >
+              <View>
+                <TextInput
+                  style={styles.workoutNameInput}
+                  value={workoutName}
+                  onChangeText={setWorkoutName}
+                  placeholder="Workout Name"
+                  placeholderTextColor="#8E8E93"
+                />
+
+                <View style={styles.workoutTimes}>
+                  <View style={styles.timeInfo}>
+                    <Clock size={20} color="#007AFF" />
+                    <Text style={styles.timeText}>
+                      {(() => {
+                        try {
+                          if (workoutStartTime) {
+                            return `${format(workoutStartTime, 'HH:mm')}${
+                              workoutEndTime ? ` - ${format(workoutEndTime, 'HH:mm')}` : ''
+                            }`;
+                          }
+                          return 'Not started';
+                        } catch (error) {
+                          console.warn('Error formatting workout time:', error);
+                          return 'Time unavailable';
+                        }
+                      })()}
+                    </Text>
                   </View>
-                  <View style={styles.infoContent}>
-                    <Text style={styles.infoLabel}>Body Weight</Text>
-                    <TextInput
-                      style={styles.infoInput}
-                      value={bodyWeight}
-                      onChangeText={setBodyWeight}
-                      placeholder="Enter weight"
-                      keyboardType="numeric"
-                      placeholderTextColor="#8E8E93"
-                    />
+                  <TouchableOpacity
+                    style={[
+                      styles.workoutStateButton,
+                      isWorkoutActive && styles.workoutStateButtonActive
+                    ]}
+                    onPress={isWorkoutActive ? endWorkout : startWorkout}
+                  >
+                    <Text style={styles.workoutStateButtonText}>
+                      {isWorkoutActive ? 'End Workout' : 'Start Workout'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+                
+                <View style={styles.infoGrid}>
+                  <View style={styles.infoCard}>
+                    <View style={styles.infoIconContainer}>
+                      <Scale size={20} color="#FF9500" />
+                    </View>
+                    <View style={styles.infoContent}>
+                      <Text style={styles.infoLabel}>Body Weight</Text>
+                      <TextInput
+                        style={styles.infoInput}
+                        value={bodyWeight}
+                        onChangeText={setBodyWeight}
+                        placeholder="Enter weight"
+                        keyboardType="numeric"
+                        placeholderTextColor="#8E8E93"
+                      />
+                    </View>
+                  </View>
+
+                  <View style={[styles.infoCard, styles.notesCard]}>
+                    <View style={styles.infoIconContainer}>
+                      <FileEdit size={20} color="#FF3B30" />
+                    </View>
+                    <View style={styles.infoContent}>
+                      <Text style={styles.infoLabel}>Notes</Text>
+                      <TextInput
+                        style={[styles.infoInput, styles.notesInput]}
+                        value={notes}
+                        onChangeText={setNotes}
+                        placeholder="Add workout notes..."
+                        placeholderTextColor="#8E8E93"
+                        multiline
+                      />
+                    </View>
                   </View>
                 </View>
-
-                <View style={[styles.infoCard, styles.notesCard]}>
-                  <View style={styles.infoIconContainer}>
-                    <FileEdit size={20} color="#FF3B30" />
-                  </View>
-                  <View style={styles.infoContent}>
-                    <Text style={styles.infoLabel}>Notes</Text>
-                    <TextInput
-                      style={[styles.infoInput, styles.notesInput]}
-                      value={notes}
-                      onChangeText={setNotes}
-                      placeholder="Add workout notes..."
-                      placeholderTextColor="#8E8E93"
-                      multiline
-                    />
-                  </View>
-                </View>
               </View>
+            </Swipeable>
+          </View>
+
+          {exercises.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Dumbbell size={48} color="#8E8E93" />
+              <Text style={styles.emptyStateText}>No exercises found</Text>
+              <Text style={styles.emptyStateSubtext}>
+                This workout plan doesn't have any exercises yet
+              </Text>
             </View>
-
-            {exercises.length === 0 ? (
-              <View style={styles.emptyState}>
-                <Dumbbell size={48} color="#8E8E93" />
-                <Text style={styles.emptyStateText}>No exercises found</Text>
-                <Text style={styles.emptyStateSubtext}>
-                  This workout plan doesn't have any exercises yet
-                </Text>
-              </View>
-            ) : (
-              exercises.map((exercise, exerciseIndex) => (
-                <View key={exerciseIndex} style={styles.exerciseCard}>
+          ) : (
+            exercises.map((exercise, index) => (
+              <TouchableOpacity 
+                key={exercise.id}
+                style={[
+                  styles.exerciseCard,
+                  draggingExercise === exercise.id && styles.exerciseCardDragging
+                ]}
+                onLongPress={() => handleDragStart(exercise.id)}
+                onPress={() => {
+                  if (draggingExercise && draggingExercise !== exercise.id) {
+                    handleMoveExercise(draggingExercise, exercise.id);
+                    handleDragEnd();
+                  }
+                }}
+                delayLongPress={200}
+                activeOpacity={0.7}
+              >
+                <View style={styles.exerciseHeader}>
                   <Text style={styles.exerciseName}>{exercise.name}</Text>
-                  {exercise.sets.map((set, setIndex) => (
-                    <View key={setIndex} style={styles.setContainer}>
-                      <View style={styles.setNumber}>
-                        <Text style={styles.setNumberText}>{setIndex + 1}</Text>
-                      </View>
+                </View>
+                {exercise.sets.map((set, setIndex) => (
+                  <Swipeable
+                    key={setIndex}
+                    renderRightActions={() => renderRightActions(exercise.id, set.id)}
+                    rightThreshold={40}
+                  >
+                    <View style={styles.setContainer}>
+                      <TouchableOpacity
+                        onPress={() => toggleSetType(exercise.id, set.id)}
+                        style={[
+                          styles.setNumber,
+                          set.type === 'warmup' && styles.warmupNumber,
+                          set.type === 'dropset' && styles.dropsetNumber,
+                        ]}>
+                        <Text style={[
+                          styles.setNumberText,
+                          showTypeLabel.id === set.id && showTypeLabel.show ? styles.hideNumber : null
+                        ]}>
+                          {showTypeLabel.id === set.id && showTypeLabel.show ?
+                            (set.type === 'warmup' ? 'W' : set.type === 'dropset' ? 'D' : 'N') :
+                            (setIndex + 1)
+                          }
+                        </Text>
+                      </TouchableOpacity>
                       <View style={styles.setInputs}>
                         <View style={styles.inputGroup}>
                           <Text style={styles.inputLabel}>Weight</Text>
@@ -279,67 +655,155 @@ export default function WorkoutDetailScreen() {
                             keyboardType="numeric"
                             value={set.weight}
                             onChangeText={(text) => updateSet(exercise.id, set.id, 'weight', text)}
-                            placeholder="kg"
+                            placeholder={set.weight || "kg"}
+                            placeholderTextColor="#C7C7CC"
                           />
                         </View>
-                        <View style={styles.inputGroup}>
+
+                        <View style={[styles.inputGroup, styles.smallInputGroup]}>
                           <Text style={styles.inputLabel}>Reps</Text>
                           <TextInput
                             style={styles.input}
                             keyboardType="numeric"
                             value={set.reps}
                             onChangeText={(text) => updateSet(exercise.id, set.id, 'reps', text)}
-                            placeholder="#"
+                            placeholder={set.reps || "#"}
+                            placeholderTextColor="#C7C7CC"
                           />
                         </View>
-                        <TouchableOpacity 
-                          style={[
-                            styles.setType,
-                            set.type === 'warmup' && styles.warmupType,
-                            set.type === 'dropset' && styles.dropsetType,
-                          ]} 
-                          onPress={() => toggleSetType(exercise.id, set.id)}
-                          activeOpacity={0.7}>
-                          <Text style={[
-                            styles.setTypeText,
-                            set.type === 'warmup' && styles.warmupTypeText,
-                            set.type === 'dropset' && styles.dropsetTypeText,
-                          ]}>
-                            {set.type === 'normal' ? 'Normal' : 
-                             set.type === 'warmup' ? 'Warm-up' : 'Drop Set'}
-                          </Text>
-                        </TouchableOpacity>
+
+                        <View style={[styles.inputGroup, styles.notesGroup]}>
+                          <Text style={styles.inputLabel}>Notes</Text>
+                          <TextInput
+                            style={[styles.input, styles.multilineInput]}
+                            value={set.notes}
+                            onChangeText={(text) => updateSet(exercise.id, set.id, 'notes', text)}
+                            placeholder={set.notes || "Notes"}
+                            placeholderTextColor="#C7C7CC"
+                            multiline
+                            numberOfLines={1}
+                          />
+                        </View>
                       </View>
                     </View>
-                  ))}
+                  </Swipeable>
+                ))}
 
-                  <View style={styles.setActions}>
-                    <TouchableOpacity
-                      style={styles.addSetButton}
-                      onPress={() => addSet(exercise.id)}
-                      activeOpacity={0.7}>
-                      <Plus size={20} color="#FFFFFF" />
-                      <Text style={styles.addSetText}>Add Set</Text>
+                <View style={styles.setActions}>
+                  <TouchableOpacity
+                    style={styles.addSetButton}
+                    onPress={() => addSet(exercise.id)}
+                    activeOpacity={0.7}>
+                    <Plus size={20} color="#FFFFFF" />
+                    <Text style={styles.addSetText}>Add Set</Text>
+                  </TouchableOpacity>
+
+                  <View style={styles.setActionButtons}>
+                    <TouchableOpacity style={styles.actionButton} activeOpacity={0.7}>
+                      <Clock size={20} color="#007AFF" />
                     </TouchableOpacity>
-
-                    <View style={styles.setActionButtons}>
-                      <TouchableOpacity style={styles.actionButton} activeOpacity={0.7}>
-                        <Clock size={20} color="#007AFF" />
-                      </TouchableOpacity>
-                      <TouchableOpacity style={styles.actionButton} activeOpacity={0.7}>
-                        <BarChart3 size={20} color="#007AFF" />
-                      </TouchableOpacity>
-                      <TouchableOpacity style={styles.actionButton} activeOpacity={0.7}>
-                        <Star size={20} color="#007AFF" />
-                      </TouchableOpacity>
-                    </View>
+                    <TouchableOpacity style={styles.actionButton} activeOpacity={0.7}>
+                      <BarChart3 size={20} color="#007AFF" />
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                      style={[styles.actionButton, styles.deleteButton]} 
+                      onPress={() => handleDeleteExercise(exercise.id)}
+                      activeOpacity={0.7}
+                    >
+                      <Trash2 size={20} color="#FF3B30" />
+                    </TouchableOpacity>
                   </View>
                 </View>
-              ))
+              </TouchableOpacity>
+            ))
+          )}
+
+          <View style={styles.bottomButtonsContainer}>
+            <TouchableOpacity
+              style={styles.addExerciseButtonInline}
+              onPress={addExercise}
+              activeOpacity={0.7}>
+              <Dumbbell size={20} color="#FFFFFF" />
+              <Text style={styles.addExerciseText}>Add Exercise</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.saveWorkoutButtonInline}
+              onPress={saveWorkoutChanges}
+              activeOpacity={0.7}>
+              <Save size={24} color="#FFFFFF" />
+              <Text style={styles.saveWorkoutText}>Save</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+
+        {/* Timer Mini-Player */}
+        {showRestTimer && (
+          <View style={styles.miniPlayer}>
+            <TouchableOpacity 
+              style={styles.timerMainContent}
+              onPress={() => {
+                if (!isTimerRunning) {
+                  setIsTimerExpanded(!isTimerExpanded);
+                }
+              }}
+              activeOpacity={0.9}
+            >
+              <Text style={styles.timerText}>
+                {Math.floor(currentTime / 60)}:{(currentTime % 60).toString().padStart(2, '0')}
+              </Text>
+              <View style={styles.timerRightContent}>
+                <TouchableOpacity 
+                  style={styles.timerButton} 
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    isTimerRunning ? stopRestTimer() : startRestTimer();
+                  }}
+                >
+                  <Text style={styles.timerButtonText}>
+                    {isTimerRunning ? 'Pause' : 'Start'}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={styles.timerButton} 
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    resetRestTimer();
+                  }}
+                >
+                  <Text style={styles.timerButtonText}>Reset</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={styles.miniPlayerClose} 
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    toggleRestTimer();
+                  }}
+                >
+                  <X size={20} color="#8E8E93" />
+                </TouchableOpacity>
+              </View>
+            </TouchableOpacity>
+
+            {isTimerExpanded && !isTimerRunning && (
+              <View style={styles.timeAdjustment}>
+                <TouchableOpacity 
+                  style={styles.timeAdjustButton}
+                  onPress={() => adjustTime(-15)}
+                >
+                  <Text style={styles.timeAdjustButtonText}>-15s</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={styles.timeAdjustButton}
+                  onPress={() => adjustTime(15)}
+                >
+                  <Text style={styles.timeAdjustButtonText}>+15s</Text>
+                </TouchableOpacity>
+              </View>
             )}
-          </ScrollView>
-        </SafeAreaView>
-      </TouchableWithoutFeedback>
+          </View>
+        )}
+      </SafeAreaView>
     </KeyboardAvoidingView>
   );
 }
@@ -377,10 +841,13 @@ const styles = StyleSheet.create({
   headerButton: {
     padding: 8,
   },
+  headerButtonActive: {
+    backgroundColor: '#E6FEE9',
+  },
   workoutInfo: {
     backgroundColor: '#FFFFFF',
-    margin: 16,
-    padding: 16,
+    margin: 12,
+    padding: 12,
     borderRadius: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -388,11 +855,48 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 2,
   },
-  workoutName: {
+  workoutNameInput: {
     fontSize: 24,
     fontWeight: 'bold',
     color: '#000000',
     marginBottom: 20,
+    padding: 0,
+  },
+  workoutTimes: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    marginBottom: 12,
+  },
+  timeInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  timeLabel: {
+    fontSize: 16,
+    color: '#8E8E93',
+    fontWeight: '500',
+  },
+  timeText: {
+    fontSize: 16,
+    color: '#000000',
+    fontWeight: '600',
+  },
+  workoutStateButton: {
+    backgroundColor: '#34C759',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+  },
+  workoutStateButtonActive: {
+    backgroundColor: '#FF3B30',
+  },
+  workoutStateButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
   },
   infoGrid: {
     flexDirection: 'row',
@@ -476,15 +980,23 @@ const styles = StyleSheet.create({
   },
   exerciseCard: {
     backgroundColor: '#FFFFFF',
-    margin: 16,
+    margin: 12,
     marginTop: 0,
-    padding: 16,
+    padding: 12,
     borderRadius: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 2,
+  },
+  exerciseCardDragging: {
+    opacity: 0.5,
+    transform: [{ scale: 0.98 }],
+    borderColor: '#34C759',
+    borderWidth: 2,
+    margin: 16,
+    marginTop: 0,
   },
   exerciseHeader: {
     flexDirection: 'row',
@@ -493,36 +1005,54 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   exerciseName: {
-    fontSize: 20,
-    fontWeight: 'bold',
+    fontSize: 22,
+    fontWeight: '700',
     color: '#000000',
+    marginBottom: 12,
+    flex: 1,
   },
   setContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 8,
   },
   setNumber: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     backgroundColor: '#007AFF',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
+    marginRight: 8,
+    marginTop: 21,
+  },
+  warmupNumber: {
+    backgroundColor: '#FFB100',
+  },
+  dropsetNumber: {
+    backgroundColor: '#FF3B30',
   },
   setNumberText: {
     color: '#FFFFFF',
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: 'bold',
+  },
+  hideNumber: {
+    fontSize: 14,
   },
   setInputs: {
     flex: 1,
     flexDirection: 'row',
-    gap: 12,
+    gap: 8,
   },
   inputGroup: {
-    flex: 1,
+    flex: 0.7,
+  },
+  smallInputGroup: {
+    flex: 0.7,
+  },
+  notesGroup: {
+    flex: 2,
   },
   inputLabel: {
     fontSize: 14,
@@ -532,35 +1062,20 @@ const styles = StyleSheet.create({
   input: {
     backgroundColor: '#F2F2F7',
     borderRadius: 8,
-    padding: 8,
-    color: '#000000',
-    fontSize: 16,
-  },
-  setType: {
-    backgroundColor: '#F2F2F7',
-    borderRadius: 8,
-    padding: 8,
-    alignItems: 'center',
-  },
-  setTypeText: {
+    padding: 6,
     color: '#000000',
     fontSize: 14,
-    fontWeight: '600',
+    minHeight: 36,
+    placeholderTextColor: '#C7C7CC',
   },
-  warmupType: {
-    backgroundColor: '#FFF9E6',
-  },
-  warmupTypeText: {
-    color: '#FFB100',
-  },
-  dropsetType: {
-    backgroundColor: '#FFF2F2',
-  },
-  dropsetTypeText: {
-    color: '#FF3B30',
+  multilineInput: {
+    height: undefined,
+    textAlignVertical: 'top',
+    paddingTop: 8,
+    paddingBottom: 8,
   },
   setActions: {
-    marginTop: 16,
+    marginTop: 12,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -598,6 +1113,48 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
     elevation: 1,
   },
+  deleteButton: {
+    backgroundColor: '#FFF2F2',
+  },
+  bottomButtonsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    padding: 12,
+    paddingBottom: Platform.OS === 'ios' ? 24 : 12,
+    gap: 8,
+  },
+  addExerciseButtonInline: {
+    flex: 1,
+    backgroundColor: '#34C759',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  saveWorkoutButtonInline: {
+    flex: 1,
+    backgroundColor: '#007AFF',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  addExerciseText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  saveWorkoutText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -625,5 +1182,91 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
+  },
+  deleteAction: {
+    backgroundColor: '#FF3B30',
+    justifyContent: 'center',
+    alignItems: 'center',
+    height: 36,
+    marginTop: 21,
+    borderRadius: 8,
+    width: 100,
+    marginLeft: 8,
+    marginBottom: 12,
+  },
+  miniPlayer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  timerMainContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  timerRightContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  timerButton: {
+    backgroundColor: '#007AFF',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+  },
+  timerButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  timerText: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#000000',
+  },
+  miniPlayerClose: {
+    padding: 8,
+    backgroundColor: '#F2F2F7',
+    borderRadius: 8,
+  },
+  timeAdjustment: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 16,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E5EA',
+    marginTop: 12,
+  },
+  timeAdjustButton: {
+    backgroundColor: '#F2F2F7',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+  },
+  timeAdjustButtonText: {
+    color: '#007AFF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  workoutDeleteAction: {
+    backgroundColor: '#FF3B30',
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 80,
+    height: '100%',
+    borderTopRightRadius: 16,
+    borderBottomRightRadius: 16,
   },
 });

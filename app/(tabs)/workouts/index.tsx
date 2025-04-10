@@ -1,45 +1,80 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, StatusBar, SafeAreaView, Alert, Platform } from 'react-native';
-import { Plus, Star, Play, Clock, Calendar, Dumbbell } from 'lucide-react-native';
-import { useRouter } from 'expo-router';
-import { getWorkouts, Workout } from '@/utils/workout';
+import { Plus, Star, Play, Clock, Calendar, Dumbbell, Trash2, Filter } from 'lucide-react-native';
+import { useRouter, useFocusEffect } from 'expo-router';
+import { getWorkoutPlans, WorkoutPlan, deleteWorkoutPlan, updateWorkoutPlan } from '@/utils/supabase';
 import { useSession } from '@/utils/auth';
 import { format, parseISO } from 'date-fns';
+import { Swipeable } from 'react-native-gesture-handler';
 
 export default function WorkoutsScreen() {
   const router = useRouter();
   const { session } = useSession();
   const [showOwnWorkouts, setShowOwnWorkouts] = useState(true);
   const [currentStreak, setCurrentStreak] = useState(5);
-  const [workouts, setWorkouts] = useState<Workout[]>([]);
+  const [workoutPlans, setWorkoutPlans] = useState<WorkoutPlan[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
-  const todaysWorkout = {
-    isRestDay: false,
-    name: 'Upper Body Focus',
-    duration: '60 min',
-  };
+  const [todaysWorkout, setTodaysWorkout] = useState<{
+    id?: string;
+    isRestDay: boolean;
+    name: string;
+    duration: string;
+  }>({
+    isRestDay: true,
+    name: 'Rest Day',
+    duration: '0 min',
+  });
+  const [filterType, setFilterType] = useState<'all' | 'split' | 'custom'>('all');
 
-  useEffect(() => {
-    if (session?.user) {
-      loadWorkouts();
-    } else {
-      setIsLoading(false);
-      setError('Please log in to view your workouts');
-    }
-  }, [session]);
+  const getCurrentDayOfWeek = (): string => {
+    return new Date().toLocaleDateString('en-US', { weekday: 'long' });
+  };
 
   const loadWorkouts = async () => {
     try {
       setIsLoading(true);
       setError(null);
-      const data = await getWorkouts();
-      setWorkouts(data);
-      console.log(`Loaded ${data.length} workouts from database`);
+      if (!session?.user?.id) {
+        setError('User not authenticated');
+        setWorkoutPlans([]);
+        return;
+      }
+
+      const data = await getWorkoutPlans(session.user.id);
+
+      let filteredData = data;
+      if (filterType !== 'all') {
+        filteredData = data.filter(plan => plan.workout_type === filterType);
+      }
+
+      setWorkoutPlans(filteredData);
+      console.log(`Loaded ${filteredData.length} ${filterType} workout plans for user ${session.user.id}`);
+
+      const currentDay = getCurrentDayOfWeek();
+      const workoutPlanForToday = data.find(
+        w => w.day_of_week === currentDay && w.workout_type === 'split'
+      );
+
+      if (workoutPlanForToday) {
+        setTodaysWorkout({
+          id: workoutPlanForToday.id,
+          isRestDay: false,
+          name: workoutPlanForToday.title,
+          duration: `${workoutPlanForToday.duration_minutes} min`,
+        });
+        console.log(`Found today's workout plan: ${workoutPlanForToday.title}`);
+      } else {
+        setTodaysWorkout({
+          isRestDay: true,
+          name: 'Rest Day',
+          duration: '0 min',
+        });
+        console.log(`No workout plan found for ${currentDay}, it's a rest day`);
+      }
     } catch (error) {
-      console.error('Error loading workouts:', error);
-      setError('Failed to load workouts. Please try again.');
+      console.error('Error loading workout plans:', error);
+      setError('Failed to load workout plans. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -47,80 +82,90 @@ export default function WorkoutsScreen() {
 
   const handleStartWorkout = () => {
     if (todaysWorkout.isRestDay) {
-      console.log('Starting rest day activities');
-    } else {
+      console.log('Today is a rest day');
+      Alert.alert(
+        "Rest Day",
+        "Today is your rest day. Take time to recover and prepare for your next workout.",
+        [{ text: "OK", style: "default" }]
+      );
+    } else if (todaysWorkout.id) {
       console.log('Starting workout:', todaysWorkout.name);
+      router.push(`/workouts/${todaysWorkout.id}`);
     }
   };
 
-  const renderWorkoutList = () => {
-    if (error) {
-      return (
-        <View style={styles.emptyState}>
-          <Text style={styles.emptyStateText}>{error}</Text>
-          {session?.user && (
-            <TouchableOpacity style={styles.createButton} onPress={loadWorkouts}>
-              <Text style={styles.createButtonText}>Try Again</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      );
-    }
+  const handleDeleteWorkoutPlan = (planId: string) => {
+    Alert.alert(
+      'Delete Workout Plan',
+      'Are you sure you want to delete this workout plan?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteWorkoutPlan(planId);
+              setWorkoutPlans(prev => prev.filter(p => p.id !== planId));
+            } catch (error) {
+              Alert.alert('Error', 'Failed to delete workout plan');
+            }
+          },
+        },
+      ]
+    );
+  };
 
-    if (isLoading) {
-      return (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#007AFF" />
-        </View>
+  const handleMarkWorkoutDone = async (workoutId: string, isDone: boolean) => {
+    try {
+      await updateWorkoutPlan(workoutId, { done: isDone });
+      setWorkoutPlans(prev => 
+        prev.map(w => w.id === workoutId ? { ...w, done: isDone } : w)
       );
+    } catch (error) {
+      console.error('Error updating workout status:', error);
+      Alert.alert('Error', 'Failed to update workout status');
     }
+  };
 
-    if (workouts.length === 0) {
-      return (
-        <View style={styles.emptyState}>
-          <Dumbbell size={64} color="#CCCCCC" />
-          <Text style={styles.emptyText}>No workouts yet</Text>
-          <Text style={styles.emptySubtext}>
-            Create your first workout to get started!
-          </Text>
-        </View>
-      );
-    }
-
-    return workouts.map((workout) => (
+  const renderRightActions = (workoutId: string) => {
+    return (
       <TouchableOpacity
-        key={workout.id}
-        style={styles.planCard}
-        onPress={() => router.push(`/workouts/${workout.id}`)}
+        style={styles.deleteAction}
+        onPress={() => handleDeleteWorkoutPlan(workoutId)}
       >
-        <View style={styles.planInfo}>
-          <Text style={styles.planName}>{workout.title}</Text>
-          <View style={styles.planDetails}>
-            <View style={styles.detailItem}>
-              <Calendar size={14} color="#8E8E93" />
-              <Text style={styles.detailText}>
-                {format(parseISO(workout.date), 'MMM d, yyyy')}
-              </Text>
-            </View>
-            
-            <View style={styles.detailItem}>
-              <Clock size={14} color="#8E8E93" />
-              <Text style={styles.detailText}>
-                {workout.duration_minutes} min
-              </Text>
-            </View>
-            
-            <View style={styles.detailItem}>
-              <Dumbbell size={14} color="#8E8E93" />
-              <Text style={styles.detailText}>
-                {workout.exercises.length} exercises
-              </Text>
-            </View>
-          </View>
-        </View>
+        <Trash2 size={20} color="#FFFFFF" />
+        <Text style={styles.deleteActionText}>Delete</Text>
       </TouchableOpacity>
-    ));
+    );
   };
+
+  const toggleFilter = () => {
+    if (filterType === 'all') {
+      setFilterType('split');
+    } else if (filterType === 'split') {
+      setFilterType('custom');
+    } else {
+      setFilterType('all');
+    }
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      if (session?.user?.id) {
+        loadWorkouts();
+      }
+    }, [session?.user?.id])
+  );
+
+  useEffect(() => {
+    if (session?.user?.id) {
+      loadWorkouts();
+    } else {
+      setIsLoading(false);
+      setError('Please log in to view your workouts');
+    }
+  }, [filterType, session?.user?.id]);
 
   return (
     <SafeAreaView style={[styles.container, Platform.OS === 'ios' && { paddingTop: 0 }]}>
@@ -134,29 +179,38 @@ export default function WorkoutsScreen() {
               {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
             </Text>
           </View>
-          
-          <View style={styles.workoutInfo}>
-            <Text style={styles.workoutName}>
-              {todaysWorkout.isRestDay ? 'Rest Day' : todaysWorkout.name}
-            </Text>
-            {!todaysWorkout.isRestDay && (
-              <Text style={styles.workoutDuration}>{todaysWorkout.duration}</Text>
-            )}
-          </View>
 
-          <TouchableOpacity 
-            style={[
-              styles.startButton,
-              todaysWorkout.isRestDay && styles.startButtonRest
-            ]}
-            onPress={handleStartWorkout}
-            activeOpacity={0.7}
-          >
-            <Play size={24} color="#FFFFFF" />
-            <Text style={styles.startButtonText}>
-              {todaysWorkout.isRestDay ? 'Start Recovery Session' : 'Start Workout'}
-            </Text>
-          </TouchableOpacity>
+          {isLoading ? (
+            <ActivityIndicator size="small" color="#007AFF" style={{ marginVertical: 16 }} />
+          ) : (
+            <>
+              <View style={styles.workoutInfo}>
+                <Text style={styles.workoutName}>
+                  {todaysWorkout.isRestDay ? 'Rest Day' : todaysWorkout.name}
+                </Text>
+                {!todaysWorkout.isRestDay && (
+                  <Text style={styles.workoutDuration}>{todaysWorkout.duration}</Text>
+                )}
+                {todaysWorkout.isRestDay && (
+                  <Text style={styles.workoutDuration}>Recovery and muscle growth</Text>
+                )}
+              </View>
+
+              <TouchableOpacity 
+                style={[
+                  styles.startButton,
+                  todaysWorkout.isRestDay ? styles.startButtonRest : styles.startButtonWorkout
+                ]}
+                onPress={handleStartWorkout}
+                activeOpacity={0.7}
+              >
+                <Play size={24} color="#FFFFFF" />
+                <Text style={styles.startButtonText}>
+                  {todaysWorkout.isRestDay ? 'View Recovery Tips' : 'Start Workout'}
+                </Text>
+              </TouchableOpacity>
+            </>
+          )}
         </View>
 
         <View style={styles.streakSection}>
@@ -188,11 +242,14 @@ export default function WorkoutsScreen() {
             </TouchableOpacity>
 
             <TouchableOpacity 
-              style={[styles.filterButton, showOwnWorkouts && styles.filterButtonActive]}
-              onPress={() => setShowOwnWorkouts(!showOwnWorkouts)}
+              style={styles.filterButton}
+              onPress={toggleFilter}
               activeOpacity={0.7}
             >
-              <Star size={24} color={showOwnWorkouts ? "#FFFFFF" : "#007AFF"} />
+              <Filter size={22} color="#FFFFFF" />
+              <Text style={styles.filterText}>
+                {filterType === 'all' ? 'All' : filterType === 'split' ? 'Split' : 'Custom'}
+              </Text>
             </TouchableOpacity>
           </View>
 
@@ -200,7 +257,7 @@ export default function WorkoutsScreen() {
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color="#007AFF" />
             </View>
-          ) : workouts.length === 0 ? (
+          ) : workoutPlans.length === 0 ? (
             <View style={styles.emptyState}>
               <Text style={styles.emptyStateText}>No workout plans yet</Text>
               <Text style={styles.emptyStateText}>
@@ -208,19 +265,49 @@ export default function WorkoutsScreen() {
               </Text>
             </View>
           ) : (
-            workouts.map((plan) => (
-              <TouchableOpacity
+            workoutPlans.map((plan) => (
+              <Swipeable
                 key={plan.id}
-                style={styles.planCard}
-                onPress={() => router.push(`/workouts/${plan.id}`)}
+                renderRightActions={() => renderRightActions(plan.id)}
+                rightThreshold={40}
               >
-                <View style={styles.planInfo}>
-                  <Text style={styles.planName}>{plan.title}</Text>
-                  <Text style={styles.planDetails}>
-                    {plan.exercises.length} exercises
-                  </Text>
-                </View>
-              </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.planCard, plan.done && styles.completedPlanCard]}
+                  onPress={() => router.push(`/workouts/${plan.id}`)}
+                >
+                  <View style={styles.planInfo}>
+                    <View style={styles.planNameRow}>
+                      <Text style={styles.planName}>{plan.title}</Text>
+                      {plan.done && (
+                        <View style={styles.doneTag}>
+                          <Text style={styles.doneTagText}>Completed</Text>
+                        </View>
+                      )}
+                      <View style={[
+                        styles.typeTag, 
+                        plan.workout_type === 'split' ? styles.splitTag : styles.customTag
+                      ]}>
+                        <Text style={[
+                          styles.typeTagText,
+                          plan.workout_type === 'split' ? { color: '#007AFF' } : { color: '#FF9F0A' }
+                        ]}>
+                          {plan.workout_type === 'split' ? 'Split' : 'Custom'}
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={styles.planDetails}>
+                      <View style={styles.detailItem}>
+                        <Dumbbell size={14} color="#8E8E93" />
+                        <Text style={styles.detailText}>
+                          {plan.exercises?.length > 0 
+                            ? `${plan.exercises.length} exercises` 
+                            : "No exercises yet"}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              </Swipeable>
             ))
           )}
         </View>
@@ -274,7 +361,6 @@ const styles = StyleSheet.create({
     color: '#8E8E93',
   },
   startButton: {
-    backgroundColor: '#007AFF',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -287,8 +373,11 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
+  startButtonWorkout: {
+    backgroundColor: '#007AFF', // Green button for workouts
+  },
   startButtonRest: {
-    backgroundColor: '#34C759',
+    backgroundColor: '#007AFF', // Blue button for rest days
   },
   startButtonText: {
     color: '#FFFFFF',
@@ -372,20 +461,18 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   filterButton: {
-    width: 56,
-    height: 56,
-    backgroundColor: '#F2F2F7',
-    justifyContent: 'center',
+    flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 1,
-  },
-  filterButtonActive: {
     backgroundColor: '#007AFF',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    gap: 6,
+  },
+  filterText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
   },
   planCard: {
     backgroundColor: '#FFFFFF',
@@ -393,13 +480,49 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 12,
   },
+  completedPlanCard: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#34C759',
+  },
   planInfo: {
     flex: 1,
+  },
+  planNameRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
   },
   planName: {
     fontSize: 18,
     fontWeight: '600',
-    marginBottom: 4,
+  },
+  typeTag: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  splitTag: {
+    backgroundColor: '#007AFF20',
+  },
+  customTag: {
+    backgroundColor: '#FF9F0A20',
+  },
+  typeTagText: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  doneTag: {
+    backgroundColor: '#34C75920',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    marginRight: 6,
+  },
+  doneTagText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#34C759',
   },
   detailItem: {
     flexDirection: 'row',
@@ -442,5 +565,21 @@ const styles = StyleSheet.create({
     color: '#8E8E93',
     textAlign: 'center',
     marginTop: 8,
+  },
+  deleteAction: {
+    backgroundColor: '#FF3B30',
+    width: 80,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderTopRightRadius: 12,
+    borderBottomRightRadius: 12,
+    flexDirection: 'column',
+    gap: 4,
+    marginBottom: 12,  // Same spacing as the card
+  },
+  deleteActionText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600',
   },
 });
