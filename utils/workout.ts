@@ -13,12 +13,12 @@ export interface Workout {
   title: string;
   description?: string;
   workout_type: 'split' | 'custom';
-  day_of_week?: string;
+  day_of_week?: string | null;
   duration_minutes: number;
   exercises?: Exercise[];
   user_id: string;
   created_at: string;
-  done: boolean; // Added done field
+  done?: boolean;
 }
 
 // Sample exercises for each workout type
@@ -125,67 +125,18 @@ export async function generateWorkoutsFromSchedule(schedule, userId) {
   }
 }
 
-export async function getWorkouts(userId?: string): Promise<Workout[]> {
+export async function getWorkouts(userId: string): Promise<Workout[]> {
   try {
-    if (!userId) {
-      console.warn('No user ID provided to getWorkouts');
-      return [];
-    }
-    
-    console.log(`Fetching workouts for user ID: ${userId}`);
-    
-    // Fetch all workouts for the user
     const { data, error } = await supabase
       .from('workouts')
       .select('*')
       .eq('user_id', userId);
     
-    if (error) {
-      console.error('Error fetching workouts:', error);
-      throw new Error(error.message);
-    }
-    
-    // If no workouts exist, return empty array
-    if (!data || data.length === 0) {
-      console.log("No workouts found for user");
-      return [];
-    }
-    
-    console.log(`Found ${data.length} workouts for user`);
-    
-    // Define weekday order for sorting
-    const dayOrder = {
-      'Monday': 1,
-      'Tuesday': 2,
-      'Wednesday': 3,
-      'Thursday': 4,
-      'Friday': 5,
-      'Saturday': 6,
-      'Sunday': 7
-    };
-    
-    // Sort workouts by day of week
-    const sortedWorkouts = [...data].sort((a, b) => {
-      // First sort by workout_type (split first, then custom)
-      if (a.workout_type !== b.workout_type) {
-        return a.workout_type === 'split' ? -1 : 1;
-      }
-      
-      // For split workouts, sort by day of week
-      if (a.workout_type === 'split' && b.workout_type === 'split') {
-        const dayA = a.day_of_week || '';
-        const dayB = b.day_of_week || '';
-        return (dayOrder[dayA] || 99) - (dayOrder[dayB] || 99);
-      }
-      
-      // For custom workouts, sort by date (newest first)
-      return new Date(b.date).getTime() - new Date(a.date).getTime();
-    });
-    
-    return sortedWorkouts as Workout[];
+    if (error) throw error;
+    return data || [];
   } catch (error) {
-    console.error('Error in getWorkouts:', error);
-    return [];
+    console.error('Error fetching workouts:', error);
+    throw error;
   }
 }
 
@@ -206,31 +157,20 @@ export async function getWorkout(id: string): Promise<Workout> {
 }
 
 // Create a new workout
-export async function createWorkout(workout: Omit<Workout, 'id'>): Promise<Workout> {
-  console.log('Creating workout with data:', workout);
-  
-  const workoutToCreate = {
-    title: workout.title,           // Wichtig: title statt name
-    date: new Date().toISOString(),
-    exercises: workout.exercises,
-    duration_minutes: workout.duration_minutes || 0,
-    calories_burned: workout.calories_burned || 0,
-    notes: workout.notes || '',
-    user_id: workout.user_id       // Wichtig: user_id muss übergeben werden
-  };
-
-  const { data, error } = await supabase
-    .from('workouts')
-    .insert(workoutToCreate)
-    .select()
-    .single();
-
-  if (error) {
+export async function createWorkout(workoutData: Omit<Workout, 'id' | 'created_at'>): Promise<Workout> {
+  try {
+    const { data, error } = await supabase
+      .from('workouts')
+      .insert(workoutData)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return data;
+  } catch (error) {
     console.error('Error creating workout:', error);
     throw error;
   }
-
-  return data;
 }
 
 // Update a workout - using the correct field name 'bodyweight'
