@@ -1,9 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Switch, Platform, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Scale, Droplets, Bell, Clock, Save } from 'lucide-react-native';
-import { getNutritionSettings, updateNutritionSettings, supabase } from '@/utils/supabase';
+import { Scale, Droplets, Bell, Clock, Save, AlertTriangle } from 'lucide-react-native';
+import { getNutritionSettings, updateNutritionSettings, supabase, getCurrentUser } from '@/utils/supabase';
 import type { NutritionSettings } from '@/utils/supabase';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { 
+  requestNotificationPermissions, 
+  scheduleMealNotifications, 
+  scheduleWaterReminders, 
+  sendTestNotification,
+  sendImmediateTestNotification,
+  listScheduledNotifications,
+  setupNotificationChannels,
+  testExactTimeNotification
+} from '@/utils/notifications';
 
 const defaultSettings: Omit<NutritionSettings, 'user_id' | 'updated_at'> = {
   calorie_goal: 2200,
@@ -24,37 +35,94 @@ export default function NutritionSettingsScreen() {
   const [saving, setSaving] = useState(false);
   const [settings, setSettings] = useState<NutritionSettings | null>(null);
   const [isNewUser, setIsNewUser] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState<number | null>(null);
+  const [notificationsPermission, setNotificationsPermission] = useState(false);
+  const [scheduledNotifications, setScheduledNotifications] = useState<any[]>([]);
 
   useEffect(() => {
     loadSettings();
+    checkNotificationPermissions();
   }, []);
+
+  const checkNotificationPermissions = async () => {
+    try {
+      if (Platform.OS === 'android') {
+        await setupNotificationChannels();
+      }
+      
+      const hasPermission = await requestNotificationPermissions();
+      setNotificationsPermission(hasPermission);
+      if (!hasPermission) {
+        Alert.alert(
+          "Notification Permission Required",
+          "To receive meal and water reminders, please enable notifications for this app in your device settings.",
+          [{ text: "OK" }]
+        );
+      } else {
+        console.log('Notification permissions granted');
+      }
+    } catch (error) {
+      console.error('Error checking notification permissions:', error);
+    }
+  };
 
   const loadSettings = async () => {
     try {
       setLoading(true);
-      const { data: userData } = await supabase.auth.getUser();
-      if (!userData.user) throw new Error('Not authenticated');
-
+      
       try {
         const data = await getNutritionSettings();
         setSettings(data);
         setIsNewUser(false);
       } catch (error: any) {
+        console.error('Error loading settings:', error);
+        
         if (error?.message?.includes('JSON object requested, multiple (or no) rows returned')) {
-          // No settings found, use defaults
-          setSettings({
-            user_id: userData.user.id,
-            updated_at: new Date().toISOString(),
-            ...defaultSettings,
-          });
+          // Handle new user case
+          const { data: userData } = await supabase.auth.getUser();
+          if (!userData.user) {
+            // If still no user after checking, try session refresh
+            const { data: refreshData } = await supabase.auth.refreshSession();
+            if (!refreshData.user) {
+              throw new Error('Authentication failed. Please log in again.');
+            }
+            
+            setSettings({
+              user_id: refreshData.user.id,
+              updated_at: new Date().toISOString(),
+              ...defaultSettings,
+            });
+          } else {
+            setSettings({
+              user_id: (await supabase.auth.getUser()).data?.user?.id || '',
+              updated_at: new Date().toISOString(),
+              ...defaultSettings,
+            });
+          }
           setIsNewUser(true);
+        } else if (error?.message?.includes('Not authenticated')) {
+          // Handle authentication error
+          const { data: refreshData } = await supabase.auth.refreshSession();
+          if (!refreshData.user) {
+            Alert.alert(
+              "Authentication Error",
+              "Your session has expired. Please log in again.",
+              [{ text: "OK", onPress: () => router.replace('/sign-in') }]
+            );
+            return;
+          } else {
+            // Try again after refresh
+            const data = await getNutritionSettings();
+            setSettings(data);
+            setIsNewUser(false);
+          }
         } else {
           throw error;
         }
       }
     } catch (error) {
       console.error('Error loading settings:', error);
-      Alert.alert('Error', 'Failed to load settings');
+      Alert.alert('Error', 'Failed to load settings. Please check your connection and try again.');
     } finally {
       setLoading(false);
     }
@@ -125,13 +193,28 @@ export default function NutritionSettingsScreen() {
 
     try {
       setSaving(true);
-      const { data: userData } = await supabase.auth.getUser();
-      if (!userData.user) throw new Error('Not authenticated');
+      
+      // First check authentication
+      try {
+        await getCurrentUser();
+      } catch (error) {
+        // Try to refresh the session
+        const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+        if (refreshError || !refreshData.user) {
+          Alert.alert(
+            "Authentication Error",
+            "Your session has expired. Please log in again.",
+            [{ text: "OK", onPress: () => router.replace('/sign-in') }]
+          );
+          return;
+        }
+      }
 
+      // Normalize settings first
       const normalizedSettings = {
         ...settings,
         calorie_goal:
-typeof settings.calorie_goal === 'string' || settings.calorie_goal === null
+          typeof settings.calorie_goal === 'string' || settings.calorie_goal === null
             ? settings.calorie_goal === ''
               ? 2200
               : parseInt(String(settings.calorie_goal), 10) || 2200
@@ -150,32 +233,98 @@ typeof settings.calorie_goal === 'string' || settings.calorie_goal === null
             : settings.water_interval,
       };
 
-      if (isNewUser) {
-        const { error: insertError } = await supabase.from('nutrition_settings').insert({
-          user_id: userData.user.id,
-          calorie_goal: normalizedSettings.calorie_goal,
-          water_goal: normalizedSettings.water_goal,
-          water_notifications: normalizedSettings.water_notifications,
-          water_interval: normalizedSettings.water_interval,
-          meal_times: normalizedSettings.meal_times,
-          updated_at: new Date().toISOString(),
-        });
+      // First, save to database
+      try {
+        if (isNewUser) {
+          const { error: insertError } = await supabase.from('nutrition_settings').insert({
+            user_id: (await supabase.auth.getUser()).data?.user?.id || '',
+            calorie_goal: normalizedSettings.calorie_goal,
+            water_goal: normalizedSettings.water_goal,
+            water_notifications: normalizedSettings.water_notifications,
+            water_interval: normalizedSettings.water_interval,
+            meal_times: normalizedSettings.meal_times,
+            updated_at: new Date().toISOString(),
+          });
 
-        if (insertError) throw insertError;
+          if (insertError) throw insertError;
+        } else {
+          await updateNutritionSettings({
+            calorie_goal: normalizedSettings.calorie_goal,
+            water_goal: normalizedSettings.water_goal,
+            water_notifications: normalizedSettings.water_notifications,
+            water_interval: normalizedSettings.water_interval,
+            meal_times: normalizedSettings.meal_times,
+          });
+        }
+        
+        console.log('Settings saved successfully to database');
+      } catch (dbError) {
+        console.error('Database error while saving settings:', dbError);
+        throw new Error('Failed to save settings to database. Please try again.');
+      }
+
+      // Then, handle notifications if permission is granted
+      if (notificationsPermission) {
+        try {
+          console.log('Setting up notifications with saved settings:', JSON.stringify(normalizedSettings, null, 2));
+          
+          // Verify meal_times structure before scheduling
+          if (!normalizedSettings.meal_times || !Array.isArray(normalizedSettings.meal_times)) {
+            console.error('Invalid meal_times structure:', normalizedSettings.meal_times);
+            throw new Error('Invalid meal times settings. Please check your configuration.');
+          }
+          
+          const enabledMealTimes = normalizedSettings.meal_times.filter(meal => meal.enabled);
+          console.log(`Found ${enabledMealTimes.length} enabled meal times`);
+          
+          // Validate each meal time format before scheduling
+          enabledMealTimes.forEach(meal => {
+            const [hours, minutes] = meal.time.split(':').map(Number);
+            if (isNaN(hours) || isNaN(minutes)) {
+              console.error(`Invalid time format for ${meal.name}: ${meal.time}`);
+              throw new Error(`Invalid time format for ${meal.name}: ${meal.time}`);
+            }
+            console.log(`Validated meal time: ${meal.name} at ${hours}:${minutes}`);
+          });
+          
+          // Schedule meal notifications
+          const mealNotificationIds = await scheduleMealNotifications(normalizedSettings);
+          console.log('Meal notification IDs:', mealNotificationIds);
+          
+          // Schedule water reminders if enabled
+          if (normalizedSettings.water_notifications) {
+            const waterReminderId = await scheduleWaterReminders(
+              normalizedSettings.water_notifications,
+              normalizedSettings.water_interval
+            );
+            console.log('Water reminder ID:', waterReminderId);
+          }
+          
+        } catch (notificationError) {
+          console.error('Error scheduling notifications:', notificationError);
+        }
       } else {
-        await updateNutritionSettings({
-          calorie_goal: normalizedSettings.calorie_goal,
-          water_goal: normalizedSettings.water_goal,
-          water_notifications: normalizedSettings.water_notifications,
-          water_interval: normalizedSettings.water_interval,
-          meal_times: normalizedSettings.meal_times,
-        });
+        await checkNotificationPermissions();
       }
 
       router.replace('/nutrition/index-with-data');
     } catch (error) {
       console.error('Error saving settings:', error);
-      Alert.alert('Error', 'Failed to save settings');
+      
+      // Check if this is an auth error
+      if (error instanceof Error && (error.message.includes('Not authenticated') || error.message.includes('JWT expired'))) {
+        Alert.alert(
+          "Authentication Error",
+          "Your session has expired. Please log in again.",
+          [{ text: "OK", onPress: () => router.replace('/sign-in') }]
+        );
+      } else {
+        if (error instanceof Error) {
+          Alert.alert('Error', `Failed to save settings: ${error.message}`);
+        } else {
+          Alert.alert('Error', 'Failed to save settings due to an unknown error.');
+        }
+      }
     } finally {
       setSaving(false);
     }
@@ -198,6 +347,42 @@ typeof settings.calorie_goal === 'string' || settings.calorie_goal === null
       ...settings,
       meal_times: updatedMealTimes,
     });
+  };
+
+  const handleTimePickerChange = (index: number, event: any, selectedDate?: Date) => {
+    setShowTimePicker(null);
+
+    if (Platform.OS === 'android') {
+      if (event.type === 'dismissed') {
+        return;
+      }
+    }
+
+    if (selectedDate) {
+      const hours = selectedDate.getHours().toString().padStart(2, '0');
+      const minutes = selectedDate.getMinutes().toString().padStart(2, '0');
+      const timeString = `${hours}:${minutes}`;
+
+      handleMealTimeChange(index, 'time', timeString);
+    }
+  };
+
+  const showTimepicker = (index: number) => {
+    setShowTimePicker(index);
+  };
+
+  const parseTimeString = (timeString: string): Date => {
+    const date = new Date();
+    const [hoursStr, minutesStr] = timeString.split(':');
+    const hours = parseInt(hoursStr, 10);
+    const minutes = parseInt(minutesStr, 10);
+
+    if (!isNaN(hours) && !isNaN(minutes)) {
+      date.setHours(hours);
+      date.setMinutes(minutes);
+    }
+
+    return date;
   };
 
   if (loading) {
@@ -311,13 +496,37 @@ typeof settings.calorie_goal === 'string' || settings.calorie_goal === null
             {meal.enabled && (
               <View style={styles.timeContainer}>
                 <Text style={styles.timeLabel}>Reminder Time</Text>
-                <TextInput
-                  style={styles.timeInput}
-                  value={meal.time}
-                  onChangeText={(value) => handleMealTimeChange(index, 'time', value)}
-                  placeholder="HH:MM"
-                  keyboardType={Platform.OS === 'ios' ? 'numbers-and-punctuation' : 'default'}
-                />
+
+                {Platform.OS === 'ios' ? (
+                  <View style={styles.timePickerContainer}>
+                    <DateTimePicker
+                      value={parseTimeString(meal.time)}
+                      mode="time"
+                      display="default"
+                      onChange={(event, selectedDate) => handleTimePickerChange(index, event, selectedDate)}
+                      style={styles.iosTimePicker}
+                    />
+                  </View>
+                ) : (
+                  <>
+                    <TouchableOpacity
+                      style={styles.timeButton}
+                      onPress={() => showTimepicker(index)}
+                    >
+                      <Text style={styles.timeButtonText}>{meal.time}</Text>
+                    </TouchableOpacity>
+
+                    {showTimePicker === index && (
+                      <DateTimePicker
+                        value={parseTimeString(meal.time)}
+                        mode="time"
+                        is24Hour={true}
+                        display="default"
+                        onChange={(event, selectedDate) => handleTimePickerChange(index, event, selectedDate)}
+                      />
+                    )}
+                  </>
+                )}
               </View>
             )}
           </View>
@@ -335,6 +544,15 @@ typeof settings.calorie_goal === 'string' || settings.calorie_goal === null
           {saving ? 'Saving...' : isNewUser ? 'Create Settings' : 'Save Settings'}
         </Text>
       </TouchableOpacity>
+      
+      {!notificationsPermission && (
+        <View style={styles.permissionWarning}>
+          <AlertTriangle size={20} color="#FF9500" />
+          <Text style={styles.permissionWarningText}>
+            Notification permission not granted. You won't receive meal and water reminders.
+          </Text>
+        </View>
+      )}
     </ScrollView>
   );
 }
@@ -467,6 +685,28 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
   },
+  timeButton: {
+    backgroundColor: '#FFFFFF',
+    padding: 12,
+    borderRadius: 8,
+    width: 100,
+    alignItems: 'center',
+  },
+  timeButtonText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#007AFF',
+  },
+  timePickerContainer: {
+    width: 70,
+    overflow: 'hidden',
+    borderRadius: 12,
+  },
+
+  iosTimePicker: {
+    height: 40,
+    alignSelf: 'flex-end',
+  },
   saveButton: {
     backgroundColor: '#007AFF',
     margin: 16,
@@ -484,5 +724,20 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
+  },
+  permissionWarning: {
+    backgroundColor: '#FFF9EB',
+    margin: 16,
+    marginTop: 0,
+    padding: 12,
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  permissionWarningText: {
+    color: '#FF9500',
+    fontSize: 14,
+    flex: 1,
   },
 });

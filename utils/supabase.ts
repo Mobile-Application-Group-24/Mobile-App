@@ -356,35 +356,80 @@ export async function removeMember(groupId: string, userId: string) {
   if (error) throw error;
 }
 
-// Nutrition Settings functions
-export async function getNutritionSettings(): Promise<NutritionSettings> {
-  const { data: userData, error: userError } = await supabase.auth.getUser();
-  if (userError || !userData.user) throw new Error('User not authenticated');
+// Enhanced function to get current user with session refresh
+export async function getCurrentUser() {
+  try {
+    // First try to get the user normally
+    const { data: userData, error } = await supabase.auth.getUser();
+    
+    // If there's an error or no user, try to refresh the session
+    if (error || !userData?.user) {
+      console.log('Session may have expired, attempting to refresh...');
+      const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+      
+      if (refreshError || !refreshData?.user) {
+        console.error('Failed to refresh authentication session:', refreshError);
+        throw new Error('Not authenticated');
+      }
+      
+      console.log('Session successfully refreshed');
+      return refreshData.user;
+    }
+    
+    return userData.user;
+  } catch (error) {
+    console.error('Error getting current user:', error);
+    throw new Error('Not authenticated');
+  }
+}
 
-  const { data, error } = await supabase
-    .from('nutrition_settings')
-    .select('*')
-    .eq('user_id', userData.user.id)
-    .single();
-  if (error) throw error;
-  return data;
+// Nutrition Settings functions with enhanced authentication
+export async function getNutritionSettings(): Promise<NutritionSettings> {
+  try {
+    const user = await getCurrentUser();
+    
+    const { data, error } = await supabase
+      .from('nutrition_settings')
+      .select('*')
+      .eq('user_id', user.id)
+      .single();
+
+    if (error) {
+      console.error('Error fetching nutrition settings:', error);
+      throw error;
+    }
+    
+    return data;
+  } catch (error) {
+    console.error('Failed to get nutrition settings:', error);
+    throw error;
+  }
 }
 
 export async function updateNutritionSettings(updates: Partial<Omit<NutritionSettings, 'user_id' | 'updated_at'>>) {
-  const { data: userData, error: userError } = await supabase.auth.getUser();
-  if (userError || !userData.user) throw new Error('User not authenticated');
+  try {
+    const user = await getCurrentUser();
+    
+    const { data, error } = await supabase
+      .from('nutrition_settings')
+      .update({
+        ...updates,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('user_id', user.id)
+      .select()
+      .single();
 
-  const { data, error } = await supabase
-    .from('nutrition_settings')
-    .update({
-      ...updates,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('user_id', userData.user.id)
-    .select()
-    .single();
-  if (error) throw error;
-  return data;
+    if (error) {
+      console.error('Error updating nutrition settings:', error);
+      throw error;
+    }
+    
+    return data;
+  } catch (error) {
+    console.error('Failed to update nutrition settings:', error);
+    throw error;
+  }
 }
 
 // Meal tracking functions
@@ -443,18 +488,33 @@ export async function getWeeklyMeals(): Promise<{ date: string; calories: number
   const { data: userData, error: userError } = await supabase.auth.getUser();
   if (userError || !userData.user) throw new Error('User not authenticated');
 
+  // Get exactly 7 days including today
+  const today = new Date();
+  today.setHours(23, 59, 59, 999); // End of today
+  
+  const sevenDaysAgo = new Date(today);
+  sevenDaysAgo.setDate(today.getDate() - 6);
+  sevenDaysAgo.setHours(0, 0, 0, 0); // Start of day 7 days ago
+
   const { data, error } = await supabase
-    .from('meals')
-    .select('consumed_at, calories')
-    .eq('user_id', userData.user.id)
-    .gte('consumed_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString())
-    .order('consumed_at', { ascending: true });
+      .from('meals')
+      .select('consumed_at, calories, meal_type')
+      .eq('user_id', userData.user.id)
+      .gte('consumed_at', sevenDaysAgo.toISOString())
+      .lte('consumed_at', today.toISOString())
+      .order('consumed_at', { ascending: true });
+  
   if (error) throw error;
 
   // Group meals by date and sum calories
   const dailyCalories = data.reduce((acc, meal) => {
+    // Skip water entries as they're not calories
+    if (meal.meal_type === 'water') return acc;
+    
     const date = new Date(meal.consumed_at).toISOString().split('T')[0];
-    acc[date] = (acc[date] || 0) + meal.calories;
+    // Ensure calories is a number
+    const mealCalories = typeof meal.calories === 'number' ? meal.calories : parseInt(String(meal.calories)) || 0;
+    acc[date] = (acc[date] || 0) + mealCalories;
     return acc;
   }, {} as Record<string, number>);
 
