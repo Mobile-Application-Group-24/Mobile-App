@@ -25,13 +25,13 @@ export default function WorkoutsScreen() {
     name: 'Rest Day',
     duration: '0 min',
   });
-  const [filterType, setFilterType] = useState<'all' | 'split' | 'custom'>('split');
+  const [filterType, setFilterType] = useState<'all' | 'split' | 'custom'>('all');
 
   const getCurrentDayOfWeek = (): string => {
     return new Date().toLocaleDateString('en-US', { weekday: 'long' });
   };
 
-  const loadWorkoutPlans = async () => {
+  const loadWorkouts = async () => {
     try {
       setIsLoading(true);
       setError(null);
@@ -42,8 +42,14 @@ export default function WorkoutsScreen() {
       }
 
       const data = await getWorkoutPlans(session.user.id);
-      setWorkoutPlans(data);
-      console.log(`Loaded ${data.length} workout plans for user ${session.user.id}`);
+
+      let filteredData = data;
+      if (filterType !== 'all') {
+        filteredData = data.filter(plan => plan.workout_type === filterType);
+      }
+
+      setWorkoutPlans(filteredData);
+      console.log(`Loaded ${filteredData.length} ${filterType} workout plans for user ${session.user.id}`);
 
       const currentDay = getCurrentDayOfWeek();
       const workoutPlanForToday = data.find(
@@ -135,27 +141,26 @@ export default function WorkoutsScreen() {
   };
 
   const toggleFilter = () => {
-    // Cycle through filter options: split -> custom -> all -> split
-    if (filterType === 'split') {
-      setFilterType('custom');
-    } else if (filterType === 'custom') {
-      setFilterType('all');
-    } else {
+    if (filterType === 'all') {
       setFilterType('split');
+    } else if (filterType === 'split') {
+      setFilterType('custom');
+    } else {
+      setFilterType('all');
     }
   };
 
   useFocusEffect(
     useCallback(() => {
       if (session?.user?.id) {
-        loadWorkoutPlans();
+        loadWorkouts();
       }
     }, [session?.user?.id])
   );
 
   useEffect(() => {
     if (session?.user?.id) {
-      loadWorkoutPlans();
+      loadWorkouts();
     } else {
       setIsLoading(false);
       setError('Please log in to view your workouts');
@@ -237,12 +242,14 @@ export default function WorkoutsScreen() {
             </TouchableOpacity>
 
             <TouchableOpacity 
-              style={[styles.filterButton, styles.filterButtonActive]}
+              style={styles.filterButton}
               onPress={toggleFilter}
               activeOpacity={0.7}
             >
-              <Filter size={24} color="#FFFFFF" />
-              <Text style={styles.filterText}>{filterType === 'all' ? 'All' : filterType === 'split' ? 'Split' : 'Custom'}</Text>
+              <Filter size={22} color="#FFFFFF" />
+              <Text style={styles.filterText}>
+                {filterType === 'all' ? 'All' : filterType === 'split' ? 'Split' : 'Custom'}
+              </Text>
             </TouchableOpacity>
           </View>
 
@@ -454,22 +461,13 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   filterButton: {
-    backgroundColor: '#007AFF',
     flexDirection: 'row',
-    padding: 10,
-    paddingHorizontal: 14,
     alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 1,
-    gap: 6,
-  },
-  filterButtonActive: {
     backgroundColor: '#007AFF',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    gap: 6,
   },
   filterText: {
     color: '#FFFFFF',

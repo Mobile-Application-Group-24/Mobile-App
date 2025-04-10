@@ -113,10 +113,16 @@ export interface WorkoutPlan {
   workout_type: 'split' | 'custom';
   day_of_week?: string | null;
   duration_minutes: number;
-  exercises: Exercise[];
+  exercises: PlanExercise[];
   user_id: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface PlanExercise {
+  id: string;
+  name: string;
+  sets: number;
 }
 
 export interface Workout {
@@ -129,9 +135,25 @@ export interface Workout {
   notes: string;
   calories_burned: number;
   bodyweight?: number;
+  exercises?: WorkoutExercise[];
   done: boolean;
   user_id: string;
   created_at: string;
+}
+
+export interface WorkoutExercise {
+  id: string;
+  name: string;
+  sets: number;
+  setDetails: SetDetail[];
+}
+
+export interface SetDetail {
+  id: string;
+  weight?: number;
+  reps?: number;
+  type: 'normal' | 'warmup' | 'dropset';
+  notes?: string;
 }
 
 // Store invitation codes in memory since database operations are failing
@@ -490,11 +512,21 @@ export async function updateWorkoutCompletionStatus(workoutId: string, isDone: b
 // Workout plan functions
 export async function createWorkoutPlan(planData: Omit<WorkoutPlan, 'id' | 'created_at' | 'updated_at'>): Promise<WorkoutPlan> {
   try {
-    console.log('Sending to Supabase:', JSON.stringify(planData));
+    // Ensure exercises only include name and sets (no weight/reps)
+    const sanitizedPlanData = {
+      ...planData,
+      exercises: planData.exercises?.map(ex => ({
+        id: ex.id,
+        name: ex.name,
+        sets: ex.sets
+      }))
+    };
+    
+    console.log('Sending to Supabase:', JSON.stringify(sanitizedPlanData));
     
     const { data, error } = await supabase
       .from('workout_plans')
-      .insert(planData)
+      .insert(sanitizedPlanData)
       .select()
       .single();
     
@@ -531,10 +563,22 @@ export async function getWorkoutPlans(userId: string): Promise<WorkoutPlan[]> {
 
 export async function updateWorkoutPlan(planId: string, updates: Partial<WorkoutPlan>): Promise<WorkoutPlan> {
   try {
+    // Make a deep copy to avoid modifying the original object
+    const updateData = { ...updates };
+    
+    // Ensure exercises only include name and sets (no weight/reps)
+    if (updateData.exercises) {
+      updateData.exercises = updateData.exercises.map(ex => ({
+        id: ex.id,
+        name: ex.name,
+        sets: ex.sets
+      }));
+    }
+    
     const { data, error } = await supabase
       .from('workout_plans')
       .update({
-        ...updates,
+        ...updateData,
         updated_at: new Date().toISOString(),
       })
       .eq('id', planId)
@@ -564,15 +608,31 @@ export async function deleteWorkoutPlan(planId: string): Promise<void> {
 }
 
 // Workout session functions
-export async function createWorkout(workoutData: Omit<Workout, 'id' | 'created_at'>): Promise<Workout> {
+export async function createWorkout(workoutData: Omit<Workout, 'id' | 'created_at'>, exercisesData?: any[]): Promise<Workout> {
   try {
+    // Include the exercises array in the workout data (with full details)
+    const fullWorkoutData = {
+      ...workoutData,
+      exercises: exercisesData?.map(ex => ({
+        id: ex.id,
+        name: ex.name,
+        sets: ex.sets,
+        setDetails: ex.setDetails || []
+      }))
+    };
+    
+    // 1. Create the workout entry with exercises included (assuming the column exists)
     const { data, error } = await supabase
       .from('workouts')
-      .insert(workoutData)
+      .insert(fullWorkoutData)
       .select()
       .single();
     
-    if (error) throw error;
+    if (error) {
+      console.error('Error inserting workout:', error);
+      throw error;
+    }
+    
     return data;
   } catch (error) {
     console.error('Error creating workout session:', error);

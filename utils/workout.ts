@@ -4,8 +4,31 @@ export interface Exercise {
   id: string;
   name: string;
   sets: number;
-  reps: number;
-  weight: number;
+  reps?: number;  // Optional for compatibility
+  weight?: number; // Optional for compatibility
+}
+
+// New interface for exercises in workout plans (without reps/weight)
+export interface PlanExercise {
+  id: string;
+  name: string;
+  sets: number;
+}
+
+// New interface for exercises in completed workouts (with reps/weight)
+export interface WorkoutExercise {
+  id: string;
+  name: string;
+  sets: number;
+  setDetails: SetDetail[];
+}
+
+export interface SetDetail {
+  id: string;
+  weight?: number;
+  reps?: number;
+  type: 'normal' | 'warmup' | 'dropset';
+  notes?: string;
 }
 
 export interface Workout {
@@ -177,9 +200,34 @@ export async function getWorkout(id: string): Promise<Workout> {
   return data;
 }
 
-// Create a new workout
+// Get a specific workout plan
+export async function getWorkoutPlan(id: string): Promise<WorkoutPlan> {
+  try {
+    const { data, error } = await supabase
+      .from('workout_plans')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (error) {
+      console.error('Error fetching workout plan:', error);
+      throw error;
+    }
+
+    return data;
+  } catch (error) {
+    console.error('Error in getWorkoutPlan:', error);
+    throw error;
+  }
+}
+
+// Create a new workout session
 export async function createWorkout(workoutData: Omit<Workout, 'id' | 'created_at'>): Promise<Workout> {
   try {
+    // The workout data should already include the exercises array
+    // with proper structure from the caller
+
+    // Insert the workout data
     const { data, error } = await supabase
       .from('workouts')
       .insert(workoutData)
@@ -189,7 +237,7 @@ export async function createWorkout(workoutData: Omit<Workout, 'id' | 'created_a
     if (error) throw error;
     return data;
   } catch (error) {
-    console.error('Error creating workout:', error);
+    console.error('Error creating workout session:', error);
     throw error;
   }
 }

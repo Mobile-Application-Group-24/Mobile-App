@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Platfo
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { X, Clock, ChartBar as BarChart3, Plus, CalendarClock, Scale, File as FileEdit, Dumbbell, Trash, Save, Trash2 } from 'lucide-react-native';
 import { format } from 'date-fns';
-import { getWorkout, deleteWorkout, updateWorkout, Workout, Exercise } from '@/utils/workout';
+import { getWorkoutPlan, getWorkouts, deleteWorkoutPlan, updateWorkoutPlan, WorkoutPlan, Workout, createWorkout } from '@/utils/workout';
 import { Swipeable } from 'react-native-gesture-handler';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
@@ -28,7 +28,9 @@ export default function WorkoutDetailScreen() {
   const workoutId = params.id as string;
   const selectedExercise = params.selectedExercise;
   const router = useRouter();
-  const [workout, setWorkout] = useState<Workout | null>(null);
+  const [workoutPlan, setWorkoutPlan] = useState<WorkoutPlan | null>(null);
+  const [previousWorkout, setPreviousWorkout] = useState<Workout | null>(null);
+  const [hasPreviousData, setHasPreviousData] = useState(false);
   const [workoutName, setWorkoutName] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -151,50 +153,46 @@ export default function WorkoutDetailScreen() {
 
   useEffect(() => {
     if (workoutId) {
-      loadWorkout(workoutId);
+      loadWorkoutPlan(workoutId);
     } else {
-      setError('Workout ID not found');
+      setError('Workout plan ID not found');
       setLoading(false);
     }
   }, [workoutId]);
 
-  const loadWorkout = async (workoutId: string) => {
+  const loadWorkoutPlan = async (workoutPlanId: string) => {
     try {
       setLoading(true);
       setError(null);
-      const data = await getWorkout(workoutId);
-      setWorkout(data);
-      setWorkoutName(data.title || '');
-      setNotes(data.notes || '');
-      setBodyWeight(data.bodyweight?.toString() || '');
-      setExercises(data.exercises.map(exercise => {
-        if (exercise.setDetails && exercise.setDetails.length > 0) {
-          return {
-            id: exercise.id,
-            name: exercise.name,
-            sets: exercise.setDetails.map(set => ({
-              id: set.id.toString(),
-              weight: set.weight?.toString() || '',
-              reps: set.reps?.toString() || '',
-              type: set.type || 'normal',
-              notes: set.notes || ''
-            }))
-          };
-        } else {
-          return {
-            id: exercise.id,
-            name: exercise.name,
-            sets: Array(exercise.sets).fill(null).map((_, index) => ({
-              id: (index + 1).toString(),
-              weight: exercise.weight?.toString() || '',
-              reps: exercise.reps?.toString() || '',
-              type: 'normal'
-            }))
-          };
-        }
-      }));
+      
+      // Get the workout plan from workout_plans table
+      const plan = await getWorkoutPlan(workoutPlanId);
+      setWorkoutPlan(plan);
+      setWorkoutName(plan.title || '');
+      setNotes(plan.description || '');
+      
+      // Initialize exercises from the workout plan only, don't load previous workouts
+      const planExercises = plan.exercises?.map(exercise => {
+        return {
+          id: exercise.id,
+          name: exercise.name,
+          // Create empty sets based on the number specified in the plan
+          sets: Array(exercise.sets || 3).fill(null).map((_, index) => ({
+            id: `new-${exercise.id}-${index}`,
+            weight: '',
+            reps: '',
+            type: 'normal',
+            notes: ''
+          }))
+        };
+      }) || [];
+      
+      // Set exercises directly from plan without checking previous workouts
+      setExercises(planExercises);
+      setHasPreviousData(false);
+      
     } catch (error) {
-      console.error('Error loading workout:', error);
+      console.error('Error loading workout plan:', error);
       setError('Failed to load workout details');
     } finally {
       setLoading(false);
@@ -241,7 +239,7 @@ export default function WorkoutDetailScreen() {
           onPress: async () => {
             try {
               if (workoutId) {
-                await deleteWorkout(workoutId);
+                await deleteWorkoutPlan(workoutId);
                 router.back();
               }
             } catch (error) {
@@ -350,16 +348,23 @@ export default function WorkoutDetailScreen() {
   };
 
   const saveWorkoutChanges = async () => {
-    if (!workout || !workoutId) return;
+    if (!workoutPlan || !workoutId) return;
 
     try {
-      const updatedExercises = exercises.map(exercise => {
-        const exerciseData = {
+      // Format exercises for workout plan (no reps/weight)
+      // Make sure we preserve the set count from the original exercises
+      const planExercises = exercises.map(exercise => ({
+        id: exercise.id,
+        name: exercise.name,
+        sets: exercise.sets.length
+      }));
+
+      // Format exercises for workout tracking (with reps/weight/setDetails)
+      const workoutExercises = exercises.map(exercise => {
+        return {
           id: exercise.id,
           name: exercise.name,
           sets: exercise.sets.length,
-          reps: exercise.sets[0]?.reps ? parseInt(exercise.sets[0].reps, 10) : undefined,
-          weight: exercise.sets[0]?.weight ? parseFloat(exercise.sets[0].weight) : undefined,
           setDetails: exercise.sets.map(set => ({
             id: set.id,
             weight: set.weight ? parseFloat(set.weight) : undefined,
@@ -368,23 +373,52 @@ export default function WorkoutDetailScreen() {
             notes: set.notes || ''
           }))
         };
-        return exerciseData;
       });
 
-      const updatedWorkout = {
-        ...workout,
-        name: workoutName,
-        notes: notes,
-        exercises: updatedExercises,
-        bodyweight: bodyWeight ? parseFloat(bodyWeight) : undefined,
-      };
+      // First, update the workout plan if needed
+      if (workoutName !== workoutPlan.title || notes !== workoutPlan.description) {
+        await updateWorkoutPlan(workoutId, {
+          title: workoutName,
+          description: notes,
+          exercises: planExercises // Store only exercise structure in workout_plans table
+        });
+      }
 
-      console.log('Saving workout:', JSON.stringify(updatedWorkout, null, 2));
-      await updateWorkout(workoutId, updatedWorkout);
+      // If the workout is active (user started it), or if there's data entered,
+      // create a new workout entry
+      if (isWorkoutActive || bodyWeight || exercises.some(ex => 
+        ex.sets.some(set => set.weight || set.reps)
+      )) {
+        // Mark the workout as done whenever the save button is pressed
+        // If the workout has been explicitly ended, use that end time
+        // Otherwise, if it was started but not explicitly ended, set the current time as end time
+        const endTimeToUse = workoutEndTime || (isWorkoutActive ? new Date() : undefined);
+        
+        // Consider a workout done if it's been started (regardless of whether it has an explicit end time)
+        const isDone = isWorkoutActive || !!workoutEndTime;
+        
+        const workoutData = {
+          workout_plan_id: workoutId,
+          title: workoutName,
+          date: new Date().toISOString(),
+          start_time: workoutStartTime?.toISOString(),
+          end_time: endTimeToUse?.toISOString(),
+          notes: notes,
+          exercises: workoutExercises, // Include complete exercise data with sets and reps
+          bodyweight: bodyWeight ? parseFloat(bodyWeight) : undefined,
+          user_id: workoutPlan.user_id,
+          calories_burned: 0, // Calculate or leave as default
+          done: isDone // Mark as done if it was started or has an end time
+        };
+        
+        const savedWorkout = await createWorkout(workoutData);
+        console.log("Successfully created workout:", savedWorkout.id, "Done status:", isDone);
+      }
+      
       router.back();
     } catch (error) {
       console.error('Error updating workout:', error);
-      Alert.alert('Error', 'Failed to update workout');
+      Alert.alert('Error', 'Failed to save workout data');
     }
   };
 
@@ -429,7 +463,7 @@ export default function WorkoutDetailScreen() {
     );
   }
 
-  if (error || !workout) {
+  if (error || !workoutPlan) {
     return (
       <View style={styles.errorContainer}>
         <Text style={styles.errorText}>{error || 'Workout not found'}</Text>
@@ -454,7 +488,16 @@ export default function WorkoutDetailScreen() {
             <TouchableOpacity onPress={() => router.back()} style={styles.closeButton} activeOpacity={0.7}>
               <X size={24} color="#007AFF" />
             </TouchableOpacity>
-            <Text style={styles.date}>{format(new Date(), 'dd. MMMM')}</Text>
+            <Text style={styles.date}>
+              {(() => {
+                try {
+                  return format(new Date(), 'dd. MMMM');
+                } catch (error) {
+                  console.warn('Error formatting header date:', error);
+                  return 'Today';
+                }
+              })()}
+            </Text>
             <View style={styles.headerActions}>
               <TouchableOpacity 
                 style={[styles.headerButton, showRestTimer && styles.headerButtonActive]} 
@@ -484,10 +527,19 @@ export default function WorkoutDetailScreen() {
                   <View style={styles.timeInfo}>
                     <Clock size={20} color="#007AFF" />
                     <Text style={styles.timeText}>
-                      {workoutStartTime 
-                        ? format(workoutStartTime, 'HH:mm')
-                        : 'Not started'} 
-                      {workoutEndTime && ` - ${format(workoutEndTime, 'HH:mm')}`}
+                      {(() => {
+                        try {
+                          if (workoutStartTime) {
+                            return `${format(workoutStartTime, 'HH:mm')}${
+                              workoutEndTime ? ` - ${format(workoutEndTime, 'HH:mm')}` : ''
+                            }`;
+                          }
+                          return 'Not started';
+                        } catch (error) {
+                          console.warn('Error formatting workout time:', error);
+                          return 'Time unavailable';
+                        }
+                      })()}
                     </Text>
                   </View>
                   <TouchableOpacity
