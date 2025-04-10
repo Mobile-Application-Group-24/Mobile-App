@@ -3,7 +3,7 @@
 GymApp is a comprehensive mobile fitness application built with React Native and Expo, designed to help users track their workouts, nutrition, and connect with other fitness enthusiasts through groups.
 
 
-## Features
+## 🚀 Features
 
 ### Workout Tracking
 - Create and log custom workouts
@@ -35,7 +35,7 @@ GymApp is a comprehensive mobile fitness application built with React Native and
 - Share progress with group members
 - View other users' profiles
 
-## Technology Stack
+## 💻 Technology Stack
 
 - **Frontend**: React Native, Expo
 - **State Management**: React Hooks
@@ -47,7 +47,7 @@ GymApp is a comprehensive mobile fitness application built with React Native and
 - **UI Components**: Lucide React Native (icons)
 - **Navigation**: Expo Router
 
-## Installation
+## 🔋 Installation
 
 ### Prerequisites
 - Node.js (v14 or later)
@@ -107,7 +107,7 @@ Mobile-App/
 │   └── storage.ts       # Local storage utilities
 ```
 
-## Usage
+## 🤳 Usage
 
 ### Tracking Workouts
 Navigate to the Workouts tab to create new workout plans or log your exercises. You can specify sets, reps, weights, and other details for each exercise.
@@ -135,7 +135,7 @@ This project is licensed under the MIT License
 - Database and authentication by [Supabase](https://supabase.io/)
 
 
-## Dev Team:
+## 👨‍💻 Dev Team:
 
 | Name                  | GitHub Profile                                   |
 |-----------------------|--------------------------------------------------|
