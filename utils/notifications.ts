@@ -47,7 +47,7 @@ export async function setupNotificationChannels() {
       importance: Notifications.AndroidImportance.HIGH,
       vibrationPattern: [0, 250, 250, 250],
       lightColor: '#007AFF',
-      sound: true,
+      sound: 'default',
     });
 
     await Notifications.setNotificationChannelAsync('water-reminders', {
@@ -55,7 +55,7 @@ export async function setupNotificationChannels() {
       importance: Notifications.AndroidImportance.HIGH,
       vibrationPattern: [0, 250, 250, 250],
       lightColor: '#34C759',
-      sound: true,
+      sound: 'default',
     });
     
     console.log('Android notification channels set up successfully');
@@ -86,7 +86,7 @@ export async function scheduleNotification(
 
     // Fix for Android's potential issue with exact time triggers
     let finalTrigger = trigger;
-    if (Platform.OS === 'android' && 'hour' in trigger && 'minute' in trigger) {
+    if (Platform.OS === 'android' && trigger && 'hour' in trigger && 'minute' in trigger) {
       const date = new Date();
       date.setHours(trigger.hour as number, trigger.minute as number, 0, 0);
       

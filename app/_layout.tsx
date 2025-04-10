@@ -55,7 +55,7 @@ export default function RootLayout() {
               importance: Notifications.AndroidImportance.MAX,
               vibrationPattern: [0, 250, 250, 250],
               lightColor: '#007AFF',
-              sound: true,
+              sound: null,
               enableVibrate: true,
             });
 
@@ -64,7 +64,7 @@ export default function RootLayout() {
               importance: Notifications.AndroidImportance.HIGH,
               vibrationPattern: [0, 250, 250, 250],
               lightColor: '#34C759',
-              sound: true,
+              sound: 'default',
               enableVibrate: true,
             });
             

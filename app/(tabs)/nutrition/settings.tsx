@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Switch, Platform, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Scale, Droplets, Bell, Clock, Save, AlertTriangle } from 'lucide-react-native';
-import { getNutritionSettings, updateNutritionSettings, supabase } from '@/utils/supabase';
+import { getNutritionSettings, updateNutritionSettings, supabase, getCurrentUser } from '@/utils/supabase';
 import type { NutritionSettings } from '@/utils/supabase';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { 
@@ -94,7 +94,7 @@ export default function NutritionSettingsScreen() {
             });
           } else {
             setSettings({
-              user_id: userData.user.id,
+              user_id: (await supabase.auth.getUser()).data?.user?.id || '',
               updated_at: new Date().toISOString(),
               ...defaultSettings,
             });
@@ -107,7 +107,7 @@ export default function NutritionSettingsScreen() {
             Alert.alert(
               "Authentication Error",
               "Your session has expired. Please log in again.",
-              [{ text: "OK", onPress: () => router.replace('/login') }]
+              [{ text: "OK", onPress: () => router.replace('/sign-in') }]
             );
             return;
           } else {
@@ -204,7 +204,7 @@ export default function NutritionSettingsScreen() {
           Alert.alert(
             "Authentication Error",
             "Your session has expired. Please log in again.",
-            [{ text: "OK", onPress: () => router.replace('/login') }]
+            [{ text: "OK", onPress: () => router.replace('/sign-in') }]
           );
           return;
         }
@@ -237,7 +237,7 @@ export default function NutritionSettingsScreen() {
       try {
         if (isNewUser) {
           const { error: insertError } = await supabase.from('nutrition_settings').insert({
-            user_id: userData.user.id,
+            user_id: (await supabase.auth.getUser()).data?.user?.id || '',
             calorie_goal: normalizedSettings.calorie_goal,
             water_goal: normalizedSettings.water_goal,
             water_notifications: normalizedSettings.water_notifications,
@@ -300,61 +300,11 @@ export default function NutritionSettingsScreen() {
             console.log('Water reminder ID:', waterReminderId);
           }
           
-          // Prepare message about when notifications will appear
-          const mealTimes = enabledMealTimes.map(meal => {
-            const [hours, minutes] = meal.time.split(':').map(Number);
-            const scheduledTime = new Date();
-            scheduledTime.setHours(hours, minutes, 0, 0);
-            
-            // If time has passed today, show as tomorrow
-            if (scheduledTime <= new Date()) {
-              scheduledTime.setDate(scheduledTime.getDate() + 1);
-              return `${meal.name} (tomorrow at ${hours}:${String(minutes).padStart(2, '0')})`;
-            }
-            
-            return `${meal.name} (today at ${hours}:${String(minutes).padStart(2, '0')})`;
-          }).join(', ');
-          
-          if (enabledMealTimes.length > 0) {
-            // Show specific info about meal times from database
-            const waterMessage = normalizedSettings.water_notifications 
-              ? `\n\nWater reminders will occur every ${normalizedSettings.water_interval} hour(s).` 
-              : '';
-              
-            Alert.alert(
-              "Settings Saved",
-              `Your settings have been saved successfully.\n\nMeal reminders will appear for: ${mealTimes}${waterMessage}`,
-              [{ text: "OK" }]
-            );
-          } else {
-            // No meal times enabled
-            const waterMessage = normalizedSettings.water_notifications 
-              ? `Water reminders will occur every ${normalizedSettings.water_interval} hour(s).` 
-              : 'No meal or water notifications are currently enabled.';
-              
-            Alert.alert(
-              "Settings Saved",
-              `Your settings have been saved successfully.\n\n${waterMessage}`,
-              [{ text: "OK" }]
-            );
-          }
         } catch (notificationError) {
           console.error('Error scheduling notifications:', notificationError);
-          Alert.alert(
-            "Settings Saved with Warning",
-            `Your settings were saved, but there was an error scheduling notifications: ${notificationError.message}`,
-            [{ text: "OK" }]
-          );
         }
       } else {
-        Alert.alert(
-          "Notification Permission Required",
-          "Please enable notifications to receive meal and water reminders.",
-          [
-            { text: "Skip", style: "cancel" },
-            { text: "Check Permissions", onPress: checkNotificationPermissions }
-          ]
-        );
+        await checkNotificationPermissions();
       }
 
       router.replace('/nutrition/index-with-data');
@@ -362,14 +312,18 @@ export default function NutritionSettingsScreen() {
       console.error('Error saving settings:', error);
       
       // Check if this is an auth error
-      if (error.message?.includes('Not authenticated') || error.message?.includes('JWT expired')) {
+      if (error instanceof Error && (error.message.includes('Not authenticated') || error.message.includes('JWT expired'))) {
         Alert.alert(
           "Authentication Error",
           "Your session has expired. Please log in again.",
-          [{ text: "OK", onPress: () => router.replace('/login') }]
+          [{ text: "OK", onPress: () => router.replace('/sign-in') }]
         );
       } else {
-        Alert.alert('Error', `Failed to save settings: ${error.message}`);
+        if (error instanceof Error) {
+          Alert.alert('Error', `Failed to save settings: ${error.message}`);
+        } else {
+          Alert.alert('Error', 'Failed to save settings due to an unknown error.');
+        }
       }
     } finally {
       setSaving(false);
@@ -741,11 +695,14 @@ const styles = StyleSheet.create({
   timeButtonText: {
     fontSize: 16,
     fontWeight: '500',
+    color: '#007AFF',
   },
   timePickerContainer: {
-    width: 120,
+    width: 70,
     overflow: 'hidden',
+    borderRadius: 12,
   },
+
   iosTimePicker: {
     height: 40,
     alignSelf: 'flex-end',
