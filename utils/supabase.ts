@@ -106,16 +106,32 @@ export interface GroupInvitation {
   group?: Group;
 }
 
-export interface Workout {
+export interface WorkoutPlan {
   id: string;
   title: string;
-  date: string;
+  description?: string;
+  workout_type: 'split' | 'custom';
+  day_of_week?: string | null;
   duration_minutes: number;
   exercises: Exercise[];
+  user_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Workout {
+  id: string;
+  workout_plan_id: string;
+  title: string;
+  date: string;
+  start_time?: string | null;
+  end_time?: string | null;
   notes: string;
   calories_burned: number;
-  bodyweight?: number; // Adding the body_weight field
-  done?: boolean; // Adding the done field to track completion status
+  bodyweight?: number;
+  done: boolean;
+  user_id: string;
+  created_at: string;
 }
 
 // Store invitation codes in memory since database operations are failing
@@ -469,4 +485,149 @@ export async function updateWorkoutCompletionStatus(workoutId: string, isDone: b
     throw error;
   }
   return data;
+}
+
+// Workout plan functions
+export async function createWorkoutPlan(planData: Omit<WorkoutPlan, 'id' | 'created_at' | 'updated_at'>): Promise<WorkoutPlan> {
+  try {
+    console.log('Sending to Supabase:', JSON.stringify(planData));
+    
+    const { data, error } = await supabase
+      .from('workout_plans')
+      .insert(planData)
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('Supabase error creating workout plan:', error);
+      throw new Error(`Database error: ${error.message}`);
+    }
+    
+    if (!data) {
+      throw new Error('No data returned from workout plan creation');
+    }
+    
+    return data;
+  } catch (error) {
+    console.error('Error in createWorkoutPlan function:', error);
+    throw error;
+  }
+}
+
+export async function getWorkoutPlans(userId: string): Promise<WorkoutPlan[]> {
+  try {
+    const { data, error } = await supabase
+      .from('workout_plans')
+      .select('*')
+      .eq('user_id', userId);
+    
+    if (error) throw error;
+    return data || [];
+  } catch (error) {
+    console.error('Error fetching workout plans:', error);
+    throw error;
+  }
+}
+
+export async function updateWorkoutPlan(planId: string, updates: Partial<WorkoutPlan>): Promise<WorkoutPlan> {
+  try {
+    const { data, error } = await supabase
+      .from('workout_plans')
+      .update({
+        ...updates,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', planId)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error('Error updating workout plan:', error);
+    throw error;
+  }
+}
+
+export async function deleteWorkoutPlan(planId: string): Promise<void> {
+  try {
+    const { error } = await supabase
+      .from('workout_plans')
+      .delete()
+      .eq('id', planId);
+    
+    if (error) throw error;
+  } catch (error) {
+    console.error('Error deleting workout plan:', error);
+    throw error;
+  }
+}
+
+// Workout session functions
+export async function createWorkout(workoutData: Omit<Workout, 'id' | 'created_at'>): Promise<Workout> {
+  try {
+    const { data, error } = await supabase
+      .from('workouts')
+      .insert(workoutData)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error('Error creating workout session:', error);
+    throw error;
+  }
+}
+
+export async function getWorkouts(userId: string, workoutPlanId?: string): Promise<Workout[]> {
+  try {
+    let query = supabase
+      .from('workouts')
+      .select('*')
+      .eq('user_id', userId);
+    
+    if (workoutPlanId) {
+      query = query.eq('workout_plan_id', workoutPlanId);
+    }
+    
+    const { data, error } = await query.order('date', { ascending: false });
+    
+    if (error) throw error;
+    return data || [];
+  } catch (error) {
+    console.error('Error fetching workouts:', error);
+    throw error;
+  }
+}
+
+export async function updateWorkout(workoutId: string, updates: Partial<Workout>): Promise<Workout> {
+  try {
+    const { data, error } = await supabase
+      .from('workouts')
+      .update(updates)
+      .eq('id', workoutId)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error('Error updating workout:', error);
+    throw error;
+  }
+}
+
+export async function deleteWorkout(workoutId: string): Promise<void> {
+  try {
+    const { error } = await supabase
+      .from('workouts')
+      .delete()
+      .eq('id', workoutId);
+    
+    if (error) throw error;
+  } catch (error) {
+    console.error('Error deleting workout:', error);
+    throw error;
+  }
 }

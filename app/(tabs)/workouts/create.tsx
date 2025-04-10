@@ -2,7 +2,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, FlatList, Platform, Alert } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Plus, Minus, Dumbbell, Save, Search, X } from 'lucide-react-native';
-import { createWorkout } from '@/utils/workout';
+import { createWorkoutPlan } from '@/utils/supabase';
 import { useSession } from '@/utils/auth';
 import { supabase } from '@/utils/supabase';
 import type { Exercise } from '@/utils/storage';
@@ -64,13 +64,13 @@ export default function CreateWorkoutScreen() {
       if (!session?.user?.id) return;
       
       const { data: existingWorkouts, error } = await supabase
-        .from('workouts')
+        .from('workout_plans')  // Fixed table name
         .select('*')
         .eq('user_id', session.user.id)
         .eq('workout_type', 'split');
 
       if (error) {
-        console.error('Error fetching workouts:', error);
+        console.error('Error fetching workout plans:', error);
         return;
       }
 
@@ -126,12 +126,12 @@ export default function CreateWorkoutScreen() {
       if (!session?.user?.id) return;
       
       const { data: existingWorkouts, error } = await supabase
-        .from('workouts')
+        .from('workout_plans')  // Fixed table name
         .select('*')
         .eq('user_id', session.user.id);
 
       if (error) {
-        console.error('Error fetching workouts:', error);
+        console.error('Error fetching workout plans:', error);
         return false;
       }
 
@@ -224,25 +224,27 @@ export default function CreateWorkoutScreen() {
         weight: undefined,
       }));
       
-      const workoutData = {
+      const workoutPlanData = {
         title: planName,
-        date: new Date().toISOString(),
-        duration_minutes: 60,
-        exercises: formattedExercises,
-        notes: '',
-        calories_burned: 0,
-        user_id: userId,
-        start_time: null,
-        end_time: null,
+        description: '',
         workout_type: workoutType,
         day_of_week: workoutType === 'split' ? selectedDay : null,
+        duration_minutes: 60,
+        exercises: formattedExercises,
+        user_id: userId,
       };
       
-      const savedWorkout = await createWorkout(workoutData);
+      console.log('Creating workout plan with data:', JSON.stringify(workoutPlanData));
+      
+      const savedWorkoutPlan = await createWorkoutPlan(workoutPlanData);
+      console.log('Successfully created workout plan:', savedWorkoutPlan.id);
+      
       router.back();
     } catch (error) {
-      console.error('Error creating workout:', error);
-      Alert.alert('Error', 'Failed to create workout. Please try again.');
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error('Error creating workout plan:', errorMessage);
+      console.error('Full error:', JSON.stringify(error));
+      Alert.alert('Error', 'Failed to create workout plan. Please try again.');
     } finally {
       setIsSaving(false);
     }

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, StatusBar, SafeAreaView, Alert, Platform } from 'react-native';
 import { Plus, Star, Play, Clock, Calendar, Dumbbell, Trash2, Filter } from 'lucide-react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
-import { getWorkouts, Workout, deleteWorkout, updateWorkout } from '@/utils/workout';
+import { getWorkoutPlans, WorkoutPlan, deleteWorkoutPlan, updateWorkoutPlan } from '@/utils/supabase';
 import { useSession } from '@/utils/auth';
 import { format, parseISO } from 'date-fns';
 import { Swipeable } from 'react-native-gesture-handler';
@@ -12,7 +12,7 @@ export default function WorkoutsScreen() {
   const { session } = useSession();
   const [showOwnWorkouts, setShowOwnWorkouts] = useState(true);
   const [currentStreak, setCurrentStreak] = useState(5);
-  const [workouts, setWorkouts] = useState<Workout[]>([]);
+  const [workoutPlans, setWorkoutPlans] = useState<WorkoutPlan[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [todaysWorkout, setTodaysWorkout] = useState<{
@@ -31,51 +31,44 @@ export default function WorkoutsScreen() {
     return new Date().toLocaleDateString('en-US', { weekday: 'long' });
   };
 
-  const loadWorkouts = async () => {
+  const loadWorkoutPlans = async () => {
     try {
       setIsLoading(true);
       setError(null);
       if (!session?.user?.id) {
         setError('User not authenticated');
-        setWorkouts([]);
+        setWorkoutPlans([]);
         return;
       }
 
-      const data = await getWorkouts(session.user.id);
-
-      // Filter workouts based on type selection
-      let filteredData = data;
-      if (filterType !== 'all') {
-        filteredData = data.filter(workout => workout.workout_type === filterType);
-      }
-
-      setWorkouts(filteredData);
-      console.log(`Loaded ${filteredData.length} ${filterType} workouts for user ${session.user.id}`);
+      const data = await getWorkoutPlans(session.user.id);
+      setWorkoutPlans(data);
+      console.log(`Loaded ${data.length} workout plans for user ${session.user.id}`);
 
       const currentDay = getCurrentDayOfWeek();
-      const workoutForToday = filteredData.find(
+      const workoutPlanForToday = data.find(
         w => w.day_of_week === currentDay && w.workout_type === 'split'
       );
 
-      if (workoutForToday) {
+      if (workoutPlanForToday) {
         setTodaysWorkout({
-          id: workoutForToday.id,
+          id: workoutPlanForToday.id,
           isRestDay: false,
-          name: workoutForToday.title,
-          duration: `${workoutForToday.duration_minutes} min`,
+          name: workoutPlanForToday.title,
+          duration: `${workoutPlanForToday.duration_minutes} min`,
         });
-        console.log(`Found today's workout: ${workoutForToday.title}`);
+        console.log(`Found today's workout plan: ${workoutPlanForToday.title}`);
       } else {
         setTodaysWorkout({
           isRestDay: true,
           name: 'Rest Day',
           duration: '0 min',
         });
-        console.log(`No workout found for ${currentDay}, it's a rest day`);
+        console.log(`No workout plan found for ${currentDay}, it's a rest day`);
       }
     } catch (error) {
-      console.error('Error loading workouts:', error);
-      setError('Failed to load workouts. Please try again.');
+      console.error('Error loading workout plans:', error);
+      setError('Failed to load workout plans. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -95,10 +88,10 @@ export default function WorkoutsScreen() {
     }
   };
 
-  const handleDeleteWorkout = (workoutId: string) => {
+  const handleDeleteWorkoutPlan = (planId: string) => {
     Alert.alert(
-      'Delete Workout',
-      'Are you sure you want to delete this workout?',
+      'Delete Workout Plan',
+      'Are you sure you want to delete this workout plan?',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -106,10 +99,10 @@ export default function WorkoutsScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              await deleteWorkout(workoutId);
-              setWorkouts(prev => prev.filter(w => w.id !== workoutId));
+              await deleteWorkoutPlan(planId);
+              setWorkoutPlans(prev => prev.filter(p => p.id !== planId));
             } catch (error) {
-              Alert.alert('Error', 'Failed to delete workout');
+              Alert.alert('Error', 'Failed to delete workout plan');
             }
           },
         },
@@ -119,8 +112,8 @@ export default function WorkoutsScreen() {
 
   const handleMarkWorkoutDone = async (workoutId: string, isDone: boolean) => {
     try {
-      await updateWorkout(workoutId, { done: isDone });
-      setWorkouts(prev => 
+      await updateWorkoutPlan(workoutId, { done: isDone });
+      setWorkoutPlans(prev => 
         prev.map(w => w.id === workoutId ? { ...w, done: isDone } : w)
       );
     } catch (error) {
@@ -133,7 +126,7 @@ export default function WorkoutsScreen() {
     return (
       <TouchableOpacity
         style={styles.deleteAction}
-        onPress={() => handleDeleteWorkout(workoutId)}
+        onPress={() => handleDeleteWorkoutPlan(workoutId)}
       >
         <Trash2 size={20} color="#FFFFFF" />
         <Text style={styles.deleteActionText}>Delete</Text>
@@ -155,14 +148,14 @@ export default function WorkoutsScreen() {
   useFocusEffect(
     useCallback(() => {
       if (session?.user?.id) {
-        loadWorkouts();
+        loadWorkoutPlans();
       }
     }, [session?.user?.id])
   );
 
   useEffect(() => {
     if (session?.user?.id) {
-      loadWorkouts();
+      loadWorkoutPlans();
     } else {
       setIsLoading(false);
       setError('Please log in to view your workouts');
@@ -257,7 +250,7 @@ export default function WorkoutsScreen() {
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color="#007AFF" />
             </View>
-          ) : workouts.length === 0 ? (
+          ) : workoutPlans.length === 0 ? (
             <View style={styles.emptyState}>
               <Text style={styles.emptyStateText}>No workout plans yet</Text>
               <Text style={styles.emptyStateText}>
@@ -265,7 +258,7 @@ export default function WorkoutsScreen() {
               </Text>
             </View>
           ) : (
-            workouts.map((plan) => (
+            workoutPlans.map((plan) => (
               <Swipeable
                 key={plan.id}
                 renderRightActions={() => renderRightActions(plan.id)}
