@@ -115,6 +115,7 @@ export interface Workout {
   notes: string;
   calories_burned: number;
   bodyweight?: number; // Adding the body_weight field
+  done?: boolean; // Adding the done field to track completion status
 }
 
 // Store invitation codes in memory since database operations are failing
@@ -124,26 +125,24 @@ const invitationCodeMap = new Map<string, string>();
 // Profile functions
 export async function getProfile(userId: string): Promise<Profile> {
   const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .single();
-
+    .from('profiles')
+    .select('*')
+    .eq('id', userId)
+    .single();
   if (error) throw error;
   return data;
 }
 
 export async function updateProfile(userId: string, updates: Partial<Profile>) {
   const { data, error } = await supabase
-      .from('profiles')
-      .update({
-        ...updates,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', userId)
-      .select()
-      .single();
-
+    .from('profiles')
+    .update({
+      ...updates,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', userId)
+    .select()
+    .single();
   if (error) throw error;
   return data;
 }
@@ -153,25 +152,23 @@ export async function createGroup(groupData: Omit<Group, 'id' | 'created_at' | '
   if (userError || !userData.user) throw new Error('User not authenticated');
 
   const { data, error } = await supabase
-      .from('groups')
-      .insert({
-        ...groupData,
-        owner_id: userData.user.id,
-      })
-      .select()
-      .single();
-
+    .from('groups')
+    .insert({
+      ...groupData,
+      owner_id: userData.user.id,
+    })
+    .select()
+    .single();
   if (error) throw error;
 
   // Automatically add creator as owner in group_members
   const { error: memberError } = await supabase
-      .from('group_members')
-      .insert({
-        group_id: data.id,
-        user_id: userData.user.id,
-        role: 'owner',
-      });
-
+    .from('group_members')
+    .insert({
+      group_id: data.id,
+      user_id: userData.user.id,
+      role: 'owner',
+    });
   if (memberError) throw memberError;
 
   return data;
@@ -186,7 +183,6 @@ export async function getGroups(showOwned = false) {
     .from('group_members')
     .select('group_id')
     .eq('user_id', userData.user.id);
-
   const memberGroupIds = memberGroups?.map(g => g.group_id) || [];
 
   let query = supabase
@@ -195,15 +191,13 @@ export async function getGroups(showOwned = false) {
       *,
       member_count:group_members(count)
     `);
-
   if (showOwned) {
     // Show groups where user is owner OR member
-    query = query.or(`owner_id.eq.${userData.user.id},id.in.(${memberGroupIds.join(',')})`)
+    query = query.or(`owner_id.eq.${userData.user.id},id.in.(${memberGroupIds.join(',')})`);
   } else {
     // Show public groups OR groups where user is member
-    query = query.or(`is_private.eq.false,id.in.(${memberGroupIds.join(',')})`)
+    query = query.or(`is_private.eq.false,id.in.(${memberGroupIds.join(',')})`);
   }
-
   const { data, error } = await query;
   if (error) throw error;
 
@@ -215,14 +209,13 @@ export async function getGroups(showOwned = false) {
 
 export async function getGroupDetails(groupId: string) {
   const { data, error } = await supabase
-      .from('groups')
-      .select(`
+    .from('groups')
+    .select(`
       *,
       member_count:group_members(count)
     `)
-      .eq('id', groupId)
-      .single();
-
+    .eq('id', groupId)
+    .single();
   if (error) throw error;
 
   return {
@@ -237,16 +230,15 @@ export async function getGroupMembers(groupId: string): Promise<GroupMember[]> {
 
   // Using a join query approach instead of foreign key relationship
   const { data, error } = await supabase
-      .from('group_members')
-      .select(`
+    .from('group_members')
+    .select(`
       id,
       group_id,
       user_id,
       role,
       joined_at
     `)
-      .eq('group_id', groupId);
-
+    .eq('group_id', groupId);
   if (error) throw error;
 
   // Get all profile data in a separate query
@@ -255,7 +247,6 @@ export async function getGroupMembers(groupId: string): Promise<GroupMember[]> {
     .from('profiles')
     .select('id, full_name, avatar_url')
     .in('id', userIds);
-
   if (profilesError) throw profilesError;
 
   // Map profiles to members
@@ -276,13 +267,12 @@ export async function joinGroup(groupId: string) {
   if (!userData.user) throw new Error('User not authenticated');
 
   const { error } = await supabase
-      .from('group_members')
-      .insert({
-        group_id: groupId,
-        user_id: userData.user.id,
-        role: 'member',
-      });
-
+    .from('group_members')
+    .insert({
+      group_id: groupId,
+      user_id: userData.user.id,
+      role: 'member',
+    });
   if (error) throw error;
 }
 
@@ -291,44 +281,40 @@ export async function leaveGroup(groupId: string) {
   if (!userData.user) throw new Error('User not authenticated');
 
   const { error } = await supabase
-      .from('group_members')
-      .delete()
-      .eq('group_id', groupId)
-      .eq('user_id', userData.user.id);
-
+    .from('group_members')
+    .delete()
+    .eq('group_id', groupId)
+    .eq('user_id', userData.user.id);
   if (error) throw error;
-  
+
   return true;
 }
 
 export async function updateGroup(groupId: string, updates: Partial<Group>) {
   const { data, error } = await supabase
-      .from('groups')
-      .update(updates)
-      .eq('id', groupId)
-      .select()
-      .single();
-
+    .from('groups')
+    .update(updates)
+    .eq('id', groupId)
+    .select()
+    .single();
   if (error) throw error;
   return data;
 }
 
 export async function deleteGroup(groupId: string) {
   const { error } = await supabase
-      .from('groups')
-      .delete()
-      .eq('id', groupId);
-
+    .from('groups')
+    .delete()
+    .eq('id', groupId);
   if (error) throw error;
 }
 
 export async function removeMember(groupId: string, userId: string) {
   const { error } = await supabase
-      .from('group_members')
-      .delete()
-      .eq('group_id', groupId)
-      .eq('user_id', userId);
-
+    .from('group_members')
+    .delete()
+    .eq('group_id', groupId)
+    .eq('user_id', userId);
   if (error) throw error;
 }
 
@@ -338,11 +324,10 @@ export async function getNutritionSettings(): Promise<NutritionSettings> {
   if (userError || !userData.user) throw new Error('User not authenticated');
 
   const { data, error } = await supabase
-      .from('nutrition_settings')
-      .select('*')
-      .eq('user_id', userData.user.id)
-      .single();
-
+    .from('nutrition_settings')
+    .select('*')
+    .eq('user_id', userData.user.id)
+    .single();
   if (error) throw error;
   return data;
 }
@@ -352,15 +337,14 @@ export async function updateNutritionSettings(updates: Partial<Omit<NutritionSet
   if (userError || !userData.user) throw new Error('User not authenticated');
 
   const { data, error } = await supabase
-      .from('nutrition_settings')
-      .update({
-        ...updates,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('user_id', userData.user.id)
-      .select()
-      .single();
-
+    .from('nutrition_settings')
+    .update({
+      ...updates,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('user_id', userData.user.id)
+    .select()
+    .single();
   if (error) throw error;
   return data;
 }
@@ -371,36 +355,33 @@ export async function addMeal(meal: Omit<Meal, 'id' | 'user_id' | 'created_at'>)
   if (userError || !userData.user) throw new Error('User not authenticated');
 
   const { data, error } = await supabase
-      .from('meals')
-      .insert({
-        ...meal,
-        user_id: userData.user.id,
-      })
-      .select()
-      .single();
-
+    .from('meals')
+    .insert({
+      ...meal,
+      user_id: userData.user.id,
+    })
+    .select()
+    .single();
   if (error) throw error;
   return data;
 }
 
 export async function updateMeal(mealId: string, updates: Partial<Omit<Meal, 'id' | 'user_id' | 'created_at'>>) {
   const { data, error } = await supabase
-      .from('meals')
-      .update(updates)
-      .eq('id', mealId)
-      .select()
-      .single();
-
+    .from('meals')
+    .update(updates)
+    .eq('id', mealId)
+    .select()
+    .single();
   if (error) throw error;
   return data;
 }
 
 export async function deleteMeal(mealId: string) {
   const { error } = await supabase
-      .from('meals')
-      .delete()
-      .eq('id', mealId);
-
+    .from('meals')
+    .delete()
+    .eq('id', mealId);
   if (error) throw error;
 }
 
@@ -409,15 +390,13 @@ export async function getTodaysMeals(): Promise<Meal[]> {
   if (userError || !userData.user) throw new Error('User not authenticated');
 
   const today = new Date();
-
   const { data, error } = await supabase
-      .from('meals')
-      .select('*')
-      .eq('user_id', userData.user.id)
-      .gte('consumed_at', startOfDay(today).toISOString())
-      .lte('consumed_at', endOfDay(today).toISOString())
-      .order('consumed_at', { ascending: true });
-
+    .from('meals')
+    .select('*')
+    .eq('user_id', userData.user.id)
+    .gte('consumed_at', startOfDay(today).toISOString())
+    .lte('consumed_at', endOfDay(today).toISOString())
+    .order('consumed_at', { ascending: true });
   if (error) throw error;
   return data;
 }
@@ -427,12 +406,11 @@ export async function getWeeklyMeals(): Promise<{ date: string; calories: number
   if (userError || !userData.user) throw new Error('User not authenticated');
 
   const { data, error } = await supabase
-      .from('meals')
-      .select('consumed_at, calories')
-      .eq('user_id', userData.user.id)
-      .gte('consumed_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString())
-      .order('consumed_at', { ascending: true });
-
+    .from('meals')
+    .select('consumed_at, calories')
+    .eq('user_id', userData.user.id)
+    .gte('consumed_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString())
+    .order('consumed_at', { ascending: true });
   if (error) throw error;
 
   // Group meals by date and sum calories
@@ -446,7 +424,7 @@ export async function getWeeklyMeals(): Promise<{ date: string; calories: number
     date,
     calories,
   }));
-}; // Diese schließende Klammer und Semikolon fehlten
+}
 
 // Function to update a workout with body weight
 export async function updateWorkoutWithBodyWeight(workoutId: string, updates: Partial<Workout>) {
@@ -456,7 +434,6 @@ export async function updateWorkoutWithBodyWeight(workoutId: string, updates: Pa
     .eq('id', workoutId)
     .select()
     .single();
-
   if (error) {
     console.error('Error updating workout:', error);
     throw error;
@@ -471,7 +448,6 @@ export async function getWorkoutWithBodyWeight(workoutId: string): Promise<Worko
     .select('*, exercises:workout_exercises(*)')
     .eq('id', workoutId)
     .single();
-
   if (error) {
     console.error('Error getting workout:', error);
     throw error;
@@ -479,272 +455,18 @@ export async function getWorkoutWithBodyWeight(workoutId: string): Promise<Worko
   return data;
 }
 
-// Invitation functions
-export const createGroupInvitation = async (groupId: string, options: { expiresIn?: number, maxUses?: number } = {}) => {
-  try {
-    // Simple code generator
-    const generateCode = () => {
-      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-      let code = '';
-      for (let i = 0; i < 6; i++) {
-        code += chars.charAt(Math.floor(Math.random() * chars.length));
-      }
-      return code;
-    };
-
-    const invitationCode = generateCode();
-    
-    // Store the mapping in memory since database operations are failing
-    invitationCodeMap.set(invitationCode, groupId);
-    
-    console.log(`Created invitation code ${invitationCode} for group ${groupId}`);
-    
-    return {
-      code: invitationCode,
-      group: { id: groupId }
-    };
-  } catch (error) {
-    console.error('Error in createGroupInvitation:', error);
-    throw error;
-  }
-};
-
-export async function getGroupInvitation(code: string): Promise<any> {
-  try {
-    // First check our in-memory map
-    const groupId = invitationCodeMap.get(code);
-    
-    if (groupId) {
-      // If we found a mapping, try to get the group details
-      try {
-        const groupDetails = await getGroupDetails(groupId);
-        return {
-          code: code,
-          group: {
-            id: groupId,
-            name: groupDetails.name
-          }
-        };
-      } catch (err) {
-        console.log('Group not found for code', code);
-      }
-    }
-    
-    // Fallback legacy implementation
-    return {
-      code: code,
-      group: {
-        id: code,
-        name: "Your Group"
-      }
-    };
-  } catch (error) {
-    console.error('Error in getGroupInvitation:', error);
-    throw error;
-  }
-}
-
-export async function useGroupInvitation(code: string): Promise<Group> {
-  try {
-    const { data: userData, error: userError } = await supabase.auth.getUser();
-    if (userError || !userData.user) throw new Error('User not authenticated');
-    
-    // First check our in-memory map
-    let groupId = invitationCodeMap.get(code.trim());
-    
-    // If not found in our map, check if it's a direct UUID
-    if (!groupId && code.includes('-') && code.length >= 32) {
-      groupId = code;
-    }
-    
-    // Final fallback - if the code looks like a prefix of a UUID, try to find a match
-    if (!groupId) {
-      try {
-        const groups = await getGroups(false);
-        const matchingGroup = groups.find(group => 
-          group.id.toLowerCase().startsWith(code.toLowerCase())
-        );
-        
-        if (matchingGroup) {
-          groupId = matchingGroup.id;
-        }
-      } catch (err) {
-        console.error('Error finding group by prefix:', err);
-      }
-    }
-    
-    // If we still don't have a valid group ID, throw an error
-    if (!groupId) {
-      throw new Error('Invalid invitation code');
-    }
-    
-    // Check if the user is already a member
-    const { data: existingMember } = await supabase
-      .from('group_members')
-      .select('*')
-      .eq('group_id', groupId)
-      .eq('user_id', userData.user.id)
-      .maybeSingle();
-    
-    if (existingMember) {
-      throw new Error('You are already a member of this group');
-    }
-    
-    // Add the user to the group
-    await joinGroup(groupId);
-    
-    // Get the group details
-    const groupDetails = await getGroupDetails(groupId);
-    
-    return groupDetails;
-  } catch (error) {
-    console.error('Error in useGroupInvitation:', error);
-    
-    // Improve error message for database errors
-    if (error instanceof Error) {
-      if (error.message.includes('syntax for type uuid')) {
-        throw new Error('Invalid invitation code format');
-      }
-      throw error;
-    }
-    
-    throw new Error('Invitation invalid or expired');
-  }
-}
-
-export async function deactivateGroupInvitation(invitationId: string): Promise<void> {
-  const { data: userData, error: userError } = await supabase.auth.getUser();
-  if (userError || !userData.user) throw new Error('User not authenticated');
-  
-  // First check if user has permission to deactivate the invitation
-  const { data: invitation, error: invitationError } = await supabase
-    .from('group_invitations')
-    .select('*')
-    .eq('id', invitationId)
-    .single();
-  
-  if (invitationError) throw invitationError;
-  
-  // Check if user is the invitation creator or group owner
-  const { data: membership, error: membershipError } = await supabase
-    .from('group_members')
-    .select('role')
-    .eq('group_id', invitation.group_id)
-    .eq('user_id', userData.user.id)
-    .single();
-  
-  if (membershipError) throw membershipError;
-  
-  if (invitation.created_by !== userData.user.id && membership.role !== 'owner') {
-    throw new Error('You do not have permission to deactivate this invitation');
-  }
-  
-  const { error } = await supabase
-    .from('group_invitations')
-    .update({ is_active: false })
-    .eq('id', invitationId);
-  
-  if (error) throw error;
-}
-
-export async function getActiveGroupInvitations(groupId: string): Promise<GroupInvitation[]> {
+// Function to update workout completion status
+export async function updateWorkoutCompletionStatus(workoutId: string, isDone: boolean) {
   const { data, error } = await supabase
-    .from('group_invitations')
-    .select('*')
-    .eq('group_id', groupId)
-    .eq('is_active', true)
-    .gte('expires_at', new Date().toISOString());
-  
-  if (error) throw error;
-  return data;
-}
+    .from('workouts')
+    .update({ done: isDone })
+    .eq('id', workoutId)
+    .select()
+    .single();
 
-export async function joinGroupWithCode(code: string) {
-  if (!code || code.trim() === '') {
-    throw new Error('Invalid invitation code');
-  }
-  
-  try {
-    const cleanCode = code.trim();
-    
-    // First check our in-memory map for this exact code
-    const groupIdFromMap = invitationCodeMap.get(cleanCode);
-    if (groupIdFromMap) {
-      console.log(`Found group ID ${groupIdFromMap} for code ${cleanCode}`);
-      // Redirect to join page with both code and groupId
-      return {
-        success: true,
-        groupId: groupIdFromMap,
-        code: cleanCode,
-        redirectToJoin: true
-      };
-    }
-    
-    // Check if it's a UUID format (direct group ID)
-    if (cleanCode.includes('-') && cleanCode.length >= 32) {
-      try {
-        const groupDetails = await getGroupDetails(cleanCode);
-        return {
-          success: true,
-          groupId: groupDetails.id,
-          groupName: groupDetails.name,
-          redirectToJoin: true
-        };
-      } catch (error) {
-        console.error('Invalid group ID:', error);
-        throw new Error('Invalid group ID');
-      }
-    }
-    
-    // For all other codes, redirect to join screen with just the code
-    // The join screen will handle finding the right group
-    return {
-      success: true,
-      code: cleanCode,
-      redirectToJoin: true
-    };
-  } catch (error) {
-    console.error('Error joining group with code:', error);
-    throw error instanceof Error ? error : new Error('Failed to join group with this code');
-  }
-}
-
-export async function deleteUserAccount() {
-  const { data: userData, error: userError } = await supabase.auth.getUser();
-  if (userError || !userData.user) throw new Error('User not authenticated');
-
-  // Delete all user data first
-  try {
-    // Delete profile data
-    await supabase
-      .from('profiles')
-      .delete()
-      .eq('id', userData.user.id);
-
-    // Delete user's group memberships
-    await supabase
-      .from('group_members')
-      .delete()
-      .eq('user_id', userData.user.id);
-
-    // Delete user's meals
-    await supabase
-      .from('meals')
-      .delete()
-      .eq('user_id', userData.user.id);
-
-    // Delete user's nutrition settings
-    await supabase
-      .from('nutrition_settings')
-      .delete()
-      .eq('user_id', userData.user.id);
-
-    // Finally, delete the user's auth account
-    const { error: deleteError } = await supabase.rpc('delete_user');
-    if (deleteError) throw deleteError;
-
-  } catch (error) {
-    console.error('Error deleting account:', error);
+  if (error) {
+    console.error('Error updating workout completion status:', error);
     throw error;
   }
+  return data;
 }

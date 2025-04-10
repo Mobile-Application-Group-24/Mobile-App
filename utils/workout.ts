@@ -11,12 +11,14 @@ export interface Exercise {
 export interface Workout {
   id: string;
   title: string;
-  date: string;
-  user_id: string;
-  duration_minutes: number;
-  exercises: Exercise[];
-  workout_type: 'split' | 'custom'; // New field to distinguish workout types
+  description?: string;
+  workout_type: 'split' | 'custom';
   day_of_week?: string;
+  duration_minutes: number;
+  exercises?: Exercise[];
+  user_id: string;
+  created_at: string;
+  done: boolean; // Added done field
 }
 
 // Sample exercises for each workout type
