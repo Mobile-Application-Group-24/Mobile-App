@@ -1,14 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, ActivityIndicator, StatusBar, SafeAreaView, Platform } from 'react-native';
-import { Settings, Award, Calendar, ChartBar as BarChart } from 'lucide-react-native';
+import { Settings, Award, Calendar, ChartBar as BarChart, Clock } from 'lucide-react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/providers/AuthProvider';
-import { getProfile, type Profile } from '@/utils/supabase';
+import { getProfile, type Profile, getRecentWorkouts, type Workout } from '@/utils/supabase';
 
 export default function ProfileScreen() {
   const router = useRouter();
   const { session } = useAuth();
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [recentWorkouts, setRecentWorkouts] = useState<Workout[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -16,30 +17,45 @@ export default function ProfileScreen() {
   useFocusEffect(
     React.useCallback(() => {
       if (session?.user?.id) {
-        loadProfile();
+        loadProfileData();
       }
     }, [session?.user?.id])
   );
 
-  const loadProfile = async () => {
+  const loadProfileData = async () => {
     if (!session?.user?.id) return;
 
     try {
       setLoading(true);
       setError(null);
-      const data = await getProfile(session.user.id);
-      // Ensure achievements and stats have default values
+      
+      const [profileData, workoutsData] = await Promise.all([
+        getProfile(session.user.id),
+        getRecentWorkouts(session.user.id, 3)
+      ]);
+      
       setProfile({
-        ...data,
-        achievements: data.achievements || [],
-        stats: data.stats || { workouts: 0, hours: 0, volume: 0 },
+        ...profileData,
+        achievements: profileData.achievements || [],
+        stats: profileData.stats || { workouts: 0, hours: 0, volume: 0 },
       });
+      
+      setRecentWorkouts(workoutsData.slice(0, 3));
     } catch (err) {
-      console.error('Error loading profile:', err);
-      setError('Failed to load profile');
+      console.error('Error loading profile data:', err);
+      setError('Failed to load profile data');
     } finally {
       setLoading(false);
     }
+  };
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { 
+      month: 'short', 
+      day: 'numeric',
+      year: 'numeric'
+    });
   };
 
   if (loading) {
@@ -56,7 +72,7 @@ export default function ProfileScreen() {
         <Text style={styles.errorText}>{error || 'Profile not found'}</Text>
         <TouchableOpacity 
           style={styles.retryButton}
-          onPress={loadProfile}
+          onPress={loadProfileData}
         >
           <Text style={styles.retryButtonText}>Retry</Text>
         </TouchableOpacity>
@@ -143,10 +159,41 @@ export default function ProfileScreen() {
             <Calendar size={24} color="#007AFF" />
             <Text style={styles.sectionTitle}>Recent Activity</Text>
           </View>
-          <View style={styles.activityChart}>
-            <BarChart size={24} color="#8E8E93" />
-            <Text style={styles.chartLabel}>Recent activity should be here</Text>
-          </View>
+          
+          {recentWorkouts.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyStateText}>No recent workouts</Text>
+              <Text style={styles.emptyStateSubtext}>
+                Your most recent workouts will appear here
+              </Text>
+            </View>
+          ) : (
+            recentWorkouts.map((workout) => (
+              <View key={workout.id} style={styles.workoutCard}>
+                <View style={styles.workoutHeader}>
+                  <Text style={styles.workoutTitle} numberOfLines={1}>
+                    {workout.title}
+                  </Text>
+                  <View style={[styles.statusBadge, { backgroundColor: workout.done ? '#34C759' : '#FF9500' }]}>
+                    <Text style={styles.statusText}>{workout.done ? 'Completed' : 'Planned'}</Text>
+                  </View>
+                </View>
+                
+                <View style={styles.workoutInfo}>
+                  <View style={styles.workoutDetail}>
+                    <Clock size={16} color="#8E8E93" />
+                    <Text style={styles.workoutDetailText}>{formatDate(workout.date)}</Text>
+                  </View>
+                  
+                  {workout.calories_burned > 0 && (
+                    <Text style={styles.caloriesText}>
+                      {workout.calories_burned} cal
+                    </Text>
+                  )}
+                </View>
+              </View>
+            ))
+          )}
         </View>
       </ScrollView>
     </>
@@ -322,5 +369,59 @@ const styles = StyleSheet.create({
     marginTop: 8,
     color: '#8E8E93',
     fontSize: 14,
+  },
+  // New styles for workout cards
+  workoutCard: {
+    backgroundColor: '#F2F2F7',
+    padding: 16,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  workoutHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  workoutTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    flex: 1,
+  },
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginLeft: 8,
+  },
+  statusText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  workoutInfo: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  workoutDetail: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  workoutDetailText: {
+    fontSize: 14,
+    color: '#8E8E93',
+    marginLeft: 4,
+  },
+  caloriesText: {
+    fontSize: 14,
+    color: '#FF9500',
+    fontWeight: '500',
+  },
+  workoutNotes: {
+    fontSize: 14,
+    color: '#8E8E93',
+    fontStyle: 'italic',
   },
 });

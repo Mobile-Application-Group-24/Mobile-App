@@ -829,3 +829,21 @@ export async function getUserWorkoutStats(userId: string): Promise<UserStats> {
     return { workouts: 0, hours: 0, volume: 0 };
   }
 }
+
+
+export async function getRecentWorkouts(userId: string, limit: number = 3): Promise<Workout[]> {
+  try {
+    const { data, error } = await supabase
+      .from('workouts')
+      .select('*')
+      .eq('user_id', userId)
+      .order('date', { ascending: false })
+      .limit(limit);
+    
+    if (error) throw error;
+    return data || [];
+  } catch (error) {
+    console.error('Error fetching recent workouts:', error);
+    throw error;
+  }
+}
