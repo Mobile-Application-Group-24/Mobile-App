@@ -168,7 +168,15 @@ export async function getProfile(userId: string): Promise<Profile> {
     .eq('id', userId)
     .single();
   if (error) throw error;
-  return data;
+  
+  // Get workout stats
+  const stats = await getUserWorkoutStats(userId);
+  
+  // Combine profile data with workout stats
+  return {
+    ...data,
+    stats
+  };
 }
 
 export async function updateProfile(userId: string, updates: Partial<Profile>) {
@@ -749,5 +757,75 @@ export async function deleteWorkout(workoutId: string): Promise<void> {
   } catch (error) {
     console.error('Error deleting workout:', error);
     throw error;
+  }
+}
+
+// Calculate user workout statistics
+export async function getUserWorkoutStats(userId: string): Promise<UserStats> {
+  try {
+    console.log(`Calculating stats for user ID: ${userId}`);
+    
+    // Get all completed workouts for the user
+    const { data: workouts, error } = await supabase
+      .from('workouts')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('done', true);
+    
+    if (error) {
+      console.error('Error fetching workouts for stats:', error);
+      throw error;
+    }
+    
+    console.log(`Found ${workouts?.length || 0} completed workouts for user ${userId}`);
+    
+    if (!workouts || workouts.length === 0) {
+      return { workouts: 0, hours: 0, volume: 0 };
+    }
+    
+    // Calculate total workouts
+    const totalWorkouts = workouts.length;
+    
+    // Calculate total hours
+    let totalMinutes = 0;
+    workouts.forEach(workout => {
+      if (workout.start_time && workout.end_time) {
+        const start = new Date(workout.start_time);
+        const end = new Date(workout.end_time);
+        const durationMs = end.getTime() - start.getTime();
+        const durationMinutes = durationMs / (1000 * 60);
+        totalMinutes += durationMinutes;
+      }
+    });
+    const totalHours = Math.round(totalMinutes / 60);
+    
+    // Calculate total volume
+    let totalVolume = 0;
+    workouts.forEach(workout => {
+      if (workout.exercises && Array.isArray(workout.exercises)) {
+        workout.exercises.forEach(exercise => {
+          if (exercise.setDetails && Array.isArray(exercise.setDetails)) {
+            exercise.setDetails.forEach(set => {
+              // Calculate volume for this set (weight * reps)
+              const weight = set.weight ? parseFloat(set.weight.toString()) : 0;
+              const reps = set.reps ? parseInt(set.reps.toString(), 10) : 0;
+              totalVolume += weight * reps;
+            });
+          }
+        });
+      }
+    });
+    
+    const stats = {
+      workouts: totalWorkouts,
+      hours: totalHours,
+      volume: Math.round(totalVolume)
+    };
+    
+    console.log(`Stats calculated for user ${userId}:`, stats);
+    return stats;
+  } catch (error) {
+    console.error('Error calculating user stats:', error);
+    return { workouts: 0, hours: 0, volume: 0 };
   }
 }

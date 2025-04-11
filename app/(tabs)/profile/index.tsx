@@ -145,7 +145,7 @@ export default function ProfileScreen() {
           </View>
           <View style={styles.activityChart}>
             <BarChart size={24} color="#8E8E93" />
-            <Text style={styles.chartLabel}>Activity data visualization would go here</Text>
+            <Text style={styles.chartLabel}>Recent activity should be here</Text>
           </View>
         </View>
       </ScrollView>
