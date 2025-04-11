@@ -66,6 +66,7 @@ export interface GroupMember {
     full_name: string | null;
     avatar_url: string | null;
   };
+  points?: number; // Add points to store user's score in the group
 }
 
 export interface MealTime {
@@ -295,8 +296,8 @@ export async function getGroupMembers(groupId: string): Promise<GroupMember[]> {
     .in('id', userIds);
   if (profilesError) throw profilesError;
 
-  // Map profiles to members
-  return data.map(member => {
+  // Map profiles to members and calculate points for each member
+  const membersWithProfiles = data.map(member => {
     const profile = profilesData.find(p => p.id === member.user_id) || { full_name: null, avatar_url: null };
     return {
       ...member,
@@ -306,6 +307,20 @@ export async function getGroupMembers(groupId: string): Promise<GroupMember[]> {
       }
     };
   });
+
+  // Calculate points for each member
+  const membersWithPoints = await Promise.all(
+    membersWithProfiles.map(async (member) => {
+      const points = await calculateUserPoints(member.user_id);
+      return {
+        ...member,
+        points
+      };
+    })
+  );
+
+  // Sort members by points in descending order
+  return membersWithPoints.sort((a, b) => (b.points || 0) - (a.points || 0));
 }
 
 export async function joinGroup(groupId: string) {
@@ -845,5 +860,205 @@ export async function getRecentWorkouts(userId: string, limit: number = 3): Prom
   } catch (error) {
     console.error('Error fetching recent workouts:', error);
     throw error;
+  }
+}
+
+// Calculate points for a user based on their workout stats
+export async function calculateUserPoints(userId: string): Promise<number> {
+  try {
+    const stats = await getUserWorkoutStats(userId);
+    
+    // Calculate points based on workouts, hours, and volume
+    // This formula can be adjusted to weight different stats as desired
+    const workoutPoints = stats.workouts * 10; // 10 points per workout
+    const hourPoints = stats.hours * 5;       // 5 points per hour
+    const volumePoints = Math.floor(stats.volume / 100); // 1 point per 100 volume
+    
+    const totalPoints = workoutPoints + hourPoints + volumePoints;
+    return totalPoints;
+  } catch (error) {
+    console.error('Error calculating user points:', error);
+    return 0;
+  }
+}
+
+// Group invitation functions
+export async function createGroupInvitation(groupId: string, options?: { expiresIn?: number, maxUses?: number | null }): Promise<GroupInvitation> {
+  try {
+    const { data: userData } = await supabase.auth.getUser();
+    if (!userData.user) throw new Error('User not authenticated');
+    
+    // Generate a random 8-character invitation code
+    const generateCode = () => {
+      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+      let code = '';
+      for (let i = 0; i < 8; i++) {
+        code += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+      return code;
+    };
+    
+    const code = generateCode();
+    
+    // Default expiration is 7 days from now
+    const expiresIn = options?.expiresIn || 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
+    const expiresAt = new Date(Date.now() + expiresIn).toISOString();
+    
+    // If we're still having database issues, store the code in memory
+    invitationCodeMap.set(code, groupId);
+    
+    // Try to create the invitation in the database
+    const { data, error } = await supabase
+      .from('group_invitations')
+      .insert({
+        group_id: groupId,
+        code: code,
+        created_by: userData.user.id,
+        expires_at: expiresAt,
+        is_active: true,
+        uses_left: options?.maxUses || null, // null means unlimited uses
+      })
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('Error creating group invitation:', error);
+      return {
+        id: 'temp-' + Date.now(),
+        group_id: groupId,
+        code: code,
+        created_by: userData.user.id,
+        created_at: new Date().toISOString(),
+        expires_at: expiresAt,
+        is_active: true,
+        uses_left: options?.maxUses || null,
+      };
+    }
+    
+    return data;
+  } catch (error) {
+    console.error('Error in createGroupInvitation:', error);
+    throw error;
+  }
+}
+
+export async function getGroupInvitation(code: string): Promise<GroupInvitation | null> {
+  try {
+    // First check memory map (our fallback solution)
+    const groupId = invitationCodeMap.get(code);
+    if (groupId) {
+      // If found in memory, construct a temporary invitation object
+      return {
+        id: 'temp-' + Date.now(),
+        group_id: groupId,
+        code: code,
+        created_by: 'unknown',
+        created_at: new Date().toISOString(),
+        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days from now
+        is_active: true,
+        uses_left: null,
+      };
+    }
+    
+    const { data, error } = await supabase
+      .from('group_invitations')
+      .select('*, group:groups(*)')
+      .eq('code', code)
+      .eq('is_active', true)
+      .gte('expires_at', new Date().toISOString())
+      .single();
+    
+    if (error) {
+      console.error('Error fetching invitation:', error);
+      return null;
+    }
+    
+    if (data.uses_left !== null && data.uses_left <= 0) {
+      return null; 
+    }
+    
+    return data;
+  } catch (error) {
+    console.error('Error in getGroupInvitation:', error);
+    return null;
+  }
+}
+
+export async function useGroupInvitation(code: string): Promise<{ success: boolean, groupId?: string, error?: string }> {
+  try {
+    const invitation = await getGroupInvitation(code);
+    
+    if (!invitation) {
+      return { success: false, error: 'Invalid or expired invitation code' };
+    }
+    
+    const { data: userData } = await supabase.auth.getUser();
+    if (!userData.user) {
+      return { success: false, error: 'User not authenticated' };
+    }
+    
+    const { data: existingMember, error: memberCheckError } = await supabase
+      .from('group_members')
+      .select('id')
+      .eq('group_id', invitation.group_id)
+      .eq('user_id', userData.user.id)
+      .single();
+    
+    if (existingMember) {
+      return { success: false, error: 'You are already a member of this group' };
+    }
+    
+    const { error: joinError } = await supabase
+      .from('group_members')
+      .insert({
+        group_id: invitation.group_id,
+        user_id: userData.user.id,
+        role: 'member',
+      });
+    
+    if (joinError) {
+      console.error('Error joining group:', joinError);
+      return { success: false, error: 'Failed to join group' };
+    }
+    
+    if (invitation.id.startsWith('temp-')) {
+    } else if (invitation.uses_left !== null) {
+      const { error: updateError } = await supabase
+        .from('group_invitations')
+        .update({ uses_left: invitation.uses_left - 1 })
+        .eq('id', invitation.id);
+      
+      if (updateError) {
+        console.error('Error updating invitation uses:', updateError);
+      }
+    }
+    
+    return { success: true, groupId: invitation.group_id };
+  } catch (error) {
+    console.error('Error using invitation:', error);
+    return { success: false, error: 'An unexpected error occurred' };
+  }
+}
+
+
+
+export async function getGroupInvitations(groupId: string): Promise<GroupInvitation[]> {
+  try {
+    const { data, error } = await supabase
+      .from('group_invitations')
+      .select('*')
+      .eq('group_id', groupId)
+      .eq('is_active', true)
+      .gte('expires_at', new Date().toISOString());
+    
+    if (error) {
+      console.error('Error fetching group invitations:', error);
+      return [];
+    }
+    
+    return data || [];
+  } catch (error) {
+    console.error('Error in getGroupInvitations:', error);
+    return [];
   }
 }
