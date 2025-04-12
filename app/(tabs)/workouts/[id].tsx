@@ -7,6 +7,7 @@ import { getWorkoutPlan, deleteWorkoutPlan, createWorkout, WorkoutPlan, Workout 
 import { updateWorkoutPlan } from '@/utils/supabase'; // Import from supabase instead
 import { Swipeable } from 'react-native-gesture-handler';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { findExerciseType } from '@/utils/exercises';
 
 type SetType = 'normal' | 'warmup' | 'dropset';
 
@@ -172,7 +173,6 @@ export default function WorkoutDetailScreen() {
       setWorkoutPlan(plan);
       setWorkoutName(plan.title || '');
       setNotes(plan.description || '');
-      
       // Initialize exercises from the workout plan only, don't load previous workouts
       const planExercises = plan.exercises?.map(exercise => {
         return {
@@ -189,11 +189,9 @@ export default function WorkoutDetailScreen() {
           }))
         };
       }) || [];
-      
       // Set exercises directly from plan without checking previous workouts
       setExercises(planExercises);
       setHasPreviousData(false);
-      
     } catch (error) {
       console.error('Error loading workout plan:', error);
       setError('Failed to load workout details');
@@ -204,18 +202,35 @@ export default function WorkoutDetailScreen() {
 
   useEffect(() => {
     if (selectedExercise && typeof selectedExercise === 'string') {
-      const timestamp = Date.now();
+      const timestamp = Date.now();      
       const exerciseToAdd: ExerciseProgress = {
         id: `${timestamp}-${Math.random().toString(36).substr(2, 9)}`,
         name: selectedExercise,
-        type: 'chest', // Default exercise type - this should be improved to get the actual type
-        sets: [{
-          id: `${timestamp}-set1`,
-          weight: '',
-          reps: '',
-          type: 'normal',
-          notes: ''
-        }]
+        type: findExerciseType(selectedExercise), // Now using the imported function
+        sets: [
+          // Create 3 sets by default instead of just 1
+          {
+            id: `${timestamp}-set1`,
+            weight: '',
+            reps: '',
+            type: 'normal',
+            notes: ''
+          },
+          {
+            id: `${timestamp}-set2`,
+            weight: '',
+            reps: '',
+            type: 'normal',
+            notes: ''
+          },
+          {
+            id: `${timestamp}-set3`,
+            weight: '',
+            reps: '',
+            type: 'normal',
+            notes: ''
+          }
+        ]
       };
 
       setExercises(prev => [...prev, exerciseToAdd]);
@@ -395,7 +410,7 @@ export default function WorkoutDetailScreen() {
         // If the workout has been explicitly ended, use that end time
         // Otherwise, if it was started but not explicitly ended, set the current time as end time
         const endTimeToUse = workoutEndTime || (isWorkoutActive ? new Date() : undefined);
-        
+            
         // Consider a workout done if it's been started (regardless of whether it has an explicit end time)
         const isDone = isWorkoutActive || !!workoutEndTime;
         
@@ -412,13 +427,13 @@ export default function WorkoutDetailScreen() {
           calories_burned: 0, // Calculate or leave as default
           done: isDone // Mark as done if it was started or has an end time
         };
-        
+                
         const savedWorkout = await createWorkout(workoutData);
         console.log("Successfully created workout session:", savedWorkout.id, "Done status:", isDone);
       } else {
         console.log("Workout wasn't started, only updating the workout plan");
       }
-      
+            
       router.back();
     } catch (error) {
       console.error('Error updating workout:', error);

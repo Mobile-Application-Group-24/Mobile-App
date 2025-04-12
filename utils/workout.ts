@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { exercisesByWorkoutType } from './exercises';
 
 export interface Exercise {
   id: string;
@@ -46,55 +47,8 @@ export interface Workout {
   done?: boolean;
 }
 
-// Sample exercises for each workout type
-export const exercisesByWorkoutType: Record<string, Exercise[]> = {
-  'Push': [
-    { id: 'ex1', name: 'Bench Press', sets: 4, reps: 8, weight: 135, type: 'chest' },
-    { id: 'ex2', name: 'Shoulder Press', sets: 3, reps: 10, weight: 95, type: 'shoulders' },
-    { id: 'ex3', name: 'Tricep Pushdown', sets: 3, reps: 12, weight: 50, type: 'arms' },
-    { id: 'ex4', name: 'Incline Dumbbell Press', sets: 3, reps: 10, weight: 60, type: 'chest' },
-    { id: 'ex5', name: 'Lateral Raises', sets: 3, reps: 15, weight: 15, type: 'shoulders' }
-  ],
-  'Pull': [
-    { id: 'ex1', name: 'Pull-ups', sets: 4, reps: 8, weight: 0, type: 'back' },
-    { id: 'ex2', name: 'Bent Over Rows', sets: 3, reps: 10, weight: 135, type: 'back' },
-    { id: 'ex3', name: 'Lat Pulldown', sets: 3, reps: 12, weight: 120, type: 'back' },
-    { id: 'ex4', name: 'Bicep Curls', sets: 3, reps: 12, weight: 35, type: 'arms' },
-    { id: 'ex5', name: 'Face Pulls', sets: 3, reps: 15, weight: 50, type: 'shoulders' }
-  ],
-  'Legs': [
-    { id: 'ex1', name: 'Squats', sets: 4, reps: 8, weight: 185, type: 'legs' },
-    { id: 'ex2', name: 'Romanian Deadlifts', sets: 3, reps: 10, weight: 155, type: 'legs' },
-    { id: 'ex3', name: 'Leg Press', sets: 3, reps: 12, weight: 270, type: 'legs' },
-    { id: 'ex4', name: 'Leg Extensions', sets: 3, reps: 15, weight: 90, type: 'legs' },
-    { id: 'ex5', name: 'Calf Raises', sets: 4, reps: 15, weight: 120, type: 'legs' }
-  ],
-  'Upper': [
-    { id: 'ex1', name: 'Bench Press', sets: 4, reps: 8, weight: 135, type: 'chest' },
-    { id: 'ex2', name: 'Pull-ups', sets: 3, reps: 8, weight: 0, type: 'back' },
-    { id: 'ex3', name: 'Shoulder Press', sets: 3, reps: 10, weight: 95, type: 'shoulders' },
-    { id: 'ex4', name: 'Bent Over Rows', sets: 3, reps: 10, weight: 135, type: 'back' },
-    { id: 'ex5', name: 'Tricep Dips', sets: 3, reps: 12, weight: 0, type: 'arms' },
-    { id: 'ex6', name: 'Bicep Curls', sets: 3, reps: 12, weight: 35, type: 'arms' }
-  ],
-  'Lower': [
-    { id: 'ex1', name: 'Squats', sets: 4, reps: 8, weight: 185, type: 'legs' },
-    { id: 'ex2', name: 'Deadlifts', sets: 3, reps: 8, weight: 205, type: 'legs' },
-    { id: 'ex3', name: 'Leg Press', sets: 3, reps: 12, weight: 270, type: 'legs' },
-    { id: 'ex4', name: 'Leg Curls', sets: 3, reps: 12, weight: 70, type: 'legs' },
-    { id: 'ex5', name: 'Calf Raises', sets: 4, reps: 15, weight: 120, type: 'legs' },
-    { id: 'ex6', name: 'Hip Thrusts', sets: 3, reps: 12, weight: 135, type: 'legs' }
-  ],
-  'Full Body': [
-    { id: 'ex1', name: 'Squats', sets: 3, reps: 10, weight: 155, type: 'legs' },
-    { id: 'ex2', name: 'Bench Press', sets: 3, reps: 10, weight: 125, type: 'chest' },
-    { id: 'ex3', name: 'Bent Over Rows', sets: 3, reps: 10, weight: 125, type: 'back' },
-    { id: 'ex4', name: 'Shoulder Press', sets: 3, reps: 10, weight: 85, type: 'shoulders' },
-    { id: 'ex5', name: 'Bicep Curls', sets: 3, reps: 12, weight: 35, type: 'arms' },
-    { id: 'ex6', name: 'Tricep Pushdown', sets: 3, reps: 12, weight: 50, type: 'arms' },
-    { id: 'ex7', name: 'Romanian Deadlifts', sets: 3, reps: 10, weight: 145, type: 'legs' }
-  ]
-};
+// Export exercises data from the imported file
+export { exercisesByWorkoutType };
 
 /**
  * Generates workout templates based on the user's training schedule
