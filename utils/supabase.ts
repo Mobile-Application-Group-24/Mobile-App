@@ -66,6 +66,7 @@ export interface GroupMember {
     full_name: string | null;
     avatar_url: string | null;
   };
+  points?: number; // Add points to store user's score in the group
 }
 
 export interface MealTime {
@@ -203,7 +204,15 @@ export async function getProfile(userId: string): Promise<Profile> {
     .eq('id', userId)
     .single();
   if (error) throw error;
-  return data;
+  
+  // Get workout stats
+  const stats = await getUserWorkoutStats(userId);
+  
+  // Combine profile data with workout stats
+  return {
+    ...data,
+    stats
+  };
 }
 
 export async function updateProfile(userId: string, updates: Partial<Profile>) {
@@ -323,8 +332,8 @@ export async function getGroupMembers(groupId: string): Promise<GroupMember[]> {
     .in('id', userIds);
   if (profilesError) throw profilesError;
 
-  // Map profiles to members
-  return data.map(member => {
+  // Map profiles to members and calculate points for each member
+  const membersWithProfiles = data.map(member => {
     const profile = profilesData.find(p => p.id === member.user_id) || { full_name: null, avatar_url: null };
     return {
       ...member,
@@ -334,6 +343,20 @@ export async function getGroupMembers(groupId: string): Promise<GroupMember[]> {
       }
     };
   });
+
+  // Calculate points for each member
+  const membersWithPoints = await Promise.all(
+    membersWithProfiles.map(async (member) => {
+      const points = await calculateUserPoints(member.user_id);
+      return {
+        ...member,
+        points
+      };
+    })
+  );
+
+  // Sort members by points in descending order
+  return membersWithPoints.sort((a, b) => (b.points || 0) - (a.points || 0));
 }
 
 export async function joinGroup(groupId: string) {
@@ -791,334 +814,359 @@ export async function deleteWorkout(workoutId: string): Promise<void> {
   }
 }
 
-// Get stats for all exercises - Updated to work directly with workouts table
-export async function getExerciseStats(userId: string): Promise<ExerciseStats[]> {
+// Calculate user workout statistics
+export async function getUserWorkoutStats(userId: string): Promise<UserStats> {
   try {
-    console.log('Fetching exercise stats from workouts table for user:', userId);
+    console.log(`Calculating stats for user ID: ${userId}`);
     
-    // Get all workouts with exercises
-    const { data: workouts, error: workoutsError } = await supabase
+    // Get all completed workouts for the user
+    const { data: workouts, error } = await supabase
       .from('workouts')
-      .select('id, date, exercises')
+      .select('*')
       .eq('user_id', userId)
-      .order('date', { ascending: false });
-      
-    if (workoutsError) {
-      console.error('Error fetching workouts for stats:', workoutsError);
-      throw workoutsError;
+      .eq('done', true);
+    
+    if (error) {
+      console.error('Error fetching workouts for stats:', error);
+      throw error;
     }
-
-    // Get favorite exercises if that table exists
-    let favoriteIds = new Set<string>();
-    try {
-      const { data: favorites } = await supabase
-        .from('favorite_exercises')
-        .select('exercise_id')
-        .eq('user_id', userId);
-        
-      if (favorites) {
-        favoriteIds = new Set(favorites.map(f => f.exercise_id));
+    
+    console.log(`Found ${workouts?.length || 0} completed workouts for user ${userId}`);
+    
+    if (!workouts || workouts.length === 0) {
+      return { workouts: 0, hours: 0, volume: 0 };
+    }
+    
+    // Calculate total workouts
+    const totalWorkouts = workouts.length;
+    
+    // Calculate total hours
+    let totalMinutes = 0;
+    workouts.forEach(workout => {
+      if (workout.start_time && workout.end_time) {
+        const start = new Date(workout.start_time);
+        const end = new Date(workout.end_time);
+        const durationMs = end.getTime() - start.getTime();
+        const durationMinutes = durationMs / (1000 * 60);
+        totalMinutes += durationMinutes;
       }
-    } catch (favError) {
-      console.warn('Could not fetch favorite exercises (table may not exist):', favError);
-      // Continue without favorites
-    }
-
-    // Process workouts to extract exercise stats
-    const exerciseMap = new Map<string, ExerciseStats>();
-    
-    // Track the most recent workout date for each exercise
-    const lastUsedMap = new Map<string, string>();
-    
-    // Process each workout
-    workouts?.forEach(workout => {
-      if (!workout.exercises || !Array.isArray(workout.exercises)) return;
-      
-      workout.exercises.forEach(exercise => {
-        if (!exercise || !exercise.id || !exercise.name) return;
-        
-        const exerciseId = exercise.id;
-        const exerciseName = exercise.name;
-        
-        // Update last used date for this exercise
-        if (!lastUsedMap.has(exerciseId) || new Date(workout.date) > new Date(lastUsedMap.get(exerciseId) || '')) {
-          lastUsedMap.set(exerciseId, workout.date);
-        }
-        
-        // Initialize stats object if needed
-        if (!exerciseMap.has(exerciseId)) {
-          exerciseMap.set(exerciseId, {
-            id: generateUUID(), // Use our custom UUID generator instead of crypto.randomUUID()
-            exercise_id: exerciseId,
-            exercise_name: exerciseName,
-            max_weight: 0,
-            max_reps: 0,
-            total_volume: 0,
-            total_sessions: 0,
-            last_used: workout.date,
-            is_favorite: favoriteIds.has(exerciseId),
-            progress: 0 // Will calculate this later if possible
-          });
-        }
-        
-        // Update session count
-        const stats = exerciseMap.get(exerciseId)!;
-        stats.total_sessions += 1;
-        
-        // Process set details to update max weight, max reps, and total volume
-        if (exercise.setDetails && Array.isArray(exercise.setDetails)) {
-          exercise.setDetails.forEach(set => {
-            if (!set) return;
-            
-            const weight = typeof set.weight === 'number' ? set.weight : 
-                          (set.weight ? parseFloat(set.weight) : 0);
-            
-            const reps = typeof set.reps === 'number' ? set.reps : 
-                        (set.reps ? parseInt(set.reps, 10) : 0);
-            
-            // Only count sets with both weight and reps
-            if (weight > 0 && reps > 0) {
-              // Update max weight
-              if (weight > stats.max_weight) {
-                stats.max_weight = weight;
-              }
-              
-              // Update max reps
-              if (reps > stats.max_reps) {
-                stats.max_reps = reps;
-              }
-              
-              // Add to total volume
-              stats.total_volume += weight * reps;
-            }
-          });
-        }
-      });
     });
+    const totalHours = Math.round(totalMinutes / 60);
     
-    // Update last used dates
-    exerciseMap.forEach((stats, exerciseId) => {
-      stats.last_used = lastUsedMap.get(exerciseId) || stats.last_used;
-    });
-    
-    // Calculate progress by comparing latest workout with previous
-    // Group workouts by exercise and sort by date
-    const exerciseWorkouts = new Map<string, any[]>();
-    
-    workouts?.forEach(workout => {
-      if (!workout.exercises || !Array.isArray(workout.exercises)) return;
-      
-      workout.exercises.forEach(exercise => {
-        if (!exercise || !exercise.id) return;
-        
-        const exerciseId = exercise.id;
-        
-        if (!exerciseWorkouts.has(exerciseId)) {
-          exerciseWorkouts.set(exerciseId, []);
-        }
-        
-        exerciseWorkouts.get(exerciseId)?.push({
-          date: workout.date,
-          exercise: exercise
-        });
-      });
-    });
-    
-    // Calculate progress for each exercise
-    exerciseWorkouts.forEach((workoutList, exerciseId) => {
-      if (workoutList.length < 2 || !exerciseMap.has(exerciseId)) return;
-      
-      // Sort by date descending
-      workoutList.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-      
-      const latestWorkout = workoutList[0];
-      const previousWorkout = workoutList[1];
-      
-      // Calculate average weight for latest workout
-      let latestTotalWeight = 0;
-      let latestSetCount = 0;
-      
-      if (latestWorkout.exercise.setDetails && Array.isArray(latestWorkout.exercise.setDetails)) {
-        latestWorkout.exercise.setDetails.forEach(set => {
-          if (!set) return;
-          
-          const weight = typeof set.weight === 'number' ? set.weight : 
-                        (set.weight ? parseFloat(set.weight) : 0);
-          
-          if (weight > 0) {
-            latestTotalWeight += weight;
-            latestSetCount++;
+    // Calculate total volume
+    let totalVolume = 0;
+    workouts.forEach(workout => {
+      if (workout.exercises && Array.isArray(workout.exercises)) {
+        workout.exercises.forEach(exercise => {
+          if (exercise.setDetails && Array.isArray(exercise.setDetails)) {
+            exercise.setDetails.forEach(set => {
+              // Calculate volume for this set (weight * reps)
+              const weight = set.weight ? parseFloat(set.weight.toString()) : 0;
+              const reps = set.reps ? parseInt(set.reps.toString(), 10) : 0;
+              totalVolume += weight * reps;
+            });
           }
         });
       }
-      
-      // Calculate average weight for previous workout
-      let previousTotalWeight = 0;
-      let previousSetCount = 0;
-      
-      if (previousWorkout.exercise.setDetails && Array.isArray(previousWorkout.exercise.setDetails)) {
-        previousWorkout.exercise.setDetails.forEach(set => {
-          if (!set) return;
-          
-          const weight = typeof set.weight === 'number' ? set.weight : 
-                        (set.weight ? parseFloat(set.weight) : 0);
-          
-          if (weight > 0) {
-            previousTotalWeight += weight;
-            previousSetCount++;
-          }
-        });
-      }
-      
-      // Only calculate progress if we have valid sets in both workouts
-      if (latestSetCount > 0 && previousSetCount > 0) {
-        const latestAvg = latestTotalWeight / latestSetCount;
-        const previousAvg = previousTotalWeight / previousSetCount;
-        
-        if (previousAvg > 0) {
-          const progressPercent = Math.round(((latestAvg - previousAvg) / previousAvg) * 100);
-          exerciseMap.get(exerciseId)!.progress = progressPercent;
-        }
-      }
     });
     
-    return Array.from(exerciseMap.values());
+    const stats = {
+      workouts: totalWorkouts,
+      hours: totalHours,
+      volume: Math.round(totalVolume)
+    };
+    
+    console.log(`Stats calculated for user ${userId}:`, stats);
+    return stats;
   } catch (error) {
-    console.error('Error calculating exercise stats from workouts:', error);
+    console.error('Error calculating user stats:', error);
+    return { workouts: 0, hours: 0, volume: 0 };
+  }
+}
+
+
+export async function getRecentWorkouts(userId: string, limit: number = 3): Promise<Workout[]> {
+  try {
+    const { data, error } = await supabase
+      .from('workouts')
+      .select('*')
+      .eq('user_id', userId)
+      .order('date', { ascending: false })
+      .limit(limit);
+    
+    if (error) throw error;
+    return data || [];
+  } catch (error) {
+    console.error('Error fetching recent workouts:', error);
     throw error;
   }
 }
 
-// Get history for a specific exercise
-export async function getExerciseHistory(
-  userId: string,
-  exerciseId: string
-): Promise<ExerciseHistory[]> {
-  const { data, error } = await supabase
-    .from('exercise_history')
-    .select('*')
-    .eq('user_id', userId)
-    .eq('exercise_id', exerciseId)
-    .order('date', { ascending: false });
-
-  if (error) throw error;
-  return data || [];
-}
-
-// Update exercise stats after workout
-export async function updateExerciseStats(
-  userId: string,
-  exerciseData: {
-    exercise_id: string;
-    exercise_name: string;
-    weight: number;
-    reps: number;
-    workout_id: string;
-  }
-) {
-  const volume = exerciseData.weight * exerciseData.reps;
-
-  // First, update or insert the stats
-  const { data: existingStats } = await supabase
-    .from('exercise_stats')
-    .select('*')
-    .eq('user_id', userId)
-    .eq('exercise_id', exerciseData.exercise_id)
-    .single();
-
-  if (existingStats) {
-    // Update existing stats
-    await supabase
-      .from('exercise_stats')
-      .update({
-        max_weight: Math.max(existingStats.max_weight || 0, exerciseData.weight),
-        max_reps: Math.max(existingStats.max_reps || 0, exerciseData.reps),
-        total_volume: (existingStats.total_volume || 0) + volume,
-        total_sessions: (existingStats.total_sessions || 0) + 1,
-        last_used: new Date().toISOString()
-      })
-      .eq('id', existingStats.id);
-  } else {
-    // Insert new stats
-    await supabase
-      .from('exercise_stats')
-      .insert({
-        user_id: userId,
-        exercise_id: exerciseData.exercise_id,
-        exercise_name: exerciseData.exercise_name,
-        max_weight: exerciseData.weight,
-        max_reps: exerciseData.reps,
-        total_volume: volume,
-        total_sessions: 1,
-        last_used: new Date().toISOString()
-      });
-  }
-
-  // Then, add to history
-  await supabase
-    .from('exercise_history')
-    .insert({
-      user_id: userId,
-      exercise_id: exerciseData.exercise_id,
-      workout_id: exerciseData.workout_id,
-      weight: exerciseData.weight,
-      reps: exerciseData.reps,
-      volume: volume,
-      date: new Date().toISOString()
-    });
-}
-
-// Toggle favorite status
-export async function toggleExerciseFavorite(
-  userId: string,
-  exerciseId: string
-): Promise<boolean> {
-  const { data: existing } = await supabase
-    .from('favorite_exercises')
-    .select()
-    .eq('user_id', userId)
-    .eq('exercise_id', exerciseId)
-    .single();
-
-  if (existing) {
-    await supabase
-      .from('favorite_exercises')
-      .delete()
-      .eq('user_id', userId)
-      .eq('exercise_id', exerciseId);
-    return false;
-  } else {
-    await supabase
-      .from('favorite_exercises')
-      .insert({ user_id: userId, exercise_id: exerciseId });
-    return true;
+// Calculate points for a user based on their workout stats
+export async function calculateUserPoints(userId: string): Promise<number> {
+  try {
+    const stats = await getUserWorkoutStats(userId);
+    
+    // Calculate points based on workouts, hours, and volume
+    // This formula can be adjusted to weight different stats as desired
+    const workoutPoints = stats.workouts * 10; // 10 points per workout
+    const hourPoints = stats.hours * 5;       // 5 points per hour
+    const volumePoints = Math.floor(stats.volume / 100); // 1 point per 100 volume
+    
+    const totalPoints = workoutPoints + hourPoints + volumePoints;
+    return totalPoints;
+  } catch (error) {
+    console.error('Error calculating user points:', error);
+    return 0;
   }
 }
 
-// Get progress data for charts
-export async function getExerciseProgress(
-  userId: string,
-  exerciseId: string,
-  period: 'week' | 'month' | 'year' = 'month'
-): Promise<{
-  labels: string[];
-  volumes: number[];
-  weights: number[];
-}> {
-  const { data, error } = await supabase
-    .from('exercise_history')
-    .select('*')
-    .eq('user_id', userId)
-    .eq('exercise_id', exerciseId)
-    .order('date', { ascending: true });
+// Group invitation functions
+export async function createGroupInvitation(groupId: string, options?: { expiresIn?: number, maxUses?: number | null }): Promise<GroupInvitation> {
+  try {
+    console.log('Creating group invitation for group:', groupId);
+    
+    const { data: userData } = await supabase.auth.getUser();
+    if (!userData.user) {
+      console.error('User not authenticated when creating invitation');
+      throw new Error('User not authenticated');
+    }
+    
+    // Generate a random 8-character invitation code
+    const generateCode = () => {
+      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+      let code = '';
+      for (let i = 0; i < 8; i++) {
+        code += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+      return code;
+    };
+    
+    const code = generateCode();
+    console.log('Generated invitation code:', code);
+    
+    // Default expiration is 7 days from now
+    const expiresIn = options?.expiresIn || 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
+    const expiresAt = new Date(Date.now() + expiresIn).toISOString();
+    
+    // Store the code in memory as a fallback
+    invitationCodeMap.set(code, groupId);
+    console.log('Stored invitation in memory map');
+    
+    // Prepare invitation data
+    const invitationData = {
+      group_id: groupId,
+      code: code,
+      created_by: userData.user.id,
+      expires_at: expiresAt,
+      is_active: true,
+      uses_left: options?.maxUses || null, // null means unlimited uses
+    };
+    
+    // Try to create the invitation in the database
+    try {
+      console.log('Attempting to save invitation to database:', JSON.stringify(invitationData));
+      
+      const { data, error } = await supabase
+        .from('group_invitations')
+        .insert(invitationData)
+        .select()
+        .single();
+      
+      if (error) {
+        console.warn('Database error when creating invitation:', error.message);
+        console.warn('Error details:', JSON.stringify(error));
+        // Continue with fallback
+      } else if (data) {
+        console.log('Invitation successfully saved to database');
+        return data;
+      }
+    } catch (dbError) {
+      console.warn('Exception when saving invitation to database:', dbError);
+      // Continue with fallback
+    }
+    
+    // If we get here, database operation failed but we can still use the in-memory invitation
+    console.log('Using fallback in-memory invitation');
+    const fallbackInvitation: GroupInvitation = {
+      id: 'temp-' + Date.now(),
+      group_id: groupId,
+      code: code,
+      created_by: userData.user.id,
+      created_at: new Date().toISOString(),
+      expires_at: expiresAt,
+      is_active: true,
+      uses_left: options?.maxUses || null,
+    };
+    
+    return fallbackInvitation;
+  } catch (error) {
+    // Instead of just logging and rethrowing, provide a fallback
+    console.error('Error in createGroupInvitation:', error);
+    
+    // Generate a fallback invitation even if there was an error
+    const fallbackCode = Math.random().toString(36).substring(2, 10).toUpperCase();
+    invitationCodeMap.set(fallbackCode, groupId); // Save to memory map
+    
+    return {
+      id: 'error-fallback-' + Date.now(),
+      group_id: groupId,
+      code: fallbackCode,
+      created_by: 'unknown',
+      created_at: new Date().toISOString(),
+      expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+      is_active: true,
+      uses_left: null,
+    };
+  }
+}
 
-  if (error) throw error;
+export async function useGroupInvitation(code: string): Promise<{ success: boolean, groupId?: string, error?: string }> {
+  try {
+    console.log('Attempting to use invitation with code:', code);
+    
+    const invitation = await getGroupInvitation(code);
+    
+    if (!invitation) {
+      console.warn('Invalid or expired invitation code:', code);
+      return { success: false, error: 'Invalid or expired invitation code' };
+    }
+    
+    console.log('Found valid invitation:', JSON.stringify(invitation));
+    
+    // Get current user
+    const { data: userData, error: userError } = await supabase.auth.getUser();
+    if (userError || !userData?.user) {
+      console.error('User authentication error when using invitation:', userError);
+      return { success: false, error: 'User not authenticated' };
+    }
+    
+    // Check if user is already a member of the group
+    try {
+      const { data: existingMember, error: memberCheckError } = await supabase
+        .from('group_members')
+        .select('id')
+        .eq('group_id', invitation.group_id)
+        .eq('user_id', userData.user.id)
+        .single();
+      
+      if (!memberCheckError && existingMember) {
+        console.log('User is already a member of this group');
+        return { success: false, error: 'You are already a member of this group' };
+      }
+    } catch (checkError) {
+      console.warn('Error checking existing membership:', checkError);
+      // Continue anyway, worst case we'll get a duplicate constraint error
+    }
+    
+    // Add user to the group
+    try {
+      console.log('Adding user to group:', invitation.group_id);
+      
+      const { error: joinError } = await supabase
+        .from('group_members')
+        .insert({
+          group_id: invitation.group_id,
+          user_id: userData.user.id,
+          role: 'member',
+        });
+      
+      if (joinError) {
+        console.error('Error joining group:', joinError);
+        return { success: false, error: 'Failed to join group' };
+      }
+    } catch (joinError) {
+      console.error('Exception when joining group:', joinError);
+      return { success: false, error: 'Exception when joining group' };
+    }
+    
+    // Update invitation uses if tracking usage
+    if (!invitation.id.startsWith('temp-') && !invitation.id.startsWith('error-fallback-') && invitation.uses_left !== null) {
+      try {
+        console.log('Updating invitation uses count');
+        
+        const { error: updateError } = await supabase
+          .from('group_invitations')
+          .update({ uses_left: invitation.uses_left - 1 })
+          .eq('id', invitation.id);
+        
+        if (updateError) {
+          console.warn('Error updating invitation uses:', updateError);
+          // Non-critical error, we can continue
+        }
+      } catch (updateError) {
+        console.warn('Exception updating invitation uses:', updateError);
+        // Non-critical error, we can continue
+      }
+    }
+    
+    console.log('Successfully joined group:', invitation.group_id);
+    return { success: true, groupId: invitation.group_id };
+  } catch (error) {
+    console.error('Unexpected error using invitation:', error);
+    return { success: false, error: 'An unexpected error occurred' };
+  }
+}
 
-  // Process data for charts
-  // ... Implementiere die Datenverarbeitung für Charts ...
-  return {
-    labels: [],
-    volumes: [],
-    weights: []
-  };
+export async function getGroupInvitation(code: string): Promise<GroupInvitation | null> {
+  try {
+    // First check memory map (our fallback solution)
+    const groupId = invitationCodeMap.get(code);
+    if (groupId) {
+      // If found in memory, construct a temporary invitation object
+      return {
+        id: 'temp-' + Date.now(),
+        group_id: groupId,
+        code: code,
+        created_by: 'unknown',
+        created_at: new Date().toISOString(),
+        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days from now
+        is_active: true,
+        uses_left: null,
+      };
+    }
+    
+    const { data, error } = await supabase
+      .from('group_invitations')
+      .select('*, group:groups(*)')
+      .eq('code', code)
+      .eq('is_active', true)
+      .gte('expires_at', new Date().toISOString())
+      .single();
+    
+    if (error) {
+      console.error('Error fetching invitation:', error);
+      return null;
+    }
+    
+    if (data.uses_left !== null && data.uses_left <= 0) {
+      return null; 
+    }
+    
+    return data;
+  } catch (error) {
+    console.error('Error in getGroupInvitation:', error);
+    return null;
+  }
+}
+
+export async function getGroupInvitations(groupId: string): Promise<GroupInvitation[]> {
+  try {
+    const { data, error } = await supabase
+      .from('group_invitations')
+      .select('*')
+      .eq('group_id', groupId)
+      .eq('is_active', true)
+      .gte('expires_at', new Date().toISOString());
+    
+    if (error) {
+      console.error('Error fetching group invitations:', error);
+      return [];
+    }
+    
+    return data || [];
+  } catch (error) {
+    console.error('Error in getGroupInvitations:', error);
+    return [];
+  }
 }

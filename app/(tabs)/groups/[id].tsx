@@ -30,7 +30,7 @@ export default function GroupScreen() {
 
       // Fetch group members
       const membersData = await getGroupMembers(id as string);
-      setMembers(membersData);
+      setMembers(membersData.sort((a, b) => b.points - a.points));
     } catch (err) {
       console.error('Error loading group:', err);
       setError('Failed to load group details');
@@ -151,7 +151,7 @@ export default function GroupScreen() {
                 </Text>
                 <View style={styles.pointsContainer}>
                   <Flame size={16} color="#FF9500" />
-                  <Text style={styles.points}>0 pts</Text>
+                  <Text style={styles.points}>{member.points || 0} pts</Text>
                 </View>
               </View>
             </TouchableOpacity>

@@ -131,7 +131,7 @@ This project is licensed under the MIT License
 ## Credits
 
 - Icons provided by [Lucide React Native](https://lucide.dev/)
-- AI capabilities powered by [Deepseek API](https://api.deepseek.com)
+- AI capabilities powered by [Deepseek API](https://deepseek.ai/)
 - Database and authentication by [Supabase](https://supabase.io/)
 
 
