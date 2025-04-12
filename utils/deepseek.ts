@@ -370,3 +370,80 @@ export async function generateWeightSuggestions(userId: string, workoutData: any
     return [];
   }
 }
+
+/**
+ * Generate exercise suggestions for the user's workout routines
+ * @param userId User ID
+ * @returns Array of exercise suggestions with reasoning
+ */
+export async function generateExerciseSuggestions(userId: string) {
+  try {
+    console.log('Generating exercise suggestions from DeepSeek AI');
+
+    // Get user's workout data to understand their current routine
+    const { data: workouts, error } = await supabase
+      .from('workouts')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(10);
+    
+    if (error) {
+      console.error('Error fetching workout data for suggestions:', error);
+      return [];
+    }
+
+    const workoutHistory = JSON.stringify(workouts);
+    
+    const messages = [
+      {
+        role: 'system',
+        content: `You are an AI fitness coach specializing in workout routine improvement. 
+        Analyze the user's workout history and suggest specific exercise additions or modifications
+        that would improve their overall routine balance and results.`
+      },
+      {
+        role: 'user',
+        content: `Here is my recent workout history: ${workoutHistory}
+
+        Based on this data, suggest 2-3 potential improvements to my routine. These could be:
+        1. New exercises to add to my workouts
+        2. Additional sets for exercises I'm already doing
+
+        For each suggestion, explain why it would benefit my routine.
+        Format your response as a JSON array with this structure:
+        [
+          {
+            "type": "New Exercise" or "Additional Set",
+            "exercise": "Exercise Name",
+            "suggestion": "Brief description of how to incorporate this (sets, reps, etc.)",
+            "reasoning": "Why this would benefit my routine",
+            "target_workout": "Optional - which workout type this should be added to (e.g., 'Leg Day', 'Upper Body')"
+          }
+        ]
+        Only include the JSON array in your response, nothing else.`
+      }
+    ];
+
+    const apiResponse = await sendMessageToDeepseek(messages, userId);
+    
+    // Extract the JSON array from the response
+    try {
+      // Find JSON content in the response
+      const jsonMatch = apiResponse.match(/\[[\s\S]*\]/);
+      if (jsonMatch) {
+        const jsonString = jsonMatch[0];
+        return JSON.parse(jsonString);
+      } else {
+        console.warn('No JSON array found in DeepSeek response');
+        return [];
+      }
+    } catch (parseError) {
+      console.error('Error parsing DeepSeek suggestion response:', parseError);
+      return [];
+    }
+  } catch (error) {
+    console.error('Error generating exercise suggestions:', error);
+    return [];
+  }
+}
