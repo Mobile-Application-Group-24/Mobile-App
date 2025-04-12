@@ -732,8 +732,10 @@ export async function deleteWorkoutPlan(planId: string): Promise<void> {
 export async function addExerciseToPlan(
   planId: string,
   exerciseData: {
+    id: string,
     name: string,
-    sets: number
+    sets: number,
+    type?: 'chest' | 'back' | 'arms' | 'legs' | 'shoulders' | 'core'
   }
 ): Promise<PlanExercise> {
   try {
@@ -754,11 +756,12 @@ export async function addExerciseToPlan(
     
     console.log('Current plan exercises:', plan.exercises);
     
-    // Create a new exercise
+    // Create a new exercise using the provided ID and type
     const newExercise: PlanExercise = {
-      id: `exercise-${Date.now()}`,  // Generate temporary ID
+      id: exerciseData.id,
       name: exerciseData.name,
-      sets: exerciseData.sets
+      sets: exerciseData.sets,
+      type: exerciseData.type
     };
     
     // Add new exercise to the plan's exercises array

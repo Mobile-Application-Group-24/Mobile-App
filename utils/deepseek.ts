@@ -393,21 +393,37 @@ export async function generateExerciseSuggestions(userId: string) {
       return [];
     }
 
+    // Import the exercises list to provide to DeepSeek
+    // We'll import this dynamically to avoid circular dependencies
+    const { exercisesByWorkoutType } = await import('./exercises');
+    
+    // Format the exercises into a single array for DeepSeek
+    const allExercises = Object.values(exercisesByWorkoutType).flat().map(ex => ({
+      id: ex.id,
+      name: ex.name,
+      type: ex.type
+    }));
+
     const workoutHistory = JSON.stringify(workouts);
+    const availableExercises = JSON.stringify(allExercises);
     
     const messages = [
       {
         role: 'system',
         content: `You are an AI fitness coach specializing in workout routine improvement. 
         Analyze the user's workout history and suggest specific exercise additions or modifications
-        that would improve their overall routine balance and results.`
+        that would improve their overall routine balance and results. IMPORTANT: You must ONLY suggest
+        exercises from the provided list of available exercises. Do not make up or suggest any exercises
+        that are not in this list.`
       },
       {
         role: 'user',
         content: `Here is my recent workout history: ${workoutHistory}
 
+        Here is the complete list of exercises that are available to me: ${availableExercises}
+
         Based on this data, suggest 2-3 potential improvements to my routine. These could be:
-        1. New exercises to add to my workouts
+        1. New exercises to add to my workouts (ONLY from the provided list)
         2. Additional sets for exercises I'm already doing
 
         For each suggestion, explain why it would benefit my routine.
@@ -421,7 +437,8 @@ export async function generateExerciseSuggestions(userId: string) {
             "target_workout": "Optional - which workout type this should be added to (e.g., 'Leg Day', 'Upper Body')"
           }
         ]
-        Only include the JSON array in your response, nothing else.`
+        Only include the JSON array in your response, nothing else.
+        REMEMBER: Only suggest exercises that are in the provided list of available exercises.`
       }
     ];
 
@@ -433,7 +450,21 @@ export async function generateExerciseSuggestions(userId: string) {
       const jsonMatch = apiResponse.match(/\[[\s\S]*\]/);
       if (jsonMatch) {
         const jsonString = jsonMatch[0];
-        return JSON.parse(jsonString);
+        const suggestions = JSON.parse(jsonString);
+        
+        // Validate that each suggested exercise exists in our database
+        return suggestions.filter(suggestion => {
+          // Check if the suggested exercise exists in our database
+          const exerciseExists = Object.values(exercisesByWorkoutType).flat().some(
+            ex => ex.name.toLowerCase() === suggestion.exercise.toLowerCase()
+          );
+          
+          if (!exerciseExists) {
+            console.warn(`Filtering out suggestion for non-existent exercise: ${suggestion.exercise}`);
+          }
+          
+          return exerciseExists;
+        });
       } else {
         console.warn('No JSON array found in DeepSeek response');
         return [];
