@@ -728,6 +728,67 @@ export async function deleteWorkoutPlan(planId: string): Promise<void> {
   }
 }
 
+// Function to add an exercise to a workout plan
+export async function addExerciseToPlan(
+  planId: string,
+  exerciseData: {
+    name: string,
+    sets: number
+  }
+): Promise<PlanExercise> {
+  try {
+    console.log('Adding exercise to workout plan:', planId);
+    console.log('Exercise data:', exerciseData);
+    
+    // Get current workout plan data
+    const { data: plan, error: planError } = await supabase
+      .from('workout_plans')
+      .select('exercises')
+      .eq('id', planId)
+      .single();
+    
+    if (planError) {
+      console.error('Error fetching workout plan:', planError);
+      throw planError;
+    }
+    
+    console.log('Current plan exercises:', plan.exercises);
+    
+    // Create a new exercise
+    const newExercise: PlanExercise = {
+      id: `exercise-${Date.now()}`,  // Generate temporary ID
+      name: exerciseData.name,
+      sets: exerciseData.sets
+    };
+    
+    // Add new exercise to the plan's exercises array
+    const updatedExercises = plan.exercises ? [...plan.exercises, newExercise] : [newExercise];
+    
+    console.log('Saving updated exercises to plan:', JSON.stringify(updatedExercises));
+    
+    // Update the workout plan
+    const { data, error } = await supabase
+      .from('workout_plans')
+      .update({ 
+        exercises: updatedExercises,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', planId)
+      .select();
+    
+    if (error) {
+      console.error('Error updating workout plan with new exercise:', error);
+      throw error;
+    }
+    
+    console.log('Successfully added exercise to workout plan. Response:', data);
+    return newExercise;
+  } catch (error) {
+    console.error('Error in addExerciseToPlan:', error);
+    throw error;
+  }
+}
+
 // Workout session functions
 export async function createWorkout(workoutData: Omit<Workout, 'id' | 'created_at'>, exercisesData?: any[]): Promise<Workout> {
   try {
@@ -1168,5 +1229,124 @@ export async function getGroupInvitations(groupId: string): Promise<GroupInvitat
   } catch (error) {
     console.error('Error in getGroupInvitations:', error);
     return [];
+  }
+}
+
+// Function to add a suggested exercise to an existing workout
+export async function addExerciseToWorkout(
+  workoutId: string, 
+  exerciseData: { 
+    name: string, 
+    sets: number, 
+    setDetails?: SetDetail[] 
+  },
+  isNewExercise: boolean = true
+): Promise<WorkoutExercise> {
+  try {
+    console.log('Adding exercise to workout:', workoutId);
+    console.log('Exercise data:', exerciseData);
+    console.log('Is new exercise:', isNewExercise);
+    
+    // Get current workout data
+    const { data: workout, error: workoutError } = await supabase
+      .from('workouts')
+      .select('exercises')
+      .eq('id', workoutId)
+      .single();
+    
+    if (workoutError) {
+      console.error('Error fetching workout:', workoutError);
+      throw workoutError;
+    }
+    
+    console.log('Current workout exercises:', workout.exercises);
+    
+    let updatedExercises;
+    let returnExercise;
+    
+    if (isNewExercise) {
+      // Add a completely new exercise
+      const newExercise: WorkoutExercise = {
+        id: `exercise-${Date.now()}`,  // Generate temporary ID
+        name: exerciseData.name,
+        sets: exerciseData.sets,
+        setDetails: exerciseData.setDetails || Array(exerciseData.sets).fill({}).map(() => ({
+          id: `set-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+          reps: 10,
+          weight: 0,
+          type: 'normal'
+        }))
+      };
+      
+      // Add new exercise to the workout's exercises array
+      updatedExercises = workout.exercises ? [...workout.exercises, newExercise] : [newExercise];
+      returnExercise = newExercise;
+      
+      console.log('Added new exercise to workout');
+    } else {
+      // Add additional sets to an existing exercise
+      if (!workout.exercises || workout.exercises.length === 0) {
+        throw new Error('No exercises found in workout');
+      }
+      
+      // Find the matching exercise by name
+      const existingExerciseIndex = workout.exercises.findIndex(
+        ex => ex.name.toLowerCase() === exerciseData.name.toLowerCase()
+      );
+      
+      if (existingExerciseIndex === -1) {
+        console.log('Exercise not found, adding as new exercise instead');
+        return addExerciseToWorkout(workoutId, exerciseData, true);
+      }
+      
+      // Create a deep copy of the exercises array
+      updatedExercises = [...workout.exercises];
+      
+      // Get the existing exercise
+      const existingExercise = {...updatedExercises[existingExerciseIndex]};
+      
+      // Add new sets to the existing exercise
+      const newSets = Array(exerciseData.sets).fill({}).map(() => ({
+        id: `set-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        reps: 10,
+        weight: existingExercise.setDetails && existingExercise.setDetails.length > 0 
+          ? existingExercise.setDetails[0].weight || 0 
+          : 0,
+        type: 'normal'
+      }));
+      
+      // Update the exercise
+      existingExercise.sets += exerciseData.sets;
+      existingExercise.setDetails = [
+        ...(existingExercise.setDetails || []),
+        ...newSets
+      ];
+      
+      // Replace the exercise in the array
+      updatedExercises[existingExerciseIndex] = existingExercise;
+      
+      console.log('Added additional sets to existing exercise');
+      returnExercise = existingExercise;
+    }
+    
+    console.log('Saving updated exercises to workout:', JSON.stringify(updatedExercises).substring(0, 200) + '...');
+    
+    // Make sure we're updating the workouts table, not workout_plans
+    const { data, error } = await supabase
+      .from('workouts')  // Specifically target the workouts table
+      .update({ exercises: updatedExercises })
+      .eq('id', workoutId)
+      .select();
+    
+    if (error) {
+      console.error('Error updating workout with exercise changes:', error);
+      throw error;
+    }
+    
+    console.log('Successfully saved exercise changes. Response:', JSON.stringify(data).substring(0, 200) + '...');
+    return returnExercise;
+  } catch (error) {
+    console.error('Error in addExerciseToWorkout:', error);
+    throw error;
   }
 }
