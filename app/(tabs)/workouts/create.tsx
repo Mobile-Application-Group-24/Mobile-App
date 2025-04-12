@@ -7,24 +7,21 @@ import { useSession } from '@/utils/auth';
 import { supabase } from '@/utils/supabase';
 import type { Exercise } from '@/utils/storage';
 import { Picker } from '@react-native-picker/picker';
+import { exercisesByWorkoutType } from '@/utils/exercises';
 
-const commonExercises = [
-  "Bench Press", "Incline Bench Press", "Decline Bench Press", "Dumbbell Press",
-  "Push-Ups", "Dips", "Cable Flyes", "Dumbbell Flyes",
-  "Pull-Ups", "Lat Pulldowns", "Barbell Rows", "Dumbbell Rows",
-  "T-Bar Rows", "Face Pulls", "Deadlifts",
-  "Military Press", "Arnold Press", "Lateral Raises", "Front Raises",
-  "Reverse Flyes", "Upright Rows", "Shrugs", "Pike Push-Ups",
-  "Bicep Curls", "Hammer Curls", "Tricep Extensions", "Skull Crushers",
-  "Preacher Curls", "Diamond Push-Ups", "Tricep Pushdowns", "Concentration Curls",
-  "Squats", "Front Squats", "Leg Press", "Lunges",
-  "Romanian Deadlifts", "Leg Extensions", "Leg Curls", "Calf Raises",
-  "Planks", "Russian Twists", "Crunches", "Leg Raises",
-  "Wood Chops", "Ab Rollouts", "Mountain Climbers", "Dead Bugs",
-  "Clean and Jerk", "Power Cleans", "Snatch", "Overhead Squats",
-  "Turkish Get-Ups", "Thrusters", "Kettlebell Swings", "Box Jumps",
-  "Burpees", "Battle Ropes", "Medicine Ball Slams", "Farmer's Walks"
-].sort();
+// Get all exercises from exercisesByWorkoutType
+const getAllExercises = () => {
+  const exercises: string[] = [];
+  
+  Object.values(exercisesByWorkoutType).forEach(categoryExercises => {
+    categoryExercises.forEach(exercise => {
+      exercises.push(exercise.name);
+    });
+  });
+  
+  // Sort alphabetically
+  return exercises.sort();
+};
 
 const DAYS_OF_WEEK = [
   'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'
@@ -92,19 +89,84 @@ export default function CreateWorkoutScreen() {
     }
   };
 
-  const filteredExercises = commonExercises.filter(exercise =>
+  const filteredExercises = getAllExercises().filter(exercise =>
     exercise.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const findExerciseType = (exerciseName: string): 'chest' | 'back' | 'arms' | 'legs' | 'shoulders' | 'core' => {
+    for (const category in exercisesByWorkoutType) {
+      const match = exercisesByWorkoutType[category].find(ex => 
+        ex.name.toLowerCase() === exerciseName.toLowerCase()
+      );
+      if (match && match.type) {
+        return match.type;
+      }
+    }
+    
+    for (const category in exercisesByWorkoutType) {
+      const match = exercisesByWorkoutType[category].find(ex => 
+        exerciseName.toLowerCase().includes(ex.name.toLowerCase()) || 
+        ex.name.toLowerCase().includes(exerciseName.toLowerCase())
+      );
+      if (match && match.type) {
+        return match.type;
+      }
+    }
+    
+    return determineExerciseType(exerciseName);
+  };
+
   const addExercise = (exerciseName: string) => {
+    let exerciseId = '';
+    let exerciseType: 'chest' | 'back' | 'arms' | 'legs' | 'shoulders' | 'core' = 'chest';
+    
+    for (const category in exercisesByWorkoutType) {
+      const matchedExercise = exercisesByWorkoutType[category].find(
+        ex => ex.name.toLowerCase() === exerciseName.toLowerCase()
+      );
+      
+      if (matchedExercise) {
+        exerciseId = matchedExercise.id;
+        exerciseType = matchedExercise.type;
+        break;
+      }
+    }
+    
+    if (!exerciseId) {
+      exerciseId = `custom-${Date.now()}`;
+      exerciseType = findExerciseType(exerciseName);
+    }
+    
     const newExercise: Exercise = {
-      id: Date.now().toString(),
+      id: exerciseId,
       name: exerciseName,
       sets: 3,
+      type: exerciseType,
     };
+    
     setExercises(prevExercises => [...prevExercises, newExercise]);
     setShowExerciseSearch(false);
     setSearchQuery('');
+  };
+
+  const determineExerciseType = (exerciseName: string): 'chest' | 'back' | 'arms' | 'legs' | 'shoulders' | 'core' => {
+    const name = exerciseName.toLowerCase();
+    
+    if (name.includes('bench') || name.includes('push') || name.includes('chest') || name.includes('fly') || name.includes('press')) {
+      return 'chest';
+    } else if (name.includes('row') || name.includes('pull') || name.includes('lat') || name.includes('back')) {
+      return 'back';
+    } else if (name.includes('curl') || name.includes('tricep') || name.includes('extension') || name.includes('arm')) {
+      return 'arms';
+    } else if (name.includes('squat') || name.includes('leg') || name.includes('lunge') || name.includes('dead') || name.includes('calf')) {
+      return 'legs';
+    } else if (name.includes('shoulder') || name.includes('delt') || name.includes('raise') || name.includes('press')) {
+      return 'shoulders';
+    } else if (name.includes('ab') || name.includes('crunch') || name.includes('twist') || name.includes('plank') || name.includes('core')) {
+      return 'core';
+    } 
+    
+    return 'chest';
   };
 
   const removeExercise = (id: string) => {
@@ -220,8 +282,7 @@ export default function CreateWorkoutScreen() {
         id: ex.id,
         name: ex.name,
         sets: ex.sets,
-        reps: 10,
-        weight: undefined,
+        type: ex.type || findExerciseType(ex.name),
       }));
       
       const workoutPlanData = {
@@ -265,15 +326,31 @@ export default function CreateWorkoutScreen() {
     }
   };
 
-  const renderExerciseItem = useCallback(({ item }: { item: string }) => (
-    <TouchableOpacity
-      style={styles.exerciseSearchItem}
-      onPress={() => handleExerciseSelect(item)}
-    >
-      <Dumbbell size={20} color="#007AFF" />
-      <Text style={styles.exerciseSearchText}>{item}</Text>
-    </TouchableOpacity>
-  ), []);
+  const renderExerciseItem = useCallback(({ item }: { item: string }) => {
+    let exerciseType = findExerciseType(item);
+    
+    for (const category in exercisesByWorkoutType) {
+      const matchedExercise = exercisesByWorkoutType[category].find(
+        ex => ex.name.toLowerCase() === item.toLowerCase()
+      );
+      
+      if (matchedExercise) {
+        exerciseType = matchedExercise.type;
+        break;
+      }
+    }
+    
+    return (
+      <TouchableOpacity
+        style={styles.exerciseSearchItem}
+        onPress={() => handleExerciseSelect(item)}
+      >
+        <Dumbbell size={20} color="#007AFF" />
+        <Text style={styles.exerciseSearchText}>{item}</Text>
+        <Text style={styles.exerciseTypeTag}>{exerciseType}</Text>
+      </TouchableOpacity>
+    );
+  }, []);
 
   return (
     <View style={styles.container}>
@@ -345,9 +422,6 @@ export default function CreateWorkoutScreen() {
                   </Picker>
                 </View>
               )}
-              {dayError && (
-                <Text style={styles.errorText}>{dayError}</Text>
-              )}
             </View>
           )}
         </View>
@@ -356,14 +430,14 @@ export default function CreateWorkoutScreen() {
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Exercises</Text>
             <TouchableOpacity 
-              style={styles.addButton} 
+              style={styles.addButton}
               onPress={() => setShowExerciseSearch(true)}
             >
-              <Plus size={20} color="#FFFFFF" />
+              <Plus size={16} color="#FFFFFF" />
               <Text style={styles.addButtonText}>Add Exercise</Text>
             </TouchableOpacity>
           </View>
-
+          
           {exercises.length === 0 ? (
             <View style={styles.emptyState}>
               <Dumbbell size={48} color="#8E8E93" />
@@ -380,13 +454,13 @@ export default function CreateWorkoutScreen() {
                     <Text style={styles.exerciseNumberText}>{index + 1}</Text>
                   </View>
                   <Text style={styles.exerciseName}>{exercise.name}</Text>
+                  <Text style={styles.exerciseTypeIndicator}>{exercise.type}</Text>
                   <TouchableOpacity
                     style={styles.removeButton}
                     onPress={() => removeExercise(exercise.id)}>
                     <X size={20} color="#FF3B30" />
                   </TouchableOpacity>
                 </View>
-
                 <View style={styles.exerciseContent}>
                   <Text style={styles.setsLabel}>Sets</Text>
                   <View style={styles.setsContainer}>
@@ -616,6 +690,17 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: '#1C1C1E',
   },
+  exerciseTypeIndicator: {
+    fontSize: 12,
+    color: '#8E8E93',
+    backgroundColor: '#F2F2F7',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    marginLeft: 8,
+    marginRight: 8,
+    textTransform: 'capitalize',
+  },
   removeButton: {
     padding: 8,
     backgroundColor: '#FFF2F2',
@@ -703,6 +788,16 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginLeft: 12,
     color: '#1C1C1E',
+  },
+  exerciseTypeTag: {
+    fontSize: 12,
+    color: '#8E8E93',
+    backgroundColor: '#F2F2F7',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    marginLeft: 'auto',
+    textTransform: 'capitalize',
   },
   saveButton: {
     position: 'absolute',

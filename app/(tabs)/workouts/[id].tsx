@@ -3,9 +3,11 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Platfo
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { X, Clock, ChartBar as BarChart3, Plus, CalendarClock, Scale, File as FileEdit, Dumbbell, Trash, Save, Trash2 } from 'lucide-react-native';
 import { format } from 'date-fns';
-import { getWorkoutPlan, getWorkouts, deleteWorkoutPlan, updateWorkoutPlan, WorkoutPlan, Workout, createWorkout } from '@/utils/workout';
+import { getWorkoutPlan, deleteWorkoutPlan, createWorkout, WorkoutPlan, Workout } from '@/utils/workout';
+import { updateWorkoutPlan } from '@/utils/supabase'; // Import from supabase instead
 import { Swipeable } from 'react-native-gesture-handler';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { findExerciseType, exercisesByWorkoutType } from '@/utils/exercises';
 
 type SetType = 'normal' | 'warmup' | 'dropset';
 
@@ -21,6 +23,7 @@ interface ExerciseProgress {
   id: string;
   name: string;
   sets: WorkoutSet[];
+  type?: 'chest' | 'back' | 'arms' | 'legs' | 'shoulders' | 'core';
 }
 
 export default function WorkoutDetailScreen() {
@@ -170,12 +173,12 @@ export default function WorkoutDetailScreen() {
       setWorkoutPlan(plan);
       setWorkoutName(plan.title || '');
       setNotes(plan.description || '');
-      
       // Initialize exercises from the workout plan only, don't load previous workouts
       const planExercises = plan.exercises?.map(exercise => {
         return {
           id: exercise.id,
           name: exercise.name,
+          type: exercise.type, // Include exercise type
           // Create empty sets based on the number specified in the plan
           sets: Array(exercise.sets || 3).fill(null).map((_, index) => ({
             id: `new-${exercise.id}-${index}`,
@@ -186,11 +189,9 @@ export default function WorkoutDetailScreen() {
           }))
         };
       }) || [];
-      
       // Set exercises directly from plan without checking previous workouts
       setExercises(planExercises);
       setHasPreviousData(false);
-      
     } catch (error) {
       console.error('Error loading workout plan:', error);
       setError('Failed to load workout details');
@@ -202,16 +203,58 @@ export default function WorkoutDetailScreen() {
   useEffect(() => {
     if (selectedExercise && typeof selectedExercise === 'string') {
       const timestamp = Date.now();
+      
+      // Try to find the exercise ID in our predefined lists
+      let exerciseId = '';
+      let exerciseType: 'chest' | 'back' | 'arms' | 'legs' | 'shoulders' | 'core' | undefined;
+      
+      // Search through all categories to find the exercise
+      for (const category in exercisesByWorkoutType) {
+        const matchedExercise = exercisesByWorkoutType[category].find(
+          ex => ex.name === selectedExercise
+        );
+        
+        if (matchedExercise) {
+          exerciseId = matchedExercise.id;
+          exerciseType = matchedExercise.type;
+          break;
+        }
+      }
+      
+      // If we couldn't find it, generate a custom ID
+      if (!exerciseId) {
+        exerciseId = `custom-${timestamp}-${Math.random().toString(36).substr(2, 9)}`;
+        exerciseType = findExerciseType(selectedExercise);
+      }
+      
       const exerciseToAdd: ExerciseProgress = {
-        id: `${timestamp}-${Math.random().toString(36).substr(2, 9)}`,
+        id: exerciseId,
         name: selectedExercise,
-        sets: [{
-          id: `${timestamp}-set1`,
-          weight: '',
-          reps: '',
-          type: 'normal',
-          notes: ''
-        }]
+        type: exerciseType,
+        sets: [
+          // Create 3 sets by default instead of just 1
+          {
+            id: `${timestamp}-set1`,
+            weight: '',
+            reps: '',
+            type: 'normal',
+            notes: ''
+          },
+          {
+            id: `${timestamp}-set2`,
+            weight: '',
+            reps: '',
+            type: 'normal',
+            notes: ''
+          },
+          {
+            id: `${timestamp}-set3`,
+            weight: '',
+            reps: '',
+            type: 'normal',
+            notes: ''
+          }
+        ]
       };
 
       setExercises(prev => [...prev, exerciseToAdd]);
@@ -352,48 +395,46 @@ export default function WorkoutDetailScreen() {
 
     try {
       // Format exercises for workout plan (no reps/weight)
-      // Make sure we preserve the set count from the original exercises
+      // Make sure we preserve the set count and type from the original exercises
       const planExercises = exercises.map(exercise => ({
         id: exercise.id,
         name: exercise.name,
+        type: exercise.type, // Include exercise type
         sets: exercise.sets.length
       }));
 
-      // Format exercises for workout tracking (with reps/weight/setDetails)
-      const workoutExercises = exercises.map(exercise => {
-        return {
-          id: exercise.id,
-          name: exercise.name,
-          sets: exercise.sets.length,
-          setDetails: exercise.sets.map(set => ({
-            id: set.id,
-            weight: set.weight ? parseFloat(set.weight) : undefined,
-            reps: set.reps ? parseInt(set.reps, 10) : undefined,
-            type: set.type,
-            notes: set.notes || ''
-          }))
-        };
+      // Always update the workout plan with the latest exercises
+      await updateWorkoutPlan(workoutId, {
+        title: workoutName,
+        description: notes,
+        exercises: planExercises // Store only exercise structure in workout_plans table
       });
-
-      // First, update the workout plan if needed
-      if (workoutName !== workoutPlan.title || notes !== workoutPlan.description) {
-        await updateWorkoutPlan(workoutId, {
-          title: workoutName,
-          description: notes,
-          exercises: planExercises // Store only exercise structure in workout_plans table
+      
+      console.log("Updated workout plan with new exercises");
+      
+      // Only create a workout session if the workout was started
+      if (isWorkoutActive || workoutStartTime) {
+        // Format exercises for workout tracking (with reps/weight/setDetails)
+        const workoutExercises = exercises.map(exercise => {
+          return {
+            id: exercise.id,
+            name: exercise.name,
+            type: exercise.type, // Include exercise type
+            sets: exercise.sets.length,
+            setDetails: exercise.sets.map(set => ({
+              id: set.id,
+              weight: set.weight ? parseFloat(set.weight) : undefined,
+              reps: set.reps ? parseInt(set.reps, 10) : undefined,
+              type: set.type,
+              notes: set.notes || ''
+            }))
+          };
         });
-      }
-
-      // If the workout is active (user started it), or if there's data entered,
-      // create a new workout entry
-      if (isWorkoutActive || bodyWeight || exercises.some(ex => 
-        ex.sets.some(set => set.weight || set.reps)
-      )) {
-        // Mark the workout as done whenever the save button is pressed
+        
         // If the workout has been explicitly ended, use that end time
         // Otherwise, if it was started but not explicitly ended, set the current time as end time
         const endTimeToUse = workoutEndTime || (isWorkoutActive ? new Date() : undefined);
-        
+            
         // Consider a workout done if it's been started (regardless of whether it has an explicit end time)
         const isDone = isWorkoutActive || !!workoutEndTime;
         
@@ -410,11 +451,13 @@ export default function WorkoutDetailScreen() {
           calories_burned: 0, // Calculate or leave as default
           done: isDone // Mark as done if it was started or has an end time
         };
-        
+                
         const savedWorkout = await createWorkout(workoutData);
-        console.log("Successfully created workout:", savedWorkout.id, "Done status:", isDone);
+        console.log("Successfully created workout session:", savedWorkout.id, "Done status:", isDone);
+      } else {
+        console.log("Workout wasn't started, only updating the workout plan");
       }
-      
+            
       router.back();
     } catch (error) {
       console.error('Error updating workout:', error);
@@ -622,6 +665,7 @@ export default function WorkoutDetailScreen() {
               >
                 <View style={styles.exerciseHeader}>
                   <Text style={styles.exerciseName}>{exercise.name}</Text>
+                  {exercise.type && <Text style={styles.exerciseType}>{exercise.type}</Text>}
                 </View>
                 {exercise.sets.map((set, setIndex) => (
                   <Swipeable
@@ -1010,6 +1054,16 @@ const styles = StyleSheet.create({
     color: '#000000',
     marginBottom: 12,
     flex: 1,
+  },
+  exerciseType: {
+    fontSize: 12,
+    color: '#8E8E93',
+    backgroundColor: '#F2F2F7',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
+    overflow: 'hidden',
+    textTransform: 'capitalize',
   },
   setContainer: {
     flexDirection: 'row',

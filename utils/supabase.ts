@@ -124,6 +124,7 @@ export interface PlanExercise {
   id: string;
   name: string;
   sets: number;
+  type?: 'chest' | 'back' | 'arms' | 'legs' | 'shoulders' | 'core';
 }
 
 export interface Workout {
@@ -146,6 +147,7 @@ export interface WorkoutExercise {
   id: string;
   name: string;
   sets: number;
+  type?: 'chest' | 'back' | 'arms' | 'legs' | 'shoulders' | 'core';
   setDetails: SetDetail[];
 }
 
@@ -157,9 +159,42 @@ export interface SetDetail {
   notes?: string;
 }
 
+export interface ExerciseStats {
+  id: string;
+  exercise_id: string;
+  exercise_name: string;
+  max_weight: number;
+  max_reps: number;
+  total_volume: number;
+  total_sessions: number;
+  last_used: string;
+  is_favorite?: boolean;
+  progress?: number;
+}
+
+export interface ExerciseHistory {
+  id: string;
+  exercise_id: string;
+  workout_id: string;
+  weight: number;
+  reps: number;
+  date: string;
+  volume: number;
+}
+
 // Store invitation codes in memory since database operations are failing
 // This is a temporary solution until database issues are resolved
 const invitationCodeMap = new Map<string, string>();
+
+// Helper function to generate a UUID since crypto.randomUUID() is not available
+function generateUUID() {
+  // Simple UUID v4 implementation
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
 
 // Profile functions
 export async function getProfile(userId: string): Promise<Profile> {
@@ -194,6 +229,7 @@ export async function updateProfile(userId: string, updates: Partial<Profile>) {
   return data;
 }
 
+// Group functions
 export async function createGroup(groupData: Omit<Group, 'id' | 'created_at' | 'owner_id'>) {
   const { data: userData, error: userError } = await supabase.auth.getUser();
   if (userError || !userData.user) throw new Error('User not authenticated');
@@ -595,13 +631,14 @@ export async function updateWorkoutCompletionStatus(workoutId: string, isDone: b
 // Workout plan functions
 export async function createWorkoutPlan(planData: Omit<WorkoutPlan, 'id' | 'created_at' | 'updated_at'>): Promise<WorkoutPlan> {
   try {
-    // Ensure exercises only include name and sets (no weight/reps)
+    // Ensure exercises only include name, sets, and type (no weight/reps)
     const sanitizedPlanData = {
       ...planData,
       exercises: planData.exercises?.map(ex => ({
         id: ex.id,
         name: ex.name,
-        sets: ex.sets
+        sets: ex.sets,
+        type: ex.type
       }))
     };
     
@@ -649,12 +686,13 @@ export async function updateWorkoutPlan(planId: string, updates: Partial<Workout
     // Make a deep copy to avoid modifying the original object
     const updateData = { ...updates };
     
-    // Ensure exercises only include name and sets (no weight/reps)
+    // Ensure exercises only include name, sets, and type (no weight/reps)
     if (updateData.exercises) {
       updateData.exercises = updateData.exercises.map(ex => ({
         id: ex.id,
         name: ex.name,
-        sets: ex.sets
+        sets: ex.sets,
+        type: ex.type
       }));
     }
     
@@ -693,13 +731,14 @@ export async function deleteWorkoutPlan(planId: string): Promise<void> {
 // Workout session functions
 export async function createWorkout(workoutData: Omit<Workout, 'id' | 'created_at'>, exercisesData?: any[]): Promise<Workout> {
   try {
-    // Include the exercises array in the workout data (with full details)
+    // Include the exercises array in the workout data (with full details including type)
     const fullWorkoutData = {
       ...workoutData,
       exercises: exercisesData?.map(ex => ({
         id: ex.id,
         name: ex.name,
         sets: ex.sets,
+        type: ex.type,
         setDetails: ex.setDetails || []
       }))
     };

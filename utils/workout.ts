@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { exercisesByWorkoutType } from './exercises';
 
 export interface Exercise {
   id: string;
@@ -6,6 +7,7 @@ export interface Exercise {
   sets: number;
   reps?: number;  // Optional for compatibility
   weight?: number; // Optional for compatibility
+  type?: 'chest' | 'back' | 'arms' | 'legs' | 'shoulders' | 'core'; // Exercise category
 }
 
 // New interface for exercises in workout plans (without reps/weight)
@@ -13,6 +15,7 @@ export interface PlanExercise {
   id: string;
   name: string;
   sets: number;
+  type?: 'chest' | 'back' | 'arms' | 'legs' | 'shoulders' | 'core';
 }
 
 // New interface for exercises in completed workouts (with reps/weight)
@@ -44,55 +47,8 @@ export interface Workout {
   done?: boolean;
 }
 
-// Sample exercises for each workout type
-const exercisesByWorkoutType: Record<string, Exercise[]> = {
-  'Push': [
-    { id: 'ex1', name: 'Bench Press', sets: 4, reps: 8, weight: 135 },
-    { id: 'ex2', name: 'Shoulder Press', sets: 3, reps: 10, weight: 95 },
-    { id: 'ex3', name: 'Tricep Pushdown', sets: 3, reps: 12, weight: 50 },
-    { id: 'ex4', name: 'Incline Dumbbell Press', sets: 3, reps: 10, weight: 60 },
-    { id: 'ex5', name: 'Lateral Raises', sets: 3, reps: 15, weight: 15 }
-  ],
-  'Pull': [
-    { id: 'ex1', name: 'Pull-ups', sets: 4, reps: 8, weight: 0 },
-    { id: 'ex2', name: 'Bent Over Rows', sets: 3, reps: 10, weight: 135 },
-    { id: 'ex3', name: 'Lat Pulldown', sets: 3, reps: 12, weight: 120 },
-    { id: 'ex4', name: 'Bicep Curls', sets: 3, reps: 12, weight: 35 },
-    { id: 'ex5', name: 'Face Pulls', sets: 3, reps: 15, weight: 50 }
-  ],
-  'Legs': [
-    { id: 'ex1', name: 'Squats', sets: 4, reps: 8, weight: 185 },
-    { id: 'ex2', name: 'Romanian Deadlifts', sets: 3, reps: 10, weight: 155 },
-    { id: 'ex3', name: 'Leg Press', sets: 3, reps: 12, weight: 270 },
-    { id: 'ex4', name: 'Leg Extensions', sets: 3, reps: 15, weight: 90 },
-    { id: 'ex5', name: 'Calf Raises', sets: 4, reps: 15, weight: 120 }
-  ],
-  'Upper': [
-    { id: 'ex1', name: 'Bench Press', sets: 4, reps: 8, weight: 135 },
-    { id: 'ex2', name: 'Pull-ups', sets: 3, reps: 8, weight: 0 },
-    { id: 'ex3', name: 'Shoulder Press', sets: 3, reps: 10, weight: 95 },
-    { id: 'ex4', name: 'Bent Over Rows', sets: 3, reps: 10, weight: 135 },
-    { id: 'ex5', name: 'Tricep Dips', sets: 3, reps: 12, weight: 0 },
-    { id: 'ex6', name: 'Bicep Curls', sets: 3, reps: 12, weight: 35 }
-  ],
-  'Lower': [
-    { id: 'ex1', name: 'Squats', sets: 4, reps: 8, weight: 185 },
-    { id: 'ex2', name: 'Deadlifts', sets: 3, reps: 8, weight: 205 },
-    { id: 'ex3', name: 'Leg Press', sets: 3, reps: 12, weight: 270 },
-    { id: 'ex4', name: 'Leg Curls', sets: 3, reps: 12, weight: 70 },
-    { id: 'ex5', name: 'Calf Raises', sets: 4, reps: 15, weight: 120 },
-    { id: 'ex6', name: 'Hip Thrusts', sets: 3, reps: 12, weight: 135 }
-  ],
-  'Full Body': [
-    { id: 'ex1', name: 'Squats', sets: 3, reps: 10, weight: 155 },
-    { id: 'ex2', name: 'Bench Press', sets: 3, reps: 10, weight: 125 },
-    { id: 'ex3', name: 'Bent Over Rows', sets: 3, reps: 10, weight: 125 },
-    { id: 'ex4', name: 'Shoulder Press', sets: 3, reps: 10, weight: 85 },
-    { id: 'ex5', name: 'Bicep Curls', sets: 3, reps: 12, weight: 35 },
-    { id: 'ex6', name: 'Tricep Pushdown', sets: 3, reps: 12, weight: 50 },
-    { id: 'ex7', name: 'Romanian Deadlifts', sets: 3, reps: 10, weight: 145 }
-  ]
-};
+// Export exercises data from the imported file
+export { exercisesByWorkoutType };
 
 /**
  * Generates workout templates based on the user's training schedule
@@ -225,7 +181,7 @@ export async function getWorkoutPlan(id: string): Promise<WorkoutPlan> {
 export async function createWorkout(workoutData: Omit<Workout, 'id' | 'created_at'>): Promise<Workout> {
   try {
     // The workout data should already include the exercises array
-    // with proper structure from the caller
+    // with proper structure from the caller including the exercise type
 
     // Insert the workout data
     const { data, error } = await supabase
