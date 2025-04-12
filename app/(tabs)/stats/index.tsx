@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, ActivityIndicator } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Search, ChartBar, TrendingUp, Dumbbell, ArrowRight, FolderIcon } from 'lucide-react-native';
-import { getExerciseStats, ExerciseStats } from '@/utils/supabase';
+import { supabase } from '@/utils/supabase';
 import { useSession } from '@/utils/auth';
+import { ExerciseStats, getExerciseStatsFromWorkouts } from '@/utils/stats';
 
 const categories = ['All', 'Chest', 'Back', 'Legs', 'Shoulders', 'Arms', 'Core'];
 
@@ -16,41 +17,51 @@ export default function StatsScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const loadExercises = async () => {
-      try {
-        if (!session?.user?.id) return;
-        
-        setLoading(true);
-        const stats = await getExerciseStats(session.user.id);
-        
-        // Sort by last used date (most recent first)
-        const sortedStats = stats.sort((a, b) => {
-          return new Date(b.last_used).getTime() - new Date(a.last_used).getTime();
-        });
-        
-        setExercises(sortedStats);
-        setError(null);
-      } catch (err) {
-        console.error('Error loading exercise stats:', err);
-        setError('Failed to load exercise statistics');
-      } finally {
-        setLoading(false);
-      }
-    };
+  const loadExercises = async () => {
+    try {
+      if (!session?.user?.id) return;
+      
+      setLoading(true);
+      console.log('Fetching exercise stats for user:', session.user.id);
+      // Use the new function that directly processes the workout JSONB data
+      const stats = await getExerciseStatsFromWorkouts(session.user.id);
+      console.log(`Loaded ${stats.length} exercise stats`);
+      
+      // Sort by last used date (most recent first)
+      const sortedStats = stats.sort((a, b) => {
+        return new Date(b.lastUsed).getTime() - new Date(a.lastUsed).getTime();
+      });
+      
+      setExercises(sortedStats);
+      setError(null);
+    } catch (err) {
+      console.error('Error loading exercise stats:', err);
+      setError('Failed to load exercise statistics');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    loadExercises();
-  }, [session?.user?.id]);
+  useFocusEffect(
+    useCallback(() => {
+      console.log('Stats screen focused, refreshing data');
+      loadExercises();
+    }, [session?.user?.id])
+  );
 
   const filteredExercises = exercises.filter(exercise => {
-    const matchesSearch = exercise.exercise_name.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = exercise.name.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCategory = selectedCategory === 'All' || 
-      (exercise.exercise_name && selectedCategory.toLowerCase() === determineCategory(exercise.exercise_name));
+      (exercise.type && selectedCategory.toLowerCase() === exercise.type);
     return matchesSearch && matchesCategory;
   });
 
-  // Helper function to determine the category of an exercise based on its name
   const determineCategory = (name: string): string => {
+    const exercise = exercises.find(e => e.name === name);
+    if (exercise && exercise.type) {
+      return exercise.type;
+    }
+
     const lowerName = name.toLowerCase();
     if (lowerName.includes('bench') || lowerName.includes('chest') || lowerName.includes('fly') || 
         (lowerName.includes('press') && !lowerName.includes('shoulder'))) {
@@ -148,19 +159,18 @@ export default function StatsScreen() {
             <TouchableOpacity
               key={exercise.id}
               style={styles.exerciseCard}
-              onPress={() => router.push(`/stats/${exercise.exercise_id}`)}
+              onPress={() => router.push(`/stats/${exercise.id}`)}
             >
               <View style={styles.exerciseHeader}>
                 <View style={styles.exerciseInfo}>
-                  <Text style={styles.exerciseName}>{exercise.exercise_name}</Text>
+                  <Text style={styles.exerciseName}>{exercise.name}</Text>
                   <Text style={styles.exerciseCategory}>
-                    {determineCategory(exercise.exercise_name).charAt(0).toUpperCase() + 
-                    determineCategory(exercise.exercise_name).slice(1)}
+                    {exercise.type?.charAt(0).toUpperCase() + 
+                    exercise.type?.slice(1) || 'Other'}
                   </Text>
                 </View>
                 
-                {/* Only show progress if we have enough data (at least 2 sessions) */}
-                {exercise.total_sessions > 1 && exercise.progress !== undefined && (
+                {exercise.totalSessions > 1 && exercise.progress !== undefined && (
                   <View style={[
                     styles.progressBadge,
                     exercise.progress > 0 ? styles.progressPositive : styles.progressNegative
@@ -179,7 +189,7 @@ export default function StatsScreen() {
                 <View style={styles.statItem}>
                   <TrendingUp size={20} color="#007AFF" />
                   <View>
-                    <Text style={styles.statValue}>{exercise.max_weight} kg</Text>
+                    <Text style={styles.statValue}>{exercise.maxWeight} kg</Text>
                     <Text style={styles.statLabel}>Max Weight</Text>
                   </View>
                 </View>
@@ -189,7 +199,7 @@ export default function StatsScreen() {
                 <View style={styles.statItem}>
                   <ChartBar size={20} color="#007AFF" />
                   <View>
-                    <Text style={styles.statValue}>{(exercise.total_volume / 1000).toFixed(1)}k</Text>
+                    <Text style={styles.statValue}>{(exercise.totalVolume / 1000).toFixed(1)}k</Text>
                     <Text style={styles.statLabel}>Total Volume</Text>
                   </View>
                 </View>
@@ -197,7 +207,7 @@ export default function StatsScreen() {
 
               <TouchableOpacity 
                 style={styles.viewStatsButton}
-                onPress={() => router.push(`/stats/${exercise.exercise_id}`)}
+                onPress={() => router.push(`/stats/${exercise.id}`)}
               >
                 <Text style={styles.viewStatsText}>View Statistics</Text>
                 <ArrowRight size={20} color="#007AFF" />
