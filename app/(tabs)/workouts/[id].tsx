@@ -7,7 +7,7 @@ import { getWorkoutPlan, deleteWorkoutPlan, createWorkout, WorkoutPlan, Workout 
 import { updateWorkoutPlan } from '@/utils/supabase'; // Import from supabase instead
 import { Swipeable } from 'react-native-gesture-handler';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { findExerciseType } from '@/utils/exercises';
+import { findExerciseType, exercisesByWorkoutType } from '@/utils/exercises';
 
 type SetType = 'normal' | 'warmup' | 'dropset';
 
@@ -202,11 +202,35 @@ export default function WorkoutDetailScreen() {
 
   useEffect(() => {
     if (selectedExercise && typeof selectedExercise === 'string') {
-      const timestamp = Date.now();      
+      const timestamp = Date.now();
+      
+      // Try to find the exercise ID in our predefined lists
+      let exerciseId = '';
+      let exerciseType: 'chest' | 'back' | 'arms' | 'legs' | 'shoulders' | 'core' | undefined;
+      
+      // Search through all categories to find the exercise
+      for (const category in exercisesByWorkoutType) {
+        const matchedExercise = exercisesByWorkoutType[category].find(
+          ex => ex.name === selectedExercise
+        );
+        
+        if (matchedExercise) {
+          exerciseId = matchedExercise.id;
+          exerciseType = matchedExercise.type;
+          break;
+        }
+      }
+      
+      // If we couldn't find it, generate a custom ID
+      if (!exerciseId) {
+        exerciseId = `custom-${timestamp}-${Math.random().toString(36).substr(2, 9)}`;
+        exerciseType = findExerciseType(selectedExercise);
+      }
+      
       const exerciseToAdd: ExerciseProgress = {
-        id: `${timestamp}-${Math.random().toString(36).substr(2, 9)}`,
+        id: exerciseId,
         name: selectedExercise,
-        type: findExerciseType(selectedExercise), // Now using the imported function
+        type: exerciseType,
         sets: [
           // Create 3 sets by default instead of just 1
           {

@@ -168,6 +168,7 @@ export interface ExerciseStats {
   total_sessions: number;
   last_used: string;
   is_favorite?: boolean;
+  progress?: number;
 }
 
 export interface ExerciseHistory {
@@ -183,6 +184,16 @@ export interface ExerciseHistory {
 // Store invitation codes in memory since database operations are failing
 // This is a temporary solution until database issues are resolved
 const invitationCodeMap = new Map<string, string>();
+
+// Helper function to generate a UUID since crypto.randomUUID() is not available
+function generateUUID() {
+  // Simple UUID v4 implementation
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
 
 // Profile functions
 export async function getProfile(userId: string): Promise<Profile> {
@@ -780,34 +791,200 @@ export async function deleteWorkout(workoutId: string): Promise<void> {
   }
 }
 
-// Get stats for all exercises
+// Get stats for all exercises - Updated to work directly with workouts table
 export async function getExerciseStats(userId: string): Promise<ExerciseStats[]> {
   try {
-    // First get the stats
-    const { data: stats, error: statsError } = await supabase
-      .from('exercise_stats')
-      .select('*')
-      .eq('user_id', userId);
+    console.log('Fetching exercise stats from workouts table for user:', userId);
+    
+    // Get all workouts with exercises
+    const { data: workouts, error: workoutsError } = await supabase
+      .from('workouts')
+      .select('id, date, exercises')
+      .eq('user_id', userId)
+      .order('date', { ascending: false });
+      
+    if (workoutsError) {
+      console.error('Error fetching workouts for stats:', workoutsError);
+      throw workoutsError;
+    }
 
-    if (statsError) throw statsError;
+    // Get favorite exercises if that table exists
+    let favoriteIds = new Set<string>();
+    try {
+      const { data: favorites } = await supabase
+        .from('favorite_exercises')
+        .select('exercise_id')
+        .eq('user_id', userId);
+        
+      if (favorites) {
+        favoriteIds = new Set(favorites.map(f => f.exercise_id));
+      }
+    } catch (favError) {
+      console.warn('Could not fetch favorite exercises (table may not exist):', favError);
+      // Continue without favorites
+    }
 
-    // Then get favorite exercises
-    const { data: favorites, error: favError } = await supabase
-      .from('favorite_exercises')
-      .select('exercise_id')
-      .eq('user_id', userId);
-
-    if (favError) throw favError;
-
-    const favoriteIds = new Set(favorites?.map(f => f.exercise_id));
-
-    // Combine the data
-    return stats?.map(stat => ({
-      ...stat,
-      is_favorite: favoriteIds.has(stat.exercise_id)
-    })) || [];
+    // Process workouts to extract exercise stats
+    const exerciseMap = new Map<string, ExerciseStats>();
+    
+    // Track the most recent workout date for each exercise
+    const lastUsedMap = new Map<string, string>();
+    
+    // Process each workout
+    workouts?.forEach(workout => {
+      if (!workout.exercises || !Array.isArray(workout.exercises)) return;
+      
+      workout.exercises.forEach(exercise => {
+        if (!exercise || !exercise.id || !exercise.name) return;
+        
+        const exerciseId = exercise.id;
+        const exerciseName = exercise.name;
+        
+        // Update last used date for this exercise
+        if (!lastUsedMap.has(exerciseId) || new Date(workout.date) > new Date(lastUsedMap.get(exerciseId) || '')) {
+          lastUsedMap.set(exerciseId, workout.date);
+        }
+        
+        // Initialize stats object if needed
+        if (!exerciseMap.has(exerciseId)) {
+          exerciseMap.set(exerciseId, {
+            id: generateUUID(), // Use our custom UUID generator instead of crypto.randomUUID()
+            exercise_id: exerciseId,
+            exercise_name: exerciseName,
+            max_weight: 0,
+            max_reps: 0,
+            total_volume: 0,
+            total_sessions: 0,
+            last_used: workout.date,
+            is_favorite: favoriteIds.has(exerciseId),
+            progress: 0 // Will calculate this later if possible
+          });
+        }
+        
+        // Update session count
+        const stats = exerciseMap.get(exerciseId)!;
+        stats.total_sessions += 1;
+        
+        // Process set details to update max weight, max reps, and total volume
+        if (exercise.setDetails && Array.isArray(exercise.setDetails)) {
+          exercise.setDetails.forEach(set => {
+            if (!set) return;
+            
+            const weight = typeof set.weight === 'number' ? set.weight : 
+                          (set.weight ? parseFloat(set.weight) : 0);
+            
+            const reps = typeof set.reps === 'number' ? set.reps : 
+                        (set.reps ? parseInt(set.reps, 10) : 0);
+            
+            // Only count sets with both weight and reps
+            if (weight > 0 && reps > 0) {
+              // Update max weight
+              if (weight > stats.max_weight) {
+                stats.max_weight = weight;
+              }
+              
+              // Update max reps
+              if (reps > stats.max_reps) {
+                stats.max_reps = reps;
+              }
+              
+              // Add to total volume
+              stats.total_volume += weight * reps;
+            }
+          });
+        }
+      });
+    });
+    
+    // Update last used dates
+    exerciseMap.forEach((stats, exerciseId) => {
+      stats.last_used = lastUsedMap.get(exerciseId) || stats.last_used;
+    });
+    
+    // Calculate progress by comparing latest workout with previous
+    // Group workouts by exercise and sort by date
+    const exerciseWorkouts = new Map<string, any[]>();
+    
+    workouts?.forEach(workout => {
+      if (!workout.exercises || !Array.isArray(workout.exercises)) return;
+      
+      workout.exercises.forEach(exercise => {
+        if (!exercise || !exercise.id) return;
+        
+        const exerciseId = exercise.id;
+        
+        if (!exerciseWorkouts.has(exerciseId)) {
+          exerciseWorkouts.set(exerciseId, []);
+        }
+        
+        exerciseWorkouts.get(exerciseId)?.push({
+          date: workout.date,
+          exercise: exercise
+        });
+      });
+    });
+    
+    // Calculate progress for each exercise
+    exerciseWorkouts.forEach((workoutList, exerciseId) => {
+      if (workoutList.length < 2 || !exerciseMap.has(exerciseId)) return;
+      
+      // Sort by date descending
+      workoutList.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      
+      const latestWorkout = workoutList[0];
+      const previousWorkout = workoutList[1];
+      
+      // Calculate average weight for latest workout
+      let latestTotalWeight = 0;
+      let latestSetCount = 0;
+      
+      if (latestWorkout.exercise.setDetails && Array.isArray(latestWorkout.exercise.setDetails)) {
+        latestWorkout.exercise.setDetails.forEach(set => {
+          if (!set) return;
+          
+          const weight = typeof set.weight === 'number' ? set.weight : 
+                        (set.weight ? parseFloat(set.weight) : 0);
+          
+          if (weight > 0) {
+            latestTotalWeight += weight;
+            latestSetCount++;
+          }
+        });
+      }
+      
+      // Calculate average weight for previous workout
+      let previousTotalWeight = 0;
+      let previousSetCount = 0;
+      
+      if (previousWorkout.exercise.setDetails && Array.isArray(previousWorkout.exercise.setDetails)) {
+        previousWorkout.exercise.setDetails.forEach(set => {
+          if (!set) return;
+          
+          const weight = typeof set.weight === 'number' ? set.weight : 
+                        (set.weight ? parseFloat(set.weight) : 0);
+          
+          if (weight > 0) {
+            previousTotalWeight += weight;
+            previousSetCount++;
+          }
+        });
+      }
+      
+      // Only calculate progress if we have valid sets in both workouts
+      if (latestSetCount > 0 && previousSetCount > 0) {
+        const latestAvg = latestTotalWeight / latestSetCount;
+        const previousAvg = previousTotalWeight / previousSetCount;
+        
+        if (previousAvg > 0) {
+          const progressPercent = Math.round(((latestAvg - previousAvg) / previousAvg) * 100);
+          exerciseMap.get(exerciseId)!.progress = progressPercent;
+        }
+      }
+    });
+    
+    return Array.from(exerciseMap.values());
   } catch (error) {
-    console.error('Error fetching exercise stats:', error);
+    console.error('Error calculating exercise stats from workouts:', error);
     throw error;
   }
 }

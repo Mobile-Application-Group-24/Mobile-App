@@ -1,49 +1,90 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Search, ChartBar, TrendingUp, Dumbbell, ArrowRight } from 'lucide-react-native';
-
-// Dummy data - replace with real data later
-const exercises = [
-  {
-    id: '1',
-    name: 'Bench Press',
-    category: 'Chest',
-    maxWeight: 100,
-    totalVolume: 15000,
-    progress: 5,
-  },
-  {
-    id: '2',
-    name: 'Squat',
-    category: 'Legs',
-    maxWeight: 120,
-    totalVolume: 18000,
-    progress: -2,
-  },
-  {
-    id: '3',
-    name: 'Deadlift',
-    category: 'Back',
-    maxWeight: 140,
-    totalVolume: 20000,
-    progress: 8,
-  },
-  // Add more exercises...
-];
+import { Search, ChartBar, TrendingUp, Dumbbell, ArrowRight, FolderIcon } from 'lucide-react-native';
+import { getExerciseStats, ExerciseStats } from '@/utils/supabase';
+import { useSession } from '@/utils/auth';
 
 const categories = ['All', 'Chest', 'Back', 'Legs', 'Shoulders', 'Arms', 'Core'];
 
 export default function StatsScreen() {
   const router = useRouter();
+  const { session } = useSession();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
+  const [exercises, setExercises] = useState<ExerciseStats[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const loadExercises = async () => {
+      try {
+        if (!session?.user?.id) return;
+        
+        setLoading(true);
+        const stats = await getExerciseStats(session.user.id);
+        
+        // Sort by last used date (most recent first)
+        const sortedStats = stats.sort((a, b) => {
+          return new Date(b.last_used).getTime() - new Date(a.last_used).getTime();
+        });
+        
+        setExercises(sortedStats);
+        setError(null);
+      } catch (err) {
+        console.error('Error loading exercise stats:', err);
+        setError('Failed to load exercise statistics');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadExercises();
+  }, [session?.user?.id]);
 
   const filteredExercises = exercises.filter(exercise => {
-    const matchesSearch = exercise.name.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory = selectedCategory === 'All' || exercise.category === selectedCategory;
+    const matchesSearch = exercise.exercise_name.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesCategory = selectedCategory === 'All' || 
+      (exercise.exercise_name && selectedCategory.toLowerCase() === determineCategory(exercise.exercise_name));
     return matchesSearch && matchesCategory;
   });
+
+  // Helper function to determine the category of an exercise based on its name
+  const determineCategory = (name: string): string => {
+    const lowerName = name.toLowerCase();
+    if (lowerName.includes('bench') || lowerName.includes('chest') || lowerName.includes('fly') || 
+        (lowerName.includes('press') && !lowerName.includes('shoulder'))) {
+      return 'chest';
+    } else if (lowerName.includes('row') || lowerName.includes('pull') || 
+              lowerName.includes('deadlift') || lowerName.includes('back')) {
+      return 'back';
+    } else if (lowerName.includes('squat') || lowerName.includes('leg') || 
+              lowerName.includes('lunge') || lowerName.includes('calf')) {
+      return 'legs';
+    } else if (lowerName.includes('shoulder') || lowerName.includes('delt') || 
+              lowerName.includes('military')) {
+      return 'shoulders';
+    } else if (lowerName.includes('curl') || lowerName.includes('tricep') || 
+              lowerName.includes('extension')) {
+      return 'arms';
+    } else if (lowerName.includes('ab') || lowerName.includes('crunch') || 
+              lowerName.includes('plank') || lowerName.includes('core')) {
+      return 'core';
+    }
+    return 'other';
+  };
+
+  const renderEmptyState = () => {
+    return (
+      <View style={styles.emptyState}>
+        <FolderIcon size={56} color="#8E8E93" />
+        <Text style={styles.emptyStateTitle}>No exercise data yet</Text>
+        <Text style={styles.emptyStateText}>
+          Complete workouts to track your exercise statistics
+        </Text>
+      </View>
+    );
+  };
 
   return (
     <ScrollView style={styles.container}>
@@ -91,66 +132,117 @@ export default function StatsScreen() {
         ))}
       </ScrollView>
 
-      <View style={styles.exercisesContainer}>
-        {filteredExercises.map((exercise) => (
-          <TouchableOpacity
-            key={exercise.id}
-            style={styles.exerciseCard}
-            onPress={() => router.push(`/stats/${exercise.id}`)}
-          >
-            <View style={styles.exerciseHeader}>
-              <View style={styles.exerciseInfo}>
-                <Text style={styles.exerciseName}>{exercise.name}</Text>
-                <Text style={styles.exerciseCategory}>{exercise.category}</Text>
-              </View>
-              <View style={[
-                styles.progressBadge,
-                exercise.progress > 0 ? styles.progressPositive : styles.progressNegative
-              ]}>
-                <Text style={[
-                  styles.progressText,
-                  exercise.progress > 0 ? styles.progressTextPositive : styles.progressTextNegative
-                ]}>
-                  {exercise.progress > 0 ? '+' : ''}{exercise.progress}%
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.statsGrid}>
-              <View style={styles.statItem}>
-                <TrendingUp size={20} color="#007AFF" />
-                <View>
-                  <Text style={styles.statValue}>{exercise.maxWeight} kg</Text>
-                  <Text style={styles.statLabel}>Max Weight</Text>
-                </View>
-              </View>
-
-              <View style={styles.statDivider} />
-
-              <View style={styles.statItem}>
-                <ChartBar size={20} color="#007AFF" />
-                <View>
-                  <Text style={styles.statValue}>{(exercise.totalVolume / 1000).toFixed(1)}k</Text>
-                  <Text style={styles.statLabel}>Total Volume</Text>
-                </View>
-              </View>
-            </View>
-
-            <TouchableOpacity 
-              style={styles.viewStatsButton}
-              onPress={() => router.push(`/stats/${exercise.id}`)}
+      {loading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#007AFF" />
+        </View>
+      ) : error ? (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
+      ) : filteredExercises.length === 0 ? (
+        renderEmptyState()
+      ) : (
+        <View style={styles.exercisesContainer}>
+          {filteredExercises.map((exercise) => (
+            <TouchableOpacity
+              key={exercise.id}
+              style={styles.exerciseCard}
+              onPress={() => router.push(`/stats/${exercise.exercise_id}`)}
             >
-              <Text style={styles.viewStatsText}>View Statistics</Text>
-              <ArrowRight size={20} color="#007AFF" />
+              <View style={styles.exerciseHeader}>
+                <View style={styles.exerciseInfo}>
+                  <Text style={styles.exerciseName}>{exercise.exercise_name}</Text>
+                  <Text style={styles.exerciseCategory}>
+                    {determineCategory(exercise.exercise_name).charAt(0).toUpperCase() + 
+                    determineCategory(exercise.exercise_name).slice(1)}
+                  </Text>
+                </View>
+                
+                {/* Only show progress if we have enough data (at least 2 sessions) */}
+                {exercise.total_sessions > 1 && exercise.progress !== undefined && (
+                  <View style={[
+                    styles.progressBadge,
+                    exercise.progress > 0 ? styles.progressPositive : styles.progressNegative
+                  ]}>
+                    <Text style={[
+                      styles.progressText,
+                      exercise.progress > 0 ? styles.progressTextPositive : styles.progressTextNegative
+                    ]}>
+                      {exercise.progress > 0 ? '+' : ''}{exercise.progress}%
+                    </Text>
+                  </View>
+                )}
+              </View>
+
+              <View style={styles.statsGrid}>
+                <View style={styles.statItem}>
+                  <TrendingUp size={20} color="#007AFF" />
+                  <View>
+                    <Text style={styles.statValue}>{exercise.max_weight} kg</Text>
+                    <Text style={styles.statLabel}>Max Weight</Text>
+                  </View>
+                </View>
+
+                <View style={styles.statDivider} />
+
+                <View style={styles.statItem}>
+                  <ChartBar size={20} color="#007AFF" />
+                  <View>
+                    <Text style={styles.statValue}>{(exercise.total_volume / 1000).toFixed(1)}k</Text>
+                    <Text style={styles.statLabel}>Total Volume</Text>
+                  </View>
+                </View>
+              </View>
+
+              <TouchableOpacity 
+                style={styles.viewStatsButton}
+                onPress={() => router.push(`/stats/${exercise.exercise_id}`)}
+              >
+                <Text style={styles.viewStatsText}>View Statistics</Text>
+                <ArrowRight size={20} color="#007AFF" />
+              </TouchableOpacity>
             </TouchableOpacity>
-          </TouchableOpacity>
-        ))}
-      </View>
+          ))}
+        </View>
+      )}
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
+  loadingContainer: {
+    padding: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  errorContainer: {
+    padding: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  errorText: {
+    fontSize: 16,
+    color: '#FF3B30',
+    textAlign: 'center',
+  },
+  emptyState: {
+    padding: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyStateTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginTop: 16,
+    marginBottom: 8,
+    color: '#3C3C43',
+  },
+  emptyStateText: {
+    fontSize: 14,
+    color: '#8E8E93',
+    textAlign: 'center',
+  },
   container: {
     flex: 1,
     backgroundColor: '#F2F2F7',
