@@ -307,3 +307,66 @@ export const addWorkoutEntry = async (
     throw error;
   }
 };
+
+/**
+ * Generate weight modification suggestions based on workout history using DeepSeek AI
+ * @param userId User ID
+ * @param workoutData Recent workout data with exercise details
+ * @returns Array of weight modification suggestions
+ */
+export async function generateWeightSuggestions(userId: string, workoutData: any[]) {
+  try {
+    console.log('Generating weight suggestions from DeepSeek AI');
+
+    // Format the workout data for the AI prompt
+    const workoutHistory = JSON.stringify(workoutData);
+    
+    const messages = [
+      {
+        role: 'system',
+        content: `You are an AI fitness coach specializing in progressive overload recommendations. 
+        Analyze the user's workout history and suggest specific weight increases for exercises 
+        where you see potential for progression. Focus only on exercises where the user has been 
+        using consistent weights.`
+      },
+      {
+        role: 'user',
+        content: `Here is my recent workout history: ${workoutHistory}
+
+        Based on this data, suggest up to 3 exercises where I could increase the weight. 
+        For each suggestion, provide the current weight I'm using and the suggested weight increase.
+        Format your response as a JSON array with this structure:
+        [
+          {
+            "exercise": "Exercise Name",
+            "currentWeight": 50,
+            "suggestedWeight": 55,
+            "suggestion": "Increase weight by 5kg and aim for 8-10 reps for better strength gains."
+          }
+        ]
+        Only include the JSON array in your response, nothing else.`
+      }
+    ];
+
+    const apiResponse = await sendMessageToDeepseek(messages, userId);
+    
+    // Extract the JSON array from the response
+    try {
+      // Find JSON content in the response
+      const jsonMatch = apiResponse.match(/\[[\s\S]*\]/);
+      if (jsonMatch) {
+        const jsonString = jsonMatch[0];
+        return JSON.parse(jsonString);
+      } else {
+        console.warn('No JSON array found in DeepSeek response');
+        return [];
+      }
+    } catch (parseError) {
+      console.error('Error parsing DeepSeek suggestion response:', parseError);
+      return [];
+    }
+  } catch (error) {
+    console.error('Error generating weight suggestions:', error);
+    return [];
+  }
+}
