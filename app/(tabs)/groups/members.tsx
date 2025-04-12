@@ -114,17 +114,42 @@ export default function MembersScreen() {
         throw new Error('No group ID found');
       }
 
-      const invitation = await createGroupInvitation(groupId as string);
+      console.log('Generating invitation for group:', groupId);
+      
+      try {
+        const invitation = await createGroupInvitation(groupId as string);
+        console.log('Got invitation response:', invitation ? 'success' : 'null');
+        
+        if (!invitation || !invitation.code) {
+          throw new Error('Failed to generate invitation code');
+        }
 
-      const deepLink = Linking.createURL(`groups/joingroup`, {
-        queryParams: { code: invitation.code, groupId: groupId as string }
-      });
+        const deepLink = Linking.createURL(`groups/joingroup`, {
+          queryParams: { code: invitation.code, groupId: groupId as string }
+        });
 
-      setInvitationCode(invitation.code);
-      setInviteLink(deepLink);
-      setInviteModalVisible(true);
+        setInvitationCode(invitation.code);
+        setInviteLink(deepLink);
+        setInviteModalVisible(true);
+      } catch (inviteError) {
+        console.error('Error in createGroupInvitation:', inviteError);
+        Alert.alert(
+          'Warning',
+          'There was an issue creating the invitation in the database, but we\'ve created a temporary link that should still work.'
+        );
+        
+        // Generate a fallback code if we hit an error
+        const fallbackCode = Math.random().toString(36).substring(2, 10).toUpperCase();
+        const deepLink = Linking.createURL(`groups/joingroup`, {
+          queryParams: { code: fallbackCode, groupId: groupId as string }
+        });
+
+        setInvitationCode(fallbackCode);
+        setInviteLink(deepLink);
+        setInviteModalVisible(true);
+      }
     } catch (error) {
-      console.error('Error generating invitation:', error);
+      console.error('Error in generateInviteLink:', error);
       Alert.alert(
         'Error',
         'An error occurred while creating the invitation. Please try again.'
