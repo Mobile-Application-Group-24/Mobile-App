@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import { checkDatabaseSchema, createWorkoutsTable } from '@/utils/database-checker';
 import { getWorkouts, getCurrentUser, Workout, WorkoutExercise, SetDetail, addExerciseToWorkout, getWorkoutPlans, WorkoutPlan, addExerciseToPlan } from '@/utils/supabase';
 import { generateWeightSuggestions, generateExerciseSuggestions } from '@/utils/deepseek';
+import { exercisesByWorkoutType, ExerciseReference, findExerciseType } from '@/utils/exercises';
 
 // Interface for weight modification suggestions
 interface WeightModification {
@@ -78,7 +79,7 @@ export default function AIScreen() {
         }
         
         try {
-          // Get exercise suggestions from DeepSeek
+          // Get exercise suggestions from DeepSeek (will now only include exercises from exercises.ts)
           if (typeof generateExerciseSuggestions === 'function') {
             const exerciseSuggestions = await generateExerciseSuggestions(user.id);
             
@@ -95,24 +96,34 @@ export default function AIScreen() {
               setExerciseSuggestions(formattedExerciseSuggestions);
             }
           } else {
-            // Fallback: Hardcoded sample exercise suggestions
-            console.log('Using fallback exercise suggestions');
+            // Fallback: Use valid exercises from our database
+            console.log('Using fallback exercise suggestions from exercises.ts');
+            
+            // Sample exercises from our database instead of hardcoded ones
+            const { exercisesByWorkoutType } = await import('@/utils/exercises');
+            const allExercises = Object.values(exercisesByWorkoutType).flat();
+            
+            // Randomly select 2 exercises from our database to suggest
+            const randomExercises = allExercises
+              .sort(() => 0.5 - Math.random())
+              .slice(0, 2);
+            
             const fallbackSuggestions: ExerciseSuggestion[] = [
               {
                 id: 201,
                 type: 'New Exercise',
-                exercise: 'Bulgarian Split Squats',
-                suggestion: 'Add 3 sets of 10-12 reps per leg to your leg workout',
-                reasoning: 'This unilateral exercise will help address muscle imbalances and enhance your leg development',
-                target_workout: 'Leg Day'
+                exercise: randomExercises[0].name,
+                suggestion: `Add 3 sets of 10-12 reps to your ${randomExercises[0].type} workout`,
+                reasoning: `This exercise will help strengthen your ${randomExercises[0].type} muscles and provide more balanced development`,
+                target_workout: `${randomExercises[0].type.charAt(0).toUpperCase() + randomExercises[0].type.slice(1)} Day`
               },
               {
                 id: 202,
                 type: 'Additional Set',
-                exercise: 'Bench Press',
-                suggestion: 'Add 2 more sets of your bench press with slightly lower weight',
-                reasoning: 'Increasing volume on compound exercises can boost muscle growth and strength',
-                target_workout: 'Chest Day'
+                exercise: randomExercises[1].name,
+                suggestion: 'Add 2 more sets with slightly lower weight',
+                reasoning: 'Increasing volume on this exercise can boost muscle growth and strength',
+                target_workout: `${randomExercises[1].type.charAt(0).toUpperCase() + randomExercises[1].type.slice(1)} Day`
               }
             ];
             
@@ -120,12 +131,16 @@ export default function AIScreen() {
           }
         } catch (suggestionError) {
           console.error('Error with exercise suggestions:', suggestionError);
-          // Provide fallback suggestions
+          // Provide fallback suggestions using exercises from our database
+          const { exercisesByWorkoutType } = await import('@/utils/exercises');
+          const legExercise = exercisesByWorkoutType['Legs'].find(ex => ex.name === 'Bulgarian Split Squat') || exercisesByWorkoutType['Legs'][0];
+          const chestExercise = exercisesByWorkoutType['Chest'].find(ex => ex.name === 'Barbell Bench Press') || exercisesByWorkoutType['Chest'][0];
+          
           const fallbackSuggestions: ExerciseSuggestion[] = [
             {
               id: 201,
               type: 'New Exercise',
-              exercise: 'Bulgarian Split Squats',
+              exercise: legExercise.name,
               suggestion: 'Add 3 sets of 10-12 reps per leg to your leg workout',
               reasoning: 'This unilateral exercise will help address muscle imbalances and enhance your leg development',
               target_workout: 'Leg Day'
@@ -133,8 +148,8 @@ export default function AIScreen() {
             {
               id: 202,
               type: 'Additional Set',
-              exercise: 'Bench Press',
-              suggestion: 'Add 2 more sets of your bench press with slightly lower weight',
+              exercise: chestExercise.name,
+              suggestion: 'Add 2 more sets with slightly lower weight',
               reasoning: 'Increasing volume on compound exercises can boost muscle growth and strength',
               target_workout: 'Chest Day'
             }
@@ -184,10 +199,35 @@ export default function AIScreen() {
       const setsMatch = suggestion.suggestion.match(/(\d+)\s*sets/i);
       const sets = setsMatch ? parseInt(setsMatch[1]) : 3;
       
+      // Find the exercise in our exercise database
+      const exerciseName = suggestion.exercise;
+      let exerciseId: string | undefined;
+      let exerciseType: 'chest' | 'back' | 'arms' | 'legs' | 'shoulders' | 'core' | undefined;
+      
+      // Search all categories for the exercise
+      Object.keys(exercisesByWorkoutType).forEach(category => {
+        const foundExercise = exercisesByWorkoutType[category].find(
+          ex => ex.name.toLowerCase() === exerciseName.toLowerCase()
+        );
+        if (foundExercise) {
+          exerciseId = foundExercise.id;
+          exerciseType = foundExercise.type;
+        }
+      });
+      
+      // If not found, determine type and generate a random ID
+      if (!exerciseId) {
+        exerciseType = findExerciseType(exerciseName);
+        exerciseId = `custom-${Date.now()}`;
+        console.log(`Exercise not found in database, using type: ${exerciseType}`);
+      }
+      
       // Add the exercise to the selected workout plan
       await addExerciseToPlan(planId, {
-        name: suggestion.exercise,
-        sets: sets
+        id: exerciseId,
+        name: exerciseName,
+        sets: sets,
+        type: exerciseType
       });
       
       // Update the responses state
@@ -196,7 +236,7 @@ export default function AIScreen() {
       // Show success message
       const selectedPlan = workoutPlans.find(p => p.id === planId);
       const planName = selectedPlan?.title || 'your workout plan';
-      Alert.alert('Success', `Added ${suggestion.exercise} to ${planName}!`);
+      Alert.alert('Success', `Added ${exerciseName} to ${planName}!`);
     } catch (error) {
       console.error('Error adding exercise to workout plan:', error);
       Alert.alert('Error', 'Failed to update workout plan with suggestion');

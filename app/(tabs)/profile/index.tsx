@@ -437,6 +437,12 @@ export default function ProfileScreen() {
           <View style={styles.sectionHeader}>
             <Calendar size={24} color="#007AFF" />
             <Text style={styles.sectionTitle}>Recent Activity</Text>
+            <TouchableOpacity 
+              style={styles.viewAllButton}
+              onPress={() => router.push('/profile/recent-workouts')}
+            >
+              <Text style={styles.viewAllButtonText}>View All</Text>
+            </TouchableOpacity>
           </View>
           
           {recentWorkouts.length === 0 ? (
@@ -448,7 +454,14 @@ export default function ProfileScreen() {
             </View>
           ) : (
             recentWorkouts.map((workout) => (
-              <View key={workout.id} style={styles.workoutCard}>
+              <TouchableOpacity 
+                key={workout.id} 
+                style={styles.workoutCard}
+                onPress={() => router.push({
+                  pathname: '/workout/[id]',
+                  params: { id: workout.id }
+                })}
+              >
                 <View style={styles.workoutHeader}>
                   <Text style={styles.workoutTitle} numberOfLines={1}>
                     {workout.title}
@@ -470,7 +483,7 @@ export default function ProfileScreen() {
                     </Text>
                   )}
                 </View>
-              </View>
+              </TouchableOpacity>
             ))
           )}
         </View>
@@ -599,6 +612,17 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: 'bold',
     marginLeft: 8,
+    flex: 1,
+  },
+  viewAllButton: {
+    backgroundColor: 'transparent',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
+  viewAllButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#007AFF',
   },
   emptyState: {
     alignItems: 'center',
