@@ -156,6 +156,28 @@ export interface SetDetail {
   notes?: string;
 }
 
+export interface ExerciseStats {
+  id: string;
+  exercise_id: string;
+  exercise_name: string;
+  max_weight: number;
+  max_reps: number;
+  total_volume: number;
+  total_sessions: number;
+  last_used: string;
+  is_favorite?: boolean;
+}
+
+export interface ExerciseHistory {
+  id: string;
+  exercise_id: string;
+  workout_id: string;
+  weight: number;
+  reps: number;
+  date: string;
+  volume: number;
+}
+
 // Store invitation codes in memory since database operations are failing
 // This is a temporary solution until database issues are resolved
 const invitationCodeMap = new Map<string, string>();
@@ -185,6 +207,7 @@ export async function updateProfile(userId: string, updates: Partial<Profile>) {
   return data;
 }
 
+// Group functions
 export async function createGroup(groupData: Omit<Group, 'id' | 'created_at' | 'owner_id'>) {
   const { data: userData, error: userError } = await supabase.auth.getUser();
   if (userError || !userData.user) throw new Error('User not authenticated');
@@ -750,4 +773,170 @@ export async function deleteWorkout(workoutId: string): Promise<void> {
     console.error('Error deleting workout:', error);
     throw error;
   }
+}
+
+// Get stats for all exercises
+export async function getExerciseStats(userId: string): Promise<ExerciseStats[]> {
+  try {
+    // First get the stats
+    const { data: stats, error: statsError } = await supabase
+      .from('exercise_stats')
+      .select('*')
+      .eq('user_id', userId);
+
+    if (statsError) throw statsError;
+
+    // Then get favorite exercises
+    const { data: favorites, error: favError } = await supabase
+      .from('favorite_exercises')
+      .select('exercise_id')
+      .eq('user_id', userId);
+
+    if (favError) throw favError;
+
+    const favoriteIds = new Set(favorites?.map(f => f.exercise_id));
+
+    // Combine the data
+    return stats?.map(stat => ({
+      ...stat,
+      is_favorite: favoriteIds.has(stat.exercise_id)
+    })) || [];
+  } catch (error) {
+    console.error('Error fetching exercise stats:', error);
+    throw error;
+  }
+}
+
+// Get history for a specific exercise
+export async function getExerciseHistory(
+  userId: string,
+  exerciseId: string
+): Promise<ExerciseHistory[]> {
+  const { data, error } = await supabase
+    .from('exercise_history')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('exercise_id', exerciseId)
+    .order('date', { ascending: false });
+
+  if (error) throw error;
+  return data || [];
+}
+
+// Update exercise stats after workout
+export async function updateExerciseStats(
+  userId: string,
+  exerciseData: {
+    exercise_id: string;
+    exercise_name: string;
+    weight: number;
+    reps: number;
+    workout_id: string;
+  }
+) {
+  const volume = exerciseData.weight * exerciseData.reps;
+
+  // First, update or insert the stats
+  const { data: existingStats } = await supabase
+    .from('exercise_stats')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('exercise_id', exerciseData.exercise_id)
+    .single();
+
+  if (existingStats) {
+    // Update existing stats
+    await supabase
+      .from('exercise_stats')
+      .update({
+        max_weight: Math.max(existingStats.max_weight || 0, exerciseData.weight),
+        max_reps: Math.max(existingStats.max_reps || 0, exerciseData.reps),
+        total_volume: (existingStats.total_volume || 0) + volume,
+        total_sessions: (existingStats.total_sessions || 0) + 1,
+        last_used: new Date().toISOString()
+      })
+      .eq('id', existingStats.id);
+  } else {
+    // Insert new stats
+    await supabase
+      .from('exercise_stats')
+      .insert({
+        user_id: userId,
+        exercise_id: exerciseData.exercise_id,
+        exercise_name: exerciseData.exercise_name,
+        max_weight: exerciseData.weight,
+        max_reps: exerciseData.reps,
+        total_volume: volume,
+        total_sessions: 1,
+        last_used: new Date().toISOString()
+      });
+  }
+
+  // Then, add to history
+  await supabase
+    .from('exercise_history')
+    .insert({
+      user_id: userId,
+      exercise_id: exerciseData.exercise_id,
+      workout_id: exerciseData.workout_id,
+      weight: exerciseData.weight,
+      reps: exerciseData.reps,
+      volume: volume,
+      date: new Date().toISOString()
+    });
+}
+
+// Toggle favorite status
+export async function toggleExerciseFavorite(
+  userId: string,
+  exerciseId: string
+): Promise<boolean> {
+  const { data: existing } = await supabase
+    .from('favorite_exercises')
+    .select()
+    .eq('user_id', userId)
+    .eq('exercise_id', exerciseId)
+    .single();
+
+  if (existing) {
+    await supabase
+      .from('favorite_exercises')
+      .delete()
+      .eq('user_id', userId)
+      .eq('exercise_id', exerciseId);
+    return false;
+  } else {
+    await supabase
+      .from('favorite_exercises')
+      .insert({ user_id: userId, exercise_id: exerciseId });
+    return true;
+  }
+}
+
+// Get progress data for charts
+export async function getExerciseProgress(
+  userId: string,
+  exerciseId: string,
+  period: 'week' | 'month' | 'year' = 'month'
+): Promise<{
+  labels: string[];
+  volumes: number[];
+  weights: number[];
+}> {
+  const { data, error } = await supabase
+    .from('exercise_history')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('exercise_id', exerciseId)
+    .order('date', { ascending: true });
+
+  if (error) throw error;
+
+  // Process data for charts
+  // ... Implementiere die Datenverarbeitung für Charts ...
+  return {
+    labels: [],
+    volumes: [],
+    weights: []
+  };
 }
