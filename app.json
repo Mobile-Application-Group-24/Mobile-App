@@ -12,17 +12,21 @@
       "supportsTablet": true,
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "This app uses the photo library to let you select images for your profile and groups.",
-        "NSCameraUsageDescription": "This app requires access to your camera to take profile pictures."
-      }
+        "NSCameraUsageDescription": "This app requires access to your camera to take profile pictures.",
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "bundleIdentifier": "com.lupf2002.GymApp"
     },
     "android": {
       "softwareKeyboardLayoutMode": "resize",
       "windowSoftInputMode": "adjustPan",
       "permissions": [
-        "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE",
-        "CAMERA"
-      ]
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ],
+      "package": "com.lupf2002.GymApp"
     },
     "web": {
       "bundler": "metro",
@@ -40,6 +44,14 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "f4f0d973-72fa-4f02-b543-0c9cea4f4c66"
+      }
     }
   }
 }
