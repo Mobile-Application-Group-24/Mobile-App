@@ -123,6 +123,7 @@ export interface PlanExercise {
   id: string;
   name: string;
   sets: number;
+  type?: 'chest' | 'back' | 'arms' | 'legs' | 'shoulders' | 'core';
 }
 
 export interface Workout {
@@ -145,6 +146,7 @@ export interface WorkoutExercise {
   id: string;
   name: string;
   sets: number;
+  type?: 'chest' | 'back' | 'arms' | 'legs' | 'shoulders' | 'core';
   setDetails: SetDetail[];
 }
 
@@ -595,13 +597,14 @@ export async function updateWorkoutCompletionStatus(workoutId: string, isDone: b
 // Workout plan functions
 export async function createWorkoutPlan(planData: Omit<WorkoutPlan, 'id' | 'created_at' | 'updated_at'>): Promise<WorkoutPlan> {
   try {
-    // Ensure exercises only include name and sets (no weight/reps)
+    // Ensure exercises only include name, sets, and type (no weight/reps)
     const sanitizedPlanData = {
       ...planData,
       exercises: planData.exercises?.map(ex => ({
         id: ex.id,
         name: ex.name,
-        sets: ex.sets
+        sets: ex.sets,
+        type: ex.type
       }))
     };
     
@@ -649,12 +652,13 @@ export async function updateWorkoutPlan(planId: string, updates: Partial<Workout
     // Make a deep copy to avoid modifying the original object
     const updateData = { ...updates };
     
-    // Ensure exercises only include name and sets (no weight/reps)
+    // Ensure exercises only include name, sets, and type (no weight/reps)
     if (updateData.exercises) {
       updateData.exercises = updateData.exercises.map(ex => ({
         id: ex.id,
         name: ex.name,
-        sets: ex.sets
+        sets: ex.sets,
+        type: ex.type
       }));
     }
     
@@ -693,13 +697,14 @@ export async function deleteWorkoutPlan(planId: string): Promise<void> {
 // Workout session functions
 export async function createWorkout(workoutData: Omit<Workout, 'id' | 'created_at'>, exercisesData?: any[]): Promise<Workout> {
   try {
-    // Include the exercises array in the workout data (with full details)
+    // Include the exercises array in the workout data (with full details including type)
     const fullWorkoutData = {
       ...workoutData,
       exercises: exercisesData?.map(ex => ({
         id: ex.id,
         name: ex.name,
         sets: ex.sets,
+        type: ex.type,
         setDetails: ex.setDetails || []
       }))
     };
