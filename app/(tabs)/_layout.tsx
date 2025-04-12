@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router';
-import { Dumbbell, Users, Brain, Apple, User } from 'lucide-react-native';
+import { Dumbbell, Users, Brain, Apple, User, ChartBar } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
 import { Platform, Keyboard, View, StyleSheet } from 'react-native';
 
@@ -55,6 +55,13 @@ export default function TabLayout() {
             title: 'Workouts',
             tabBarIcon: ({ color, size }) => <Dumbbell size={size} color={color} />,
           }}
+        />
+        <Tabs.Screen
+        name="stats"
+        options={{
+          title: 'Statistics',
+          tabBarIcon: ({ color, size }) => <ChartBar size={size} color={color} />,
+        }}
         />
         <Tabs.Screen
           name="groups"
