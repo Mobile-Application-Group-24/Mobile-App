@@ -170,16 +170,16 @@ export default function StatsScreen() {
                   </Text>
                 </View>
                 
-                {exercise.totalSessions > 1 && exercise.progress !== undefined && (
+                {exercise.totalSessions > 1 && exercise.volumeProgress !== undefined && (
                   <View style={[
                     styles.progressBadge,
-                    exercise.progress > 0 ? styles.progressPositive : styles.progressNegative
+                    exercise.volumeProgress > 0 ? styles.progressPositive : styles.progressNegative
                   ]}>
                     <Text style={[
                       styles.progressText,
-                      exercise.progress > 0 ? styles.progressTextPositive : styles.progressTextNegative
+                      exercise.volumeProgress > 0 ? styles.progressTextPositive : styles.progressTextNegative
                     ]}>
-                      {exercise.progress > 0 ? '+' : ''}{exercise.progress}%
+                      {exercise.volumeProgress > 0 ? '+' : ''}{exercise.volumeProgress}%
                     </Text>
                   </View>
                 )}

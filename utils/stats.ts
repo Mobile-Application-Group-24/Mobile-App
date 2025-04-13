@@ -11,6 +11,7 @@ export interface ExerciseStats {
   lastUsed: string;
   type?: 'chest' | 'back' | 'arms' | 'legs' | 'shoulders' | 'core';
   progress?: number;
+  volumeProgress?: number; // Add this field to match what the UI is expecting
 }
 
 // Interface for exercise history data points
@@ -41,6 +42,9 @@ export async function getExerciseStatsFromWorkouts(userId: string): Promise<Exer
   
   // For progress calculation: track most recent and second-most-recent workouts by exercise
   const exerciseWorkouts = new Map<string, Array<{date: string, avgWeight: number}>>();
+  
+  // For volume progress calculation: track volume by workout date
+  const exerciseVolumeByWorkout = new Map<string, Array<{date: string, totalVolume: number}>>();
   
   // Process each workout to extract exercise data
   workouts?.forEach(workout => {
@@ -73,7 +77,8 @@ export async function getExerciseStatsFromWorkouts(userId: string): Promise<Exer
           totalSessions: 0,
           lastUsed: workoutDate,
           type: exerciseType,
-          progress: 0 // Will calculate later
+          progress: 0, // Will calculate later
+          volumeProgress: 0 // Will calculate later
         });
       }
 
@@ -83,6 +88,7 @@ export async function getExerciseStatsFromWorkouts(userId: string): Promise<Exer
       // For workout progress tracking
       let totalSetWeight = 0;
       let weightedSetCount = 0;
+      let sessionVolume = 0;
 
       // Process set details to calculate stats
       if (exercise.setDetails && Array.isArray(exercise.setDetails)) {
@@ -108,7 +114,9 @@ export async function getExerciseStatsFromWorkouts(userId: string): Promise<Exer
             }
             
             // Add to total volume
-            stats.totalVolume += weight * reps;
+            const setVolume = weight * reps;
+            stats.totalVolume += setVolume;
+            sessionVolume += setVolume;
             
             // For average weight calculation
             totalSetWeight += weight;
@@ -128,6 +136,17 @@ export async function getExerciseStatsFromWorkouts(userId: string): Promise<Exer
         
         exerciseWorkouts.get(exerciseId)?.push(workoutInfo);
       }
+
+      // Track workout volume history for progress calculation
+      if (sessionVolume > 0) {
+        const workoutInfo = {date: workoutDate, totalVolume: sessionVolume};
+        
+        if (!exerciseVolumeByWorkout.has(exerciseId)) {
+          exerciseVolumeByWorkout.set(exerciseId, []);
+        }
+        
+        exerciseVolumeByWorkout.get(exerciseId)?.push(workoutInfo);
+      }
     });
   });
 
@@ -145,6 +164,29 @@ export async function getExerciseStatsFromWorkouts(userId: string): Promise<Exer
       if (secondMostRecent.avgWeight > 0) {
         const progressPercent = Math.round(((mostRecent.avgWeight - secondMostRecent.avgWeight) / secondMostRecent.avgWeight) * 100);
         stats.progress = progressPercent;
+      }
+    }
+  });
+
+  // Calculate volume progress percentages
+  exerciseMap.forEach((stats, exerciseId) => {
+    const volumeHistory = exerciseVolumeByWorkout.get(exerciseId);
+    
+    if (volumeHistory && volumeHistory.length >= 2) {
+      // Sort by date (most recent first)
+      volumeHistory.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      
+      const mostRecent = volumeHistory[0];
+      const secondMostRecent = volumeHistory[1];
+      
+      if (secondMostRecent.totalVolume > 0) {
+        // Calculate percentage change in volume between last two workouts
+        const progressPercent = Math.round(
+          ((mostRecent.totalVolume - secondMostRecent.totalVolume) / secondMostRecent.totalVolume) * 100
+        );
+        stats.volumeProgress = progressPercent;
+        
+        console.log(`Volume progress for ${stats.name}: ${progressPercent}% (${secondMostRecent.totalVolume} → ${mostRecent.totalVolume})`);
       }
     }
   });
