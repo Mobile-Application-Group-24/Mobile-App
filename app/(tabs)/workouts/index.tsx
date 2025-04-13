@@ -2,16 +2,19 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, StatusBar, SafeAreaView, Alert, Platform } from 'react-native';
 import { Plus, Star, Play, Clock, Calendar, Dumbbell, Trash2, Filter } from 'lucide-react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
-import { getWorkoutPlans, WorkoutPlan, deleteWorkoutPlan, updateWorkoutPlan } from '@/utils/supabase';
+import { getWorkoutPlans, WorkoutPlan, deleteWorkoutPlan, updateWorkoutPlan, getWorkouts } from '@/utils/supabase';
 import { useSession } from '@/utils/auth';
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, startOfWeek, addDays, isWithinInterval, isSameDay, subDays } from 'date-fns';
 import { Swipeable } from 'react-native-gesture-handler';
 
 export default function WorkoutsScreen() {
   const router = useRouter();
   const { session } = useSession();
   const [showOwnWorkouts, setShowOwnWorkouts] = useState(true);
-  const [currentStreak, setCurrentStreak] = useState(5);
+  const [currentStreak, setCurrentStreak] = useState(0);
+  const [weeklyCompletion, setWeeklyCompletion] = useState(0); // Percentage
+  const [totalTrainingDays, setTotalTrainingDays] = useState(0); // Training days this week
+  const [completedTrainingDays, setCompletedTrainingDays] = useState(0); // Completed training days this week
   const [workoutPlans, setWorkoutPlans] = useState<WorkoutPlan[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -20,10 +23,12 @@ export default function WorkoutsScreen() {
     isRestDay: boolean;
     name: string;
     duration: string;
+    isCompleted?: boolean;
   }>({
     isRestDay: true,
     name: 'Rest Day',
     duration: '0 min',
+    isCompleted: false,
   });
   const [filterType, setFilterType] = useState<'all' | 'split' | 'custom'>('all');
 
@@ -42,7 +47,9 @@ export default function WorkoutsScreen() {
       }
 
       const data = await getWorkoutPlans(session.user.id);
-
+      // Get all completed workouts to check if today's workout is already done
+      const completedWorkouts = await getWorkouts(session.user.id);
+      
       let filteredData = data;
       if (filterType !== 'all') {
         filteredData = data.filter(plan => plan.workout_type === filterType);
@@ -56,19 +63,30 @@ export default function WorkoutsScreen() {
         w => w.day_of_week === currentDay && w.workout_type === 'split'
       );
 
+      // Check if today's workout is already completed
+      const today = new Date();
+      const isTodaysWorkoutCompleted = completedWorkouts.some(w => {
+        const workoutDate = parseISO(w.date);
+        return isSameDay(workoutDate, today) && 
+               w.done && 
+               w.workout_plan_id === workoutPlanForToday?.id;
+      });
+
       if (workoutPlanForToday) {
         setTodaysWorkout({
           id: workoutPlanForToday.id,
           isRestDay: false,
           name: workoutPlanForToday.title,
           duration: `${workoutPlanForToday.duration_minutes} min`,
+          isCompleted: isTodaysWorkoutCompleted
         });
-        console.log(`Found today's workout plan: ${workoutPlanForToday.title}`);
+        console.log(`Found today's workout plan: ${workoutPlanForToday.title}, completed: ${isTodaysWorkoutCompleted}`);
       } else {
         setTodaysWorkout({
           isRestDay: true,
           name: 'Rest Day',
           duration: '0 min',
+          isCompleted: false
         });
         console.log(`No workout plan found for ${currentDay}, it's a rest day`);
       }
@@ -77,6 +95,101 @@ export default function WorkoutsScreen() {
       setError('Failed to load workout plans. Please try again.');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const calculateStreak = async () => {
+    try {
+      if (!session?.user?.id) return;
+
+      const plans = await getWorkoutPlans(session.user.id);
+      const workouts = await getWorkouts(session.user.id);
+
+      const schedule = {
+        Monday: plans.find(p => p.day_of_week === 'Monday' && p.workout_type === 'split'),
+        Tuesday: plans.find(p => p.day_of_week === 'Tuesday' && p.workout_type === 'split'),
+        Wednesday: plans.find(p => p.day_of_week === 'Wednesday' && p.workout_type === 'split'),
+        Thursday: plans.find(p => p.day_of_week === 'Thursday' && p.workout_type === 'split'),
+        Friday: plans.find(p => p.day_of_week === 'Friday' && p.workout_type === 'split'),
+        Saturday: plans.find(p => p.day_of_week === 'Saturday' && p.workout_type === 'split'),
+        Sunday: plans.find(p => p.day_of_week === 'Sunday' && p.workout_type === 'split')
+      };
+
+      const trainingDaysCount = Object.values(schedule).filter(Boolean).length;
+      setTotalTrainingDays(trainingDaysCount);
+
+      const today = new Date();
+      const startOfCurrentWeek = startOfWeek(today, { weekStartsOn: 1 });
+
+      let completedDaysThisWeek = 0;
+      let plannedDaysThisWeek = 0;
+
+      // Check each day of the week up to today
+      for (let i = 0; i < 7; i++) {
+        const currentDay = addDays(startOfCurrentWeek, i);
+        if (currentDay > today) break;
+
+        const dayName = format(currentDay, 'EEEE');
+
+        if (schedule[dayName]) {
+          plannedDaysThisWeek++;
+
+          const workoutForThisDay = workouts.find(w => {
+            const workoutDate = parseISO(w.date);
+            return isSameDay(workoutDate, currentDay) && w.done && 
+              w.workout_plan_id === schedule[dayName]?.id;
+          });
+
+          if (workoutForThisDay) {
+            completedDaysThisWeek++;
+          }
+        }
+      }
+
+      setCompletedTrainingDays(completedDaysThisWeek);
+
+      const weeklyPercentage = plannedDaysThisWeek > 0 
+        ? Math.round((completedDaysThisWeek / plannedDaysThisWeek) * 100)
+        : 0;
+
+      setWeeklyCompletion(weeklyPercentage);
+
+      // Start streak calculation - include today in the streak
+      let streak = 0;
+      let currentDate = today; // Start with today instead of yesterday
+      let consecutiveDays = true;
+
+      // Look back up to 100 days to find the streak
+      for (let i = 0; i <= 100; i++) {
+        const dayName = format(currentDate, 'EEEE');
+        
+        // Check if this is a scheduled workout day
+        if (schedule[dayName]) {
+          // Check if we have a completed workout for this day
+          const workoutForThisDay = workouts.find(w => {
+            const workoutDate = parseISO(w.date);
+            return isSameDay(workoutDate, currentDate) && w.done &&
+              w.workout_plan_id === schedule[dayName]?.id;
+          });
+          
+          if (workoutForThisDay) {
+            // Workout was completed, continue the streak
+            streak++;
+          } else if (i > 0) { // Skip current day if no workout yet
+            // Missed a workout, streak is broken
+            consecutiveDays = false;
+            break;
+          }
+        }
+        
+        // Move to the previous day
+        currentDate = subDays(currentDate, 1);
+      }
+      
+      setCurrentStreak(streak);
+      
+    } catch (error) {
+      console.error('Error calculating streak:', error);
     }
   };
 
@@ -90,7 +203,10 @@ export default function WorkoutsScreen() {
       );
     } else if (todaysWorkout.id) {
       console.log('Starting workout:', todaysWorkout.name);
-      router.push(`/workouts/${todaysWorkout.id}`);
+      router.push({
+        pathname: `/workouts/${todaysWorkout.id}`,
+        params: { autoStart: 'true' }
+      });
     }
   };
 
@@ -154,6 +270,7 @@ export default function WorkoutsScreen() {
     useCallback(() => {
       if (session?.user?.id) {
         loadWorkouts();
+        calculateStreak();
       }
     }, [session?.user?.id])
   );
@@ -161,6 +278,7 @@ export default function WorkoutsScreen() {
   useEffect(() => {
     if (session?.user?.id) {
       loadWorkouts();
+      calculateStreak();
     } else {
       setIsLoading(false);
       setError('Please log in to view your workouts');
@@ -199,14 +317,17 @@ export default function WorkoutsScreen() {
               <TouchableOpacity 
                 style={[
                   styles.startButton,
-                  todaysWorkout.isRestDay ? styles.startButtonRest : styles.startButtonWorkout
+                  todaysWorkout.isRestDay ? styles.startButtonRest : 
+                  todaysWorkout.isCompleted ? styles.startButtonCompleted : styles.startButtonWorkout
                 ]}
                 onPress={handleStartWorkout}
                 activeOpacity={0.7}
+                disabled={todaysWorkout.isCompleted}
               >
                 <Play size={24} color="#FFFFFF" />
                 <Text style={styles.startButtonText}>
-                  {todaysWorkout.isRestDay ? 'View Recovery Tips' : 'Start Workout'}
+                  {todaysWorkout.isRestDay ? 'View Recovery Tips' : 
+                   todaysWorkout.isCompleted ? 'Workout Completed' : 'Start Workout'}
                 </Text>
               </TouchableOpacity>
             </>
@@ -216,15 +337,18 @@ export default function WorkoutsScreen() {
         <View style={styles.streakSection}>
           <View style={styles.streakHeader}>
             <Text style={styles.streakTitle}>Current Streak</Text>
-            <Text style={styles.streakCount}>{currentStreak} days</Text>
+            <Text style={styles.streakCount}>{currentStreak} {currentStreak === 1 ? 'day' : 'days'}</Text>
           </View>
           <View style={styles.streakBar}>
-            <View style={[styles.streakProgress, { width: `${(currentStreak / 7) * 100}%` }]} />
+            <View style={[styles.streakProgress, { width: `${weeklyCompletion}%` }]} />
           </View>
           <Text style={styles.streakMotivation}>
-            {currentStreak === 7 
-              ? "You're on fire! 🔥" 
-              : `${7 - currentStreak} more days until your next achievement!`}
+            {completedTrainingDays}/{totalTrainingDays} workouts completed this week
+            {weeklyCompletion === 100 
+              ? " - Amazing job! 🔥" 
+              : completedTrainingDays > 0
+                ? ` - Keep going! 💪`
+                : " - Let's start training!"}
           </Text>
         </View>
 
@@ -374,10 +498,13 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   startButtonWorkout: {
-    backgroundColor: '#007AFF', // Green button for workouts
+    backgroundColor: '#007AFF',
   },
   startButtonRest: {
-    backgroundColor: '#007AFF', // Blue button for rest days
+    backgroundColor: '#007AFF',
+  },
+  startButtonCompleted: {
+    backgroundColor: '#8E8E93',
   },
   startButtonText: {
     color: '#FFFFFF',
@@ -575,7 +702,7 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 12,
     flexDirection: 'column',
     gap: 4,
-    marginBottom: 12,  // Same spacing as the card
+    marginBottom: 12,
   },
   deleteActionText: {
     color: '#FFFFFF',

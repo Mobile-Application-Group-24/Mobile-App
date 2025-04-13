@@ -30,6 +30,7 @@ export default function WorkoutDetailScreen() {
   const params = useLocalSearchParams();
   const workoutId = params.id as string;
   const selectedExercise = params.selectedExercise;
+  const autoStart = params.autoStart === 'true';
   const router = useRouter();
   const [workoutPlan, setWorkoutPlan] = useState<WorkoutPlan | null>(null);
   const [previousWorkout, setPreviousWorkout] = useState<Workout | null>(null);
@@ -266,6 +267,18 @@ export default function WorkoutDetailScreen() {
       return () => clearTimeout(timeout);
     }
   }, [selectedExercise, workoutId]);
+
+  // Add a new effect to auto-start the workout if opened from the start workout button
+  useEffect(() => {
+    if (autoStart && !isWorkoutActive && !workoutStartTime && !loading) {
+      console.log('Auto-starting workout from "Start Workout" button');
+      // Small delay to ensure the UI is ready
+      const timer = setTimeout(() => {
+        startWorkout();
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [autoStart, isWorkoutActive, workoutStartTime, loading]);
 
   const handleDelete = () => {
     Alert.alert(
