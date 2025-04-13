@@ -49,6 +49,22 @@ interface Workout {
   calories_burned?: number;
 }
 
+// Interface for workout plan
+interface WorkoutPlan {
+  title: string;
+  description?: string;
+  workout_type: 'split' | 'custom';
+  day_of_week?: string | null;
+  duration_minutes: number;
+  exercises: {
+    id: string;
+    name: string;
+    sets: number;
+    type?: 'chest' | 'back' | 'arms' | 'legs' | 'shoulders' | 'core';
+  }[];
+  user_id: string;
+}
+
 // System prompt that gives context about the app and user data access permissions
 const getSystemPrompt = async (userId: string) => {
   // Fetch user's nutrition settings and workout data to provide context
@@ -64,9 +80,31 @@ const getSystemPrompt = async (userId: string) => {
     .eq('user_id', userId)
     .order('created_at', { ascending: false })
     .limit(5);
+    
+  // Get user's workout plans to provide context
+  const { data: workoutPlans, error: workoutPlansError } = await supabase
+    .from('workout_plans')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(3);
 
   console.log('Nutrition settings fetched for prompt:', nutritionSettings);
   console.log('Workout data fetched for prompt:', workoutData);
+  console.log('Workout plans fetched for prompt:', workoutPlans);
+
+  // Load available exercises for reference
+  const { exercisesByWorkoutType } = await import('./exercises');
+  
+  // Format the exercises into a single array for the prompt
+  const allExercises = Object.values(exercisesByWorkoutType).flat().map(ex => ({
+    id: ex.id,
+    name: ex.name,
+    type: ex.type
+  }));
+
+  // Get just a sample of exercises to avoid making the prompt too large
+  const exerciseSample = allExercises.slice(0, 20);
 
   return `You are an AI fitness coach assistant for a GymApp. 
 You have access to the user's fitness data and can help them with workouts, nutrition advice, and track their progress.
@@ -74,11 +112,12 @@ You can modify their data when they explicitly ask you to update their informati
 
 User's current nutrition settings: ${JSON.stringify(nutritionSettings || {})}
 User's recent workouts: ${JSON.stringify(workoutData || [])}
+User's workout plans: ${JSON.stringify(workoutPlans || [])}
 
-IMPORTANT: When the user asks you to update their nutrition settings or create a new workout, 
-you should generate a special formatted response that includes the data in a specific format:
+IMPORTANT: When the user asks you to update their data or create new entries, 
+respond with special formatted sections in your message:
 
-1. For updating nutrition settings, include a section like this:
+1. For updating nutrition settings, use:
 \`\`\`
 DATA_UPDATE_NUTRITION:
 {
@@ -96,7 +135,7 @@ DATA_UPDATE_NUTRITION:
 END_DATA_UPDATE
 \`\`\`
 
-2. For adding a workout, include a section like this:
+2. For adding a workout, use:
 \`\`\`
 DATA_ADD_WORKOUT:
 {
@@ -113,6 +152,28 @@ DATA_ADD_WORKOUT:
 }
 END_DATA_ADD
 \`\`\`
+
+3. For creating a workout plan, use:
+\`\`\`
+DATA_ADD_WORKOUT_PLAN:
+{
+  "title": "Upper Body Workout",
+  "description": "Focus on chest, back and arms",
+  "workout_type": "custom",
+  "day_of_week": "Monday",
+  "duration_minutes": 60,
+  "exercises": [
+    {"id": "chest1", "name": "Barbell Bench Press", "sets": 4, "type": "chest"},
+    {"id": "back3", "name": "Lat Pulldown", "sets": 3, "type": "back"},
+    {"id": "arms1", "name": "Barbell Bicep Curl", "sets": 3, "type": "arms"}
+  ]
+}
+END_DATA_ADD
+\`\`\`
+
+IMPORTANT: For workout plans, you MUST ONLY use exercises from our database. Here's a sample:
+${JSON.stringify(exerciseSample)}
+The full list is much larger. When suggesting exercises, use only the exact names from this list.
 
 Always ask for confirmation before making changes to the user's data.
 
@@ -478,3 +539,59 @@ export async function generateExerciseSuggestions(userId: string) {
     return [];
   }
 }
+
+// Function to create a new workout plan
+export const createWorkoutPlan = async (
+  userId: string,
+  planData: Omit<WorkoutPlan, 'user_id'>
+) => {
+  try {
+    // Log input data
+    console.log('createWorkoutPlan called with userId:', userId);
+    console.log('planData received:', JSON.stringify(planData, null, 2));
+
+    // Validate plan data
+    if (!planData.title || !planData.exercises || planData.exercises.length === 0) {
+      const error = new Error('Invalid workout plan data. Title and exercises are required.');
+      console.error(error);
+      throw error;
+    }
+
+    // Format the workout plan data for the database
+    const formattedPlan = {
+      user_id: userId,
+      title: planData.title,
+      description: planData.description || '',
+      workout_type: 'custom',
+      day_of_week: planData.day_of_week || null,
+      duration_minutes: planData.duration_minutes || 60,
+      exercises: planData.exercises.map(exercise => ({
+        id: exercise.id,
+        name: exercise.name,
+        sets: exercise.sets,
+        type: exercise.type
+      }))
+    };
+    
+    console.log('Formatted workout plan for insert:', JSON.stringify(formattedPlan, null, 2));
+
+    // Insert directly into the workout_plans table
+    const { data, error } = await supabase
+      .from('workout_plans')
+      .insert(formattedPlan)
+      .select();
+    
+    if (error) {
+      console.error('Error adding workout plan:', error);
+      throw error;
+    }
+    
+    // Log success for debugging
+    console.log('Successfully added workout plan:', data);
+    
+    return data;
+  } catch (error) {
+    console.error('Error in createWorkoutPlan:', error);
+    throw error;
+  }
+};
