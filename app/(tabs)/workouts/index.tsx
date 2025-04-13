@@ -6,6 +6,7 @@ import { getWorkoutPlans, WorkoutPlan, deleteWorkoutPlan, updateWorkoutPlan, get
 import { useSession } from '@/utils/auth';
 import { format, parseISO, startOfWeek, addDays, isWithinInterval, isSameDay, subDays } from 'date-fns';
 import { Swipeable } from 'react-native-gesture-handler';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function WorkoutsScreen() {
   const router = useRouter();
@@ -17,6 +18,8 @@ export default function WorkoutsScreen() {
   const [completedTrainingDays, setCompletedTrainingDays] = useState(0); // Completed training days this week
   const [workoutPlans, setWorkoutPlans] = useState<WorkoutPlan[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingPlans, setIsLoadingPlans] = useState(true);
+  const [isLoadingToday, setIsLoadingToday] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [todaysWorkout, setTodaysWorkout] = useState<{
     id?: string;
@@ -36,28 +39,43 @@ export default function WorkoutsScreen() {
     return new Date().toLocaleDateString('en-US', { weekday: 'long' });
   };
 
-  const loadWorkouts = async () => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      if (!session?.user?.id) {
-        setError('User not authenticated');
-        setWorkoutPlans([]);
-        return;
+  // Load saved filter type when component mounts
+  useEffect(() => {
+    const loadFilter = async () => {
+      try {
+        const savedFilter = await AsyncStorage.getItem('workout-filter-type');
+        if (savedFilter && (savedFilter === 'all' || savedFilter === 'split' || savedFilter === 'custom')) {
+          setFilterType(savedFilter as 'all' | 'split' | 'custom');
+        }
+      } catch (error) {
+        console.log('Error loading filter type:', error);
       }
+    };
+    loadFilter();
+  }, []);
+
+  // Store filter type in AsyncStorage to persist it across app restarts
+  useEffect(() => {
+    const saveFilter = async () => {
+      try {
+        await AsyncStorage.setItem('workout-filter-type', filterType);
+      } catch (error) {
+        console.log('Error saving filter type:', error);
+      }
+    };
+    saveFilter();
+  }, [filterType]);
+
+  // Separate function to load only today's workout
+  const loadTodaysWorkout = async () => {
+    try {
+      setIsLoadingToday(true);
+      if (!session?.user?.id) return;
 
       const data = await getWorkoutPlans(session.user.id);
       // Get all completed workouts to check if today's workout is already done
       const completedWorkouts = await getWorkouts(session.user.id);
       
-      let filteredData = data;
-      if (filterType !== 'all') {
-        filteredData = data.filter(plan => plan.workout_type === filterType);
-      }
-
-      setWorkoutPlans(filteredData);
-      console.log(`Loaded ${filteredData.length} ${filterType} workout plans for user ${session.user.id}`);
-
       const currentDay = getCurrentDayOfWeek();
       const workoutPlanForToday = data.find(
         w => w.day_of_week === currentDay && w.workout_type === 'split'
@@ -91,8 +109,67 @@ export default function WorkoutsScreen() {
         console.log(`No workout plan found for ${currentDay}, it's a rest day`);
       }
     } catch (error) {
+      console.error('Error loading today\'s workout:', error);
+    } finally {
+      setIsLoadingToday(false);
+    }
+  };
+
+  // Separate function to load only workout plans with filtering
+  const loadWorkoutPlans = async () => {
+    try {
+      setIsLoadingPlans(true);
+      setError(null);
+      
+      if (!session?.user?.id) {
+        setError('User not authenticated');
+        setWorkoutPlans([]);
+        return;
+      }
+
+      const data = await getWorkoutPlans(session.user.id);
+      
+      // Apply filter consistently every time workouts are loaded
+      let filteredData = data;
+      if (filterType !== 'all') {
+        filteredData = data.filter(plan => plan.workout_type === filterType);
+      }
+
+      // Only set the filtered workout plans
+      setWorkoutPlans(filteredData);
+      console.log(`Loaded ${filteredData.length} ${filterType} workout plans for user ${session.user.id}`);
+      
+    } catch (error) {
       console.error('Error loading workout plans:', error);
       setError('Failed to load workout plans. Please try again.');
+    } finally {
+      setIsLoadingPlans(false);
+    }
+  };
+
+  // Original loadWorkouts function is now split
+  const loadWorkouts = async () => {
+    try {
+      setIsLoading(true);
+      setIsLoadingPlans(true);
+      setIsLoadingToday(true);
+      setError(null);
+      
+      if (!session?.user?.id) {
+        setError('User not authenticated');
+        setWorkoutPlans([]);
+        return;
+      }
+
+      // Load today's workout and workout plans concurrently
+      await Promise.all([
+        loadTodaysWorkout(),
+        loadWorkoutPlans()
+      ]);
+      
+    } catch (error) {
+      console.error('Error loading workouts:', error);
+      setError('Failed to load workouts. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -112,7 +189,7 @@ export default function WorkoutsScreen() {
         Thursday: plans.find(p => p.day_of_week === 'Thursday' && p.workout_type === 'split'),
         Friday: plans.find(p => p.day_of_week === 'Friday' && p.workout_type === 'split'),
         Saturday: plans.find(p => p.day_of_week === 'Saturday' && p.workout_type === 'split'),
-        Sunday: plans.find(p => p.day_of_week === 'Sunday' && p.workout_type === 'split')
+        Sunday: plans.find(p => p.day_of_week === 'Sunday' && p.workout_type === 'split'),
       };
 
       const trainingDaysCount = Object.values(schedule).filter(Boolean).length;
@@ -171,7 +248,7 @@ export default function WorkoutsScreen() {
             return isSameDay(workoutDate, currentDate) && w.done &&
               w.workout_plan_id === schedule[dayName]?.id;
           });
-          
+
           if (workoutForThisDay) {
             // Workout was completed, continue the streak
             streak++;
@@ -185,7 +262,7 @@ export default function WorkoutsScreen() {
         // Move to the previous day
         currentDate = subDays(currentDate, 1);
       }
-      
+
       setCurrentStreak(streak);
       
     } catch (error) {
@@ -228,7 +305,7 @@ export default function WorkoutsScreen() {
             }
           },
         },
-      ]
+      ],
     );
   };
 
@@ -269,21 +346,37 @@ export default function WorkoutsScreen() {
   useFocusEffect(
     useCallback(() => {
       if (session?.user?.id) {
-        loadWorkouts();
+        // Only load today's workout once when the screen is first focused
+        // or when returning to the screen after being away
+        loadTodaysWorkout();
+        
+        // Always refresh the workout plans with filters
+        loadWorkoutPlans();
         calculateStreak();
       }
-    }, [session?.user?.id])
+    }, [session?.user?.id]) // Remove filterType dependency from here
   );
 
+  // Use separate effect to handle filter changes
+  useEffect(() => {
+    if (session?.user?.id && !isLoading) {
+      // Only reload workout plans when filter changes, not today's workout
+      loadWorkoutPlans();
+    }
+  }, [filterType, session?.user?.id]);
+
+  // Initial load effect
   useEffect(() => {
     if (session?.user?.id) {
       loadWorkouts();
       calculateStreak();
     } else {
       setIsLoading(false);
+      setIsLoadingPlans(false);
+      setIsLoadingToday(false);
       setError('Please log in to view your workouts');
     }
-  }, [filterType, session?.user?.id]);
+  }, [session?.user?.id]);
 
   return (
     <SafeAreaView style={[styles.container, Platform.OS === 'ios' && { paddingTop: 0 }]}>
@@ -298,7 +391,7 @@ export default function WorkoutsScreen() {
             </Text>
           </View>
 
-          {isLoading ? (
+          {isLoadingToday ? (
             <ActivityIndicator size="small" color="#007AFF" style={{ marginVertical: 16 }} />
           ) : (
             <>
@@ -377,7 +470,7 @@ export default function WorkoutsScreen() {
             </TouchableOpacity>
           </View>
 
-          {isLoading ? (
+          {isLoadingPlans ? (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color="#007AFF" />
             </View>
@@ -680,18 +773,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     color: '#8E8E93',
-  },
-  emptyText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#8E8E93',
-    marginTop: 16,
-  },
-  emptySubtext: {
-    fontSize: 14,
-    color: '#8E8E93',
-    textAlign: 'center',
-    marginTop: 8,
   },
   deleteAction: {
     backgroundColor: '#FF3B30',
