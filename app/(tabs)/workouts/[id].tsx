@@ -498,6 +498,29 @@ export default function WorkoutDetailScreen() {
     setIsWorkoutActive(false);
   };
 
+  const navigateToExerciseStats = (exerciseId: string, exerciseName: string) => {
+    // First check if the exercise has an ID, as custom exercises may not have a unique ID
+    let idToUse = exerciseId;
+    
+    // If the ID starts with "custom-", create a special ID for the stats page
+    // This is needed because the stats page expects a unique ID for the exercise
+    if (exerciseId.startsWith('custom-')) {
+      // For custom exercises, create an ID based on the name
+      idToUse = `exercise-${exerciseName.toLowerCase().replace(/\s+/g, '-')}-stats`;
+    }
+    
+    // Navigate to the stats page with the exercise ID and name
+    // Also pass the current workoutId so we can navigate back to this workout
+    router.push({
+      pathname: '/stats/[id]',
+      params: { 
+        id: idToUse,
+        exerciseName: exerciseName,
+        workoutId: workoutId // Pass the workout ID to enable proper back navigation
+      }
+    });
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -746,7 +769,11 @@ export default function WorkoutDetailScreen() {
                     <TouchableOpacity style={styles.actionButton} activeOpacity={0.7}>
                       <Clock size={20} color="#007AFF" />
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.actionButton} activeOpacity={0.7}>
+                    <TouchableOpacity 
+                      style={styles.actionButton} 
+                      onPress={() => navigateToExerciseStats(exercise.id, exercise.name)}
+                      activeOpacity={0.7}
+                    >
                       <BarChart3 size={20} color="#007AFF" />
                     </TouchableOpacity>
                     <TouchableOpacity 
