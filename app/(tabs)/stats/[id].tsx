@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { TrendingUp, ChartBar, Calendar, Dumbbell } from 'lucide-react-native';
+import { TrendingUp, ChartBar, Calendar, Dumbbell, ArrowLeft } from 'lucide-react-native';
 import { LineChart } from 'react-native-chart-kit';
 import { useSession } from '@/utils/auth';
 import { ExerciseStats, getExerciseStatsFromWorkouts, getExerciseHistoryData } from '@/utils/stats';
 import { format, subMonths } from 'date-fns';
 
 export default function ExerciseStatsScreen() {
-  const { id } = useLocalSearchParams();
+  const { id, exerciseName, workoutId } = useLocalSearchParams(); // Add workoutId parameter
   const { session } = useSession();
   const router = useRouter();
   const [exercise, setExercise] = useState<ExerciseStats | null>(null);
@@ -41,11 +41,39 @@ export default function ExerciseStatsScreen() {
       
       try {
         setLoading(true);
-        // Get all exercise stats
+        
+        // If exerciseName is available from parameters, use it
+        const nameToUse = exerciseName as string || '';
+        
+        let exerciseData: ExerciseStats | null = null;
+        
+        // Load all exercise statistics
         const stats = await getExerciseStatsFromWorkouts(session.user.id);
         
-        // Find the specific exercise by ID
-        const exerciseData = stats.find(ex => ex.id === id);
+        // Search by ID or name (for custom exercises)
+        if (nameToUse) {
+          exerciseData = stats.find(ex => 
+            ex.name.toLowerCase() === nameToUse.toLowerCase() || 
+            ex.id === id
+          ) || null;
+        } else {
+          exerciseData = stats.find(ex => ex.id === id) || null;
+        }
+        
+        // If we still haven't found an exercise, create an empty placeholder entry
+        if (!exerciseData && nameToUse) {
+          exerciseData = {
+            id: id as string || `exercise-${Date.now()}`,
+            name: nameToUse,
+            type: 'other',
+            totalVolume: 0,
+            maxWeight: 0,
+            maxReps: 0,
+            totalSessions: 0,
+            lastUsed: new Date().toISOString(),
+          };
+        }
+        
         if (!exerciseData) {
           setError('Exercise not found');
           setLoading(false);
@@ -54,14 +82,14 @@ export default function ExerciseStatsScreen() {
         
         setExercise(exerciseData);
         
-        // Get actual history data for charts
+        // If the exercise was found, load its history data
         const historyData = await getExerciseHistoryData(session.user.id, exerciseData.name);
         
         if (historyData && historyData.length > 0) {
-          // Sort entries by date ascending
+          // Sort by date in ascending order
           historyData.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
           
-          // Get last 6 entries max
+          // Take at most the last 6 entries
           const recentEntries = historyData.slice(-6);
           
           // Format data for volume chart
@@ -70,7 +98,7 @@ export default function ExerciseStatsScreen() {
           );
           const volumeData = recentEntries.map(entry => entry.volume);
           
-          // Format data for max weight chart
+          // Format data for maximum weight chart
           const maxWeightLabels = recentEntries.map(entry => 
             format(new Date(entry.date), 'MMM d')
           );
@@ -81,7 +109,7 @@ export default function ExerciseStatsScreen() {
             maxWeight: { labels: maxWeightLabels, data: maxWeightData }
           });
         } else {
-          // Fallback to generating sample data if no history is available
+          // Fallback to sample data if no history is available
           const volumeData = [
             exerciseData.totalVolume * 0.3, 
             exerciseData.totalVolume * 0.5,
@@ -122,8 +150,22 @@ export default function ExerciseStatsScreen() {
     }
     
     loadExerciseData();
-  }, [id, session?.user?.id]);
+  }, [id, exerciseName, session?.user?.id]);
   
+  // Updated navigation handler to return to workout if workoutId is provided
+  const handleBackNavigation = () => {
+    if (workoutId) {
+      // Navigate back to workout detail screen if workoutId is available
+      router.push({
+        pathname: '/workouts/[id]',
+        params: { id: workoutId }
+      });
+    } else {
+      // Default back behavior when not coming from a workout
+      router.back();
+    }
+  };
+
   if (loading) {
     return (
       <View style={[styles.container, styles.loadingContainer]}>
@@ -136,6 +178,12 @@ export default function ExerciseStatsScreen() {
     return (
       <View style={[styles.container, styles.errorContainer]}>
         <Text style={styles.errorText}>{error || 'Exercise not found'}</Text>
+        <TouchableOpacity 
+          style={styles.backButton} 
+          onPress={handleBackNavigation}
+        >
+          <Text style={styles.backButtonText}>Go Back</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -143,6 +191,12 @@ export default function ExerciseStatsScreen() {
   return (
     <ScrollView style={styles.container}>
       <View style={styles.header}>
+        <TouchableOpacity 
+          style={styles.backButton}
+          onPress={handleBackNavigation}
+        >
+          <ArrowLeft size={24} color="#007AFF" />
+        </TouchableOpacity>
         <Text style={styles.exerciseName}>{exercise.name}</Text>
         <Text style={styles.exerciseCategory}>{exercise.type}</Text>
       </View>
@@ -230,21 +284,40 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#FF3B30',
     textAlign: 'center',
+    marginBottom: 16,
+  },
+  backButton: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: '#F2F2F7',
+    marginRight: 8,
+  },
+  backButtonText: {
+    color: '#007AFF',
+    fontSize: 16,
+    fontWeight: '500',
   },
   header: {
     backgroundColor: '#FFFFFF',
     padding: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#E5E5EA',
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   exerciseName: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: 'bold',
     marginBottom: 4,
+    flex: 1,
   },
   exerciseCategory: {
-    fontSize: 16,
+    fontSize: 14,
     color: '#8E8E93',
+    backgroundColor: '#F2F2F7',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
     textTransform: 'capitalize',
   },
   statsGrid: {
