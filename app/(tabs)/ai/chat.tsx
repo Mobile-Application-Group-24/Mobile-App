@@ -1,10 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Alert, StatusBar, SafeAreaView, Keyboard } from 'react-native';
 import { Send, ThumbsUp, CheckCircle } from 'lucide-react-native';
-import { sendMessageToDeepseek, updateNutritionData, addWorkoutEntry } from '@/utils/deepseek';
+import { sendMessageToDeepseek, updateNutritionData, addWorkoutEntry, createWorkoutPlan } from '@/utils/deepseek';
 import { useSession } from '@/utils/auth';
 import Markdown from 'react-native-markdown-display';
 import { TAB_BAR_HEIGHT } from '../_layout';
+import { findExerciseType } from '@/utils/exercises';
 
 type Message = {
   id: string;
@@ -17,7 +18,7 @@ type Message = {
 
 type Suggestion = {
   id: string;
-  type: 'nutrition' | 'workout';
+  type: 'nutrition' | 'workout' | 'workout_plan';
   title: string;
   data: any;
   accepted?: boolean;
@@ -114,6 +115,38 @@ export default function ChatScreen() {
       }
     }
 
+    if (processedText.includes('DATA_ADD_WORKOUT_PLAN:')) {
+      const dataStart = processedText.indexOf('DATA_ADD_WORKOUT_PLAN:');
+      const dataEnd = processedText.indexOf('END_DATA_ADD', dataStart);
+
+      if (dataStart >= 0 && dataEnd >= 0) {
+        try {
+          const jsonString = processedText.substring(dataStart + 22, dataEnd).trim();
+          const planData = JSON.parse(jsonString);
+
+          if (planData.exercises) {
+            planData.exercises = planData.exercises.map((exercise: any) => {
+              if (!exercise.type) {
+                exercise.type = findExerciseType(exercise.name);
+              }
+              return exercise;
+            });
+          }
+
+          suggestions.push({
+            id: (Date.now() + 2).toString(),
+            type: 'workout_plan',
+            title: `Add Workout Plan: ${planData.title}`,
+            data: planData
+          });
+
+          processedText = processedText.replace(/DATA_ADD_WORKOUT_PLAN:[\s\S]*?END_DATA_ADD/, '');
+        } catch (error) {
+          console.error('Error parsing workout plan data:', error);
+        }
+      }
+    }
+
     return [processedText, suggestions];
   };
 
@@ -174,6 +207,33 @@ export default function ChatScreen() {
         const confirmMessage: Message = {
           id: Date.now().toString(),
           text: `✅ Your workout "${suggestion.data.title}" has been successfully added!`,
+          isUser: false,
+          timestamp: new Date(),
+          role: 'assistant'
+        };
+
+        setMessages(prev => [...prev, confirmMessage]);
+      } else if (suggestion.type === 'workout_plan') {
+        console.log('Adding workout plan with data:', suggestion.data);
+        await createWorkoutPlan(session.user.id, suggestion.data);
+
+        setMessages(prev =>
+          prev.map(msg => {
+            if (msg.id === messageId) {
+              return {
+                ...msg,
+                suggestions: msg.suggestions?.map(s =>
+                  s.id === suggestion.id ? { ...s, accepted: true } : s
+                )
+              };
+            }
+            return msg;
+          })
+        );
+
+        const confirmMessage: Message = {
+          id: Date.now().toString(),
+          text: `✅ Your workout plan "${suggestion.data.title}" has been successfully added!`,
           isUser: false,
           timestamp: new Date(),
           role: 'assistant'
@@ -295,7 +355,7 @@ export default function ChatScreen() {
                     <View key={suggestion.id} style={styles.suggestionCard}>
                       <View style={styles.suggestionHeader}>
                         <Text style={styles.suggestionType}>
-                          {suggestion.type === 'nutrition' ? '🍎 Nutrition' : '💪 Workout'}
+                          {suggestion.type === 'nutrition' ? '🍎 Nutrition' : suggestion.type === 'workout' ? '💪 Workout' : '📋 Workout Plan'}
                         </Text>
                         <Text style={styles.suggestionTitle}>{suggestion.title}</Text>
                       </View>
