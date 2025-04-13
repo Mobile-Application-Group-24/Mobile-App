@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, ActivityIndicator, StatusBar, SafeAreaView } from 'react-native';
-import { ArrowLeft, Award, Calendar, ChartBar as BarChart } from 'lucide-react-native';
+import { ArrowLeft, Award, Calendar, ChartBar as BarChart, Clock, Flame } from 'lucide-react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
-import { getProfile, type Profile } from '@/utils/supabase';
+import { getProfile, type Profile, getRecentWorkouts, type Workout } from '@/utils/supabase';
 
 export default function ViewProfileScreen() {
   const { userId } = useLocalSearchParams();
   const router = useRouter();
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [recentWorkouts, setRecentWorkouts] = useState<Workout[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -23,19 +24,34 @@ export default function ViewProfileScreen() {
     try {
       setLoading(true);
       setError(null);
-      const data = await getProfile(userId as string);
+      const [data, workoutsData] = await Promise.all([
+        getProfile(userId as string),
+        getRecentWorkouts(userId as string, 3)
+      ]);
+      
       // Ensure achievements and stats have default values
       setProfile({
         ...data,
         achievements: data.achievements || [],
         stats: data.stats || { workouts: 0, hours: 0, volume: 0 },
       });
+      
+      setRecentWorkouts(workoutsData.slice(0, 3));
     } catch (err) {
       console.error('Error loading profile:', err);
       setError('Failed to load profile');
     } finally {
       setLoading(false);
     }
+  };
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { 
+      month: 'short', 
+      day: 'numeric',
+      year: 'numeric'
+    });
   };
 
   if (loading) {
@@ -130,9 +146,12 @@ export default function ViewProfileScreen() {
               </Text>
             </View>
           ) : (
-            profile.achievements.map((achievement, index) => (
+            profile.achievements.slice(0, 3).map((achievement, index) => (
               <View key={index} style={styles.achievementCard}>
-                <Text style={styles.achievementTitle}>{achievement.title}</Text>
+                <View style={styles.achievementHeader}>
+                  <Award size={20} color="#007AFF" />
+                  <Text style={styles.achievementTitle}>{achievement.title}</Text>
+                </View>
                 <Text style={styles.achievementDescription}>
                   {achievement.description}
                 </Text>
@@ -151,10 +170,46 @@ export default function ViewProfileScreen() {
             <Calendar size={24} color="#007AFF" />
             <Text style={styles.sectionTitle}>Recent Activity</Text>
           </View>
-          <View style={styles.activityChart}>
-            <BarChart size={24} color="#8E8E93" />
-            <Text style={styles.chartLabel}>Activity data visualization would go here</Text>
-          </View>
+          {recentWorkouts.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyStateText}>No recent workouts</Text>
+              <Text style={styles.emptyStateSubtext}>
+                This user hasn't recorded any workouts yet
+              </Text>
+            </View>
+          ) : (
+            recentWorkouts.map((workout) => (
+              <View key={workout.id} style={styles.workoutCard}>
+                <View style={styles.workoutHeader}>
+                  <Text style={styles.workoutTitle} numberOfLines={1}>
+                    {workout.title}
+                  </Text>
+                  <View style={[styles.statusBadge, { backgroundColor: workout.done ? '#34C759' : '#FF9500' }]}>
+                    <Text style={styles.statusText}>{workout.done ? 'Completed' : 'Planned'}</Text>
+                  </View>
+                </View>
+                
+                <View style={styles.workoutInfo}>
+                  <View style={styles.workoutDetail}>
+                    <Clock size={16} color="#8E8E93" />
+                    <Text style={styles.workoutDetailText}>{formatDate(workout.date)}</Text>
+                  </View>
+                  
+                  {workout.calories_burned > 0 && (
+                    <Text style={styles.caloriesText}>
+                      {workout.calories_burned} cal
+                    </Text>
+                  )}
+                </View>
+                
+                {workout.notes && (
+                  <Text style={styles.workoutNotes} numberOfLines={2}>
+                    {workout.notes}
+                  </Text>
+                )}
+              </View>
+            ))
+          )}
         </View>
       </ScrollView>
     </>
@@ -303,10 +358,15 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginBottom: 12,
   },
+  achievementHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
   achievementTitle: {
     fontSize: 16,
     fontWeight: '600',
-    marginBottom: 4,
+    marginLeft: 8,
   },
   achievementDescription: {
     fontSize: 14,
@@ -318,15 +378,57 @@ const styles = StyleSheet.create({
     color: '#8E8E93',
     fontStyle: 'italic',
   },
-  activityChart: {
+  workoutCard: {
     backgroundColor: '#F2F2F7',
     padding: 16,
     borderRadius: 8,
+    marginBottom: 12,
+  },
+  workoutHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  workoutTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    flex: 1,
+  },
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginLeft: 8,
+  },
+  statusText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  workoutInfo: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  workoutDetail: {
+    flexDirection: 'row',
     alignItems: 'center',
   },
-  chartLabel: {
-    marginTop: 8,
-    color: '#8E8E93',
+  workoutDetailText: {
     fontSize: 14,
+    color: '#8E8E93',
+    marginLeft: 4,
   },
+  caloriesText: {
+    fontSize: 14,
+    color: '#FF9500',
+    fontWeight: '500',
+  },
+  workoutNotes: {
+    fontSize: 14,
+    color: '#8E8E93',
+    fontStyle: 'italic',
+  }
 });
