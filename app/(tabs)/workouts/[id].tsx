@@ -1282,7 +1282,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     height: 36,
-    marginTop: 21,
+    marginTop: 23,
     borderRadius: 8,
     width: 100,
     marginLeft: 8,
