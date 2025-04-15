@@ -547,13 +547,16 @@ const styles = StyleSheet.create({
   filterContainer: {
     padding: 16,
     gap: 8,
+    justifyContent: 'center',
+    flexDirection: 'row',
+    width: '100%',
   },
   filterButton: {
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 16,
     backgroundColor: '#F2F2F7',
-    marginRight: 8,
+    marginHorizontal: 4,
   },
   filterButtonActive: {
     backgroundColor: '#007AFF',
