@@ -195,7 +195,7 @@ export default function StatsScreen() {
                   </Text>
                 </View>
                 
-                {exercise.totalSessions > 1 && exercise.volumeProgress !== undefined && (
+                {exercise.totalSessions > 1 && exercise.volumeProgress !== undefined && exercise.volumeProgress !== 0 && (
                   <View style={[
                     styles.progressBadge,
                     exercise.volumeProgress > 0 ? styles.progressPositive : styles.progressNegative
