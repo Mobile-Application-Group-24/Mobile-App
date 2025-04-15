@@ -564,7 +564,8 @@ export default function WorkoutDetailScreen() {
       params: { 
         id: idToUse,
         exerciseName: exerciseName,
-        workoutId: workoutId // Pass the workout ID to enable proper back navigation
+        workoutId: workoutId, // Pass the workout ID to enable proper back navigation
+        returnPath: `/workouts/${workoutId}` // Add explicit return path for navigation
       }
     });
   };

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, Platform } from 'react-native';
+import { useLocalSearchParams, useRouter, useNavigation, usePathname } from 'expo-router';
 import { TrendingUp, ChartBar, Calendar, Dumbbell, ArrowLeft } from 'lucide-react-native';
 import { LineChart } from 'react-native-chart-kit';
 import { useSession } from '@/utils/auth';
@@ -8,9 +8,11 @@ import { ExerciseStats, getExerciseStatsFromWorkouts, getExerciseHistoryData } f
 import { format, subMonths } from 'date-fns';
 
 export default function ExerciseStatsScreen() {
-  const { id, exerciseName, workoutId } = useLocalSearchParams(); // Add workoutId parameter
+  const { id, exerciseName, workoutId, returnPath } = useLocalSearchParams();
   const { session } = useSession();
   const router = useRouter();
+  const pathname = usePathname();
+  const navigation = useNavigation();
   const [exercise, setExercise] = useState<ExerciseStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -34,6 +36,49 @@ export default function ExerciseStatsScreen() {
       stroke: '#FFFFFF',
     },
   };
+
+  // Add a listener for tab presses - navigate to index if the stats tab is pressed
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('tabPress', (e) => {
+      // If we're on a stats detail page and the tab is pressed
+      if (pathname?.includes('/stats/')) {
+        e.preventDefault(); // Prevent default navigation
+        
+        // If we have a workoutId, we should navigate back to the workout
+        // instead of going to the stats index
+        if (workoutId) {
+          const path = returnPath 
+            ? returnPath.toString() 
+            : `/workouts/${workoutId}`;
+          
+          router.push(path);
+        } else {
+          // Only go to stats index if we're not coming from a workout
+          router.replace('/(tabs)/stats/');
+        }
+      }
+    });
+
+    return unsubscribe;
+  }, [navigation, router, pathname, workoutId, returnPath]);
+
+  // Hide the back arrow in the header if we came from a workout
+  useEffect(() => {
+    if (workoutId && navigation.setOptions) {
+      // @ts-ignore - setOptions exists but might not be in the type definitions
+      navigation.setOptions({
+        headerShown: true, // Keep the header shown
+        headerLeft: () => null, // Remove the back button
+        headerTitle: '', // Remove or customize the title as needed
+        // On Android, ensure proper status bar padding
+        headerStyle: {
+          height: Platform.OS === 'android' ? 60 : 44,
+          backgroundColor: '#FFFFFF',
+        },
+        headerShadowVisible: false // Remove the shadow for cleaner appearance
+      });
+    }
+  }, [navigation, workoutId]);
 
   useEffect(() => {
     async function loadExerciseData() {
@@ -156,13 +201,15 @@ export default function ExerciseStatsScreen() {
   const handleBackNavigation = () => {
     if (workoutId) {
       // Navigate back to workout detail screen if workoutId is available
-      router.push({
-        pathname: '/workouts/[id]',
-        params: { id: workoutId }
-      });
+      // Use returnPath if available, otherwise construct the path
+      const path = returnPath 
+        ? returnPath.toString() 
+        : `/workouts/${workoutId}`;
+      
+      router.push(path);
     } else {
       // Default back behavior when not coming from a workout
-      router.back();
+      router.push('/(tabs)/stats/');
     }
   };
 
