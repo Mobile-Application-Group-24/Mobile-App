@@ -411,12 +411,42 @@ export default function WorkoutDetailScreen() {
   const addSet = (exerciseId: string) => {
     setExercises(prev => prev.map(exercise => {
       if (exercise.id === exerciseId) {
+        // Find the current number of sets for this exercise
+        const currentSetCount = exercise.sets.length;
+        
+        // Try to find previous workout data for this exercise and set
+        let prevSetData = null;
+        
+        // Check if we have previous workout data available
+        if (previousWorkout && previousWorkout.exercises) {
+          // Find the matching exercise in previous workout
+          const prevExerciseData = previousWorkout.exercises.find(
+            prevEx => prevEx.id === exercise.id || prevEx.name === exercise.name
+          );
+          
+          // If we have previous exercise data and it has enough sets, get the corresponding set
+          if (prevExerciseData && 
+              prevExerciseData.setDetails && 
+              currentSetCount < prevExerciseData.setDetails.length) {
+            // Get the set data for the next set index
+            prevSetData = prevExerciseData.setDetails[currentSetCount];
+            console.log(`Using previous data for new set ${currentSetCount+1}: weight=${prevSetData.weight}, reps=${prevSetData.reps}`);
+          }
+        }
+        
+        // Create new set with previous data as placeholders if available
         const newSet: WorkoutSet = {
           id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
           weight: '',
           reps: '',
-          type: 'normal'
+          type: 'normal',
+          notes: '',
+          // Add previous data if available
+          prevWeight: prevSetData && prevSetData.weight !== undefined ? String(prevSetData.weight) : '',
+          prevReps: prevSetData && prevSetData.reps !== undefined ? String(prevSetData.reps) : '',
+          prevNotes: prevSetData && prevSetData.notes ? prevSetData.notes : ''
         };
+        
         return {
           ...exercise,
           sets: [...exercise.sets, newSet]
@@ -425,6 +455,7 @@ export default function WorkoutDetailScreen() {
       return exercise;
     }));
     
+    // Log status messages for clarity
     if (!isWorkoutActive && !workoutStartTime) {
       console.log("Set added - will update workout plan when saved");
     } else {
