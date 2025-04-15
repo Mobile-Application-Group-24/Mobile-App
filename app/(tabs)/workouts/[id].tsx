@@ -909,7 +909,7 @@ export default function WorkoutDetailScreen() {
                           value={set.notes}
                           onChangeText={(text) => updateSet(exercise.id, set.id, 'notes', text)}
                           placeholder={set.prevNotes || "Notes"}
-                          placeholderTextColor={set.prevNotes ? "#34C759" : "#C7C7CC"}
+                          placeholderTextColor={set.prevNotes ? "#C7C7CC" : "#C7C7CC"}
                           multiline
                           numberOfLines={1}
                         />
