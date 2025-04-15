@@ -201,12 +201,12 @@ export default function WorkoutDetailScreen() {
       setWorkoutName(plan.title || '');
       setNotes(plan.description || '');
       
-      // First get previous workout data
-      let previousWorkoutData = null;
+      // Initialize a map to store the most recent exercise data
+      const exercisePreviousData = new Map();
       
       try {
-        // Use more detailed query with explicit select to ensure we get all the data
-        const { data: previousWorkouts, error: previousError } = await supabase
+        // First try to get the most recent workout from the same plan (for body weight and general data)
+        const { data: previousPlanWorkouts, error: previousPlanError } = await supabase
           .from('workouts')
           .select('id, title, date, bodyweight, user_id, exercises')
           .eq('workout_plan_id', workoutPlanId)
@@ -214,39 +214,81 @@ export default function WorkoutDetailScreen() {
           .order('date', { ascending: false })
           .limit(1);
         
-        if (!previousError && previousWorkouts && previousWorkouts.length > 0) {
-          previousWorkoutData = previousWorkouts[0];
+        // Set the previous workout for the plan itself (useful for bodyweight, etc.)
+        let previousWorkoutData = null;
+        if (!previousPlanError && previousPlanWorkouts && previousPlanWorkouts.length > 0) {
+          previousWorkoutData = previousPlanWorkouts[0];
           setPreviousWorkout(previousWorkoutData);
           setHasPreviousData(true);
-          console.log('Found previous workout data:', previousWorkoutData.id);
+          console.log('Found previous workout data for this plan:', previousWorkoutData.id);
           
           if (previousWorkoutData.bodyweight) {
-            // Pre-fill bodyweight from previous workout
+            // Pre-fill bodyweight from previous workout of the same plan
             setBodyWeight(String(previousWorkoutData.bodyweight));
           }
-          
-          // Log the structure of exercises in the previous workout
-          console.log('Previous workout structure:', 
-            JSON.stringify(previousWorkoutData.exercises?.[0], null, 2).substring(0, 200));
         }
+        
+        // Now get ALL completed workouts to find the most recent data for each exercise
+        const { data: allCompletedWorkouts, error: allWorkoutsError } = await supabase
+          .from('workouts')
+          .select('id, date, exercises')
+          .eq('done', true)
+          .eq('user_id', plan.user_id)
+          .order('date', { ascending: false })
+          .limit(50); // Get the 50 most recent workouts to search through
+        
+        if (!allWorkoutsError && allCompletedWorkouts && allCompletedWorkouts.length > 0) {
+          console.log(`Found ${allCompletedWorkouts.length} completed workouts to search for exercise data`);
+          
+          // For each exercise in the current plan
+          if (plan.exercises) {
+            for (const exercise of plan.exercises) {
+              // Look through all workouts to find the most recent data for this specific exercise
+              for (const workout of allCompletedWorkouts) {
+                if (workout.exercises) {
+                  // Find this exercise in the workout
+                  const matchingExercise = workout.exercises.find(
+                    ex => ex.id === exercise.id || ex.name === exercise.name
+                  );
+                  
+                  if (matchingExercise && matchingExercise.setDetails && matchingExercise.setDetails.length > 0) {
+                    // Found data for this exercise - check if it's the most recent
+                    if (!exercisePreviousData.has(exercise.id) || 
+                        new Date(workout.date) > new Date(exercisePreviousData.get(exercise.id).date)) {
+                      
+                      // This is the most recent data for this exercise
+                      exercisePreviousData.set(exercise.id, {
+                        date: workout.date,
+                        exerciseData: matchingExercise
+                      });
+                      
+                      console.log(`Found most recent data for ${exercise.name} from workout on ${workout.date}`);
+                    }
+                    
+                    // No need to check more workouts if we found one with this exercise
+                    break;
+                  }
+                }
+              }
+            }
+          }
+        }
+        
       } catch (prevError) {
-        console.log('No previous workout data found', prevError);
+        console.log('Error fetching previous workout data:', prevError);
         // Continue without previous data, not a critical error
       }
       
       // Initialize exercises from the workout plan
       const planExercises = plan.exercises?.map(exercise => {
-        // Look for this exercise in the previous workout
-        let prevExerciseData = null;
+        // Get the most recent data for this specific exercise
+        const mostRecentData = exercisePreviousData.get(exercise.id);
+        const prevExerciseData = mostRecentData ? mostRecentData.exerciseData : null;
         
-        if (previousWorkoutData && previousWorkoutData.exercises) {
-          // Try to find matching exercise by id or name
-          prevExerciseData = previousWorkoutData.exercises.find(
-            prevEx => prevEx.id === exercise.id || prevEx.name === exercise.name
-          );
-          
-          console.log(`Exercise ${exercise.name}: previous data found:`, 
-            prevExerciseData ? `Yes, with ${prevExerciseData.setDetails?.length || 0} sets` : 'No');
+        if (prevExerciseData) {
+          console.log(`Exercise ${exercise.name}: most recent data found from ${mostRecentData.date}, with ${prevExerciseData.setDetails?.length || 0} sets`);
+        } else {
+          console.log(`Exercise ${exercise.name}: no previous data found`);
         }
         
         return {
@@ -256,11 +298,10 @@ export default function WorkoutDetailScreen() {
           // Create sets based on the number specified in the plan
           sets: Array(exercise.sets || 3).fill(null).map((_, index) => {
             // Only use previous set data if index is within the available sets
-            // This handles cases where the previous workout has more sets than the plan
             const prevSetData = prevExerciseData && 
-                               prevExerciseData.setDetails && 
-                               index < prevExerciseData.setDetails.length ? 
-                               prevExerciseData.setDetails[index] : null;
+                              prevExerciseData.setDetails && 
+                              index < prevExerciseData.setDetails.length ? 
+                              prevExerciseData.setDetails[index] : null;
             
             // Debug the specific set data we're working with
             if (prevSetData) {
@@ -414,37 +455,21 @@ export default function WorkoutDetailScreen() {
         // Find the current number of sets for this exercise
         const currentSetCount = exercise.sets.length;
         
-        // Try to find previous workout data for this exercise and set
-        let prevSetData = null;
+        // If we have a set in the current exercise with data (from any previous workout),
+        // use the last set's data as a reference for new sets
+        const lastSet = exercise.sets[currentSetCount - 1];
         
-        // Check if we have previous workout data available
-        if (previousWorkout && previousWorkout.exercises) {
-          // Find the matching exercise in previous workout
-          const prevExerciseData = previousWorkout.exercises.find(
-            prevEx => prevEx.id === exercise.id || prevEx.name === exercise.name
-          );
-          
-          // If we have previous exercise data and it has enough sets, get the corresponding set
-          if (prevExerciseData && 
-              prevExerciseData.setDetails && 
-              currentSetCount < prevExerciseData.setDetails.length) {
-            // Get the set data for the next set index
-            prevSetData = prevExerciseData.setDetails[currentSetCount];
-            console.log(`Using previous data for new set ${currentSetCount+1}: weight=${prevSetData.weight}, reps=${prevSetData.reps}`);
-          }
-        }
-        
-        // Create new set with previous data as placeholders if available
+        // Create new set with previous data if available
         const newSet: WorkoutSet = {
           id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
           weight: '',
           reps: '',
           type: 'normal',
           notes: '',
-          // Add previous data if available
-          prevWeight: prevSetData && prevSetData.weight !== undefined ? String(prevSetData.weight) : '',
-          prevReps: prevSetData && prevSetData.reps !== undefined ? String(prevSetData.reps) : '',
-          prevNotes: prevSetData && prevSetData.notes ? prevSetData.notes : ''
+          // Add previous data either from the previous set's data or empty
+          prevWeight: lastSet?.prevWeight || '',
+          prevReps: lastSet?.prevReps || '', 
+          prevNotes: lastSet?.prevNotes || ''
         };
         
         return {
