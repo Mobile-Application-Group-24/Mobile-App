@@ -4,7 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { X, Clock, ChartBar as BarChart3, Plus, CalendarClock, Scale, File as FileEdit, Dumbbell, Trash, Save, Trash2, Pencil } from 'lucide-react-native';
 import { format } from 'date-fns';
 import { getWorkoutPlan, deleteWorkoutPlan, createWorkout, WorkoutPlan, Workout } from '@/utils/workout';
-import { updateWorkoutPlan } from '@/utils/supabase'; // Import from supabase instead
+import { updateWorkoutPlan, supabase } from '@/utils/supabase'; // Import supabase from the same file
 import { Swipeable } from 'react-native-gesture-handler';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { findExerciseType, exercisesByWorkoutType } from '@/utils/exercises';
@@ -17,6 +17,9 @@ interface WorkoutSet {
   reps: string;
   type: SetType;
   notes?: string;
+  prevWeight?: string; // Add this for tracking previous workout values
+  prevReps?: string;   // Add this for tracking previous workout values
+  prevNotes?: string;  // Add this for tracking previous workout values
 }
 
 interface ExerciseProgress {
@@ -170,6 +173,12 @@ export default function WorkoutDetailScreen() {
       }
       return exercise;
     }));
+    
+    if (!isWorkoutActive && !workoutStartTime) {
+      console.log("Set removed - will update workout plan when saved");
+    } else {
+      console.log("Set removed - will only affect this workout session, not the plan");
+    }
   };
 
   useEffect(() => {
@@ -191,25 +200,99 @@ export default function WorkoutDetailScreen() {
       setWorkoutPlan(plan);
       setWorkoutName(plan.title || '');
       setNotes(plan.description || '');
-      // Initialize exercises from the workout plan only, don't load previous workouts
+      
+      // First get previous workout data
+      let previousWorkoutData = null;
+      
+      try {
+        // Use more detailed query with explicit select to ensure we get all the data
+        const { data: previousWorkouts, error: previousError } = await supabase
+          .from('workouts')
+          .select('id, title, date, bodyweight, user_id, exercises')
+          .eq('workout_plan_id', workoutPlanId)
+          .eq('done', true)
+          .order('date', { ascending: false })
+          .limit(1);
+        
+        if (!previousError && previousWorkouts && previousWorkouts.length > 0) {
+          previousWorkoutData = previousWorkouts[0];
+          setPreviousWorkout(previousWorkoutData);
+          setHasPreviousData(true);
+          console.log('Found previous workout data:', previousWorkoutData.id);
+          
+          if (previousWorkoutData.bodyweight) {
+            // Pre-fill bodyweight from previous workout
+            setBodyWeight(String(previousWorkoutData.bodyweight));
+          }
+          
+          // Log the structure of exercises in the previous workout
+          console.log('Previous workout structure:', 
+            JSON.stringify(previousWorkoutData.exercises?.[0], null, 2).substring(0, 200));
+        }
+      } catch (prevError) {
+        console.log('No previous workout data found', prevError);
+        // Continue without previous data, not a critical error
+      }
+      
+      // Initialize exercises from the workout plan
       const planExercises = plan.exercises?.map(exercise => {
+        // Look for this exercise in the previous workout
+        let prevExerciseData = null;
+        
+        if (previousWorkoutData && previousWorkoutData.exercises) {
+          // Try to find matching exercise by id or name
+          prevExerciseData = previousWorkoutData.exercises.find(
+            prevEx => prevEx.id === exercise.id || prevEx.name === exercise.name
+          );
+          
+          console.log(`Exercise ${exercise.name}: previous data found:`, 
+            prevExerciseData ? `Yes, with ${prevExerciseData.setDetails?.length || 0} sets` : 'No');
+        }
+        
         return {
           id: exercise.id,
           name: exercise.name,
-          type: exercise.type, // Include exercise type
-          // Create empty sets based on the number specified in the plan
-          sets: Array(exercise.sets || 3).fill(null).map((_, index) => ({
-            id: `new-${exercise.id}-${index}`,
-            weight: '',
-            reps: '',
-            type: 'normal',
-            notes: ''
-          }))
+          type: exercise.type,
+          // Create sets based on the number specified in the plan
+          sets: Array(exercise.sets || 3).fill(null).map((_, index) => {
+            // Only use previous set data if index is within the available sets
+            // This handles cases where the previous workout has more sets than the plan
+            const prevSetData = prevExerciseData && 
+                               prevExerciseData.setDetails && 
+                               index < prevExerciseData.setDetails.length ? 
+                               prevExerciseData.setDetails[index] : null;
+            
+            // Debug the specific set data we're working with
+            if (prevSetData) {
+              console.log(`Set ${index+1} for ${exercise.name}: prev weight=${prevSetData.weight}, reps=${prevSetData.reps}`);
+            }
+            
+            // Extract the values properly with fallbacks for each field
+            const prevWeight = prevSetData && prevSetData.weight !== undefined && prevSetData.weight !== null ? 
+              String(prevSetData.weight) : '';
+            
+            const prevReps = prevSetData && prevSetData.reps !== undefined && prevSetData.reps !== null ? 
+              String(prevSetData.reps) : '';
+            
+            const prevNotes = prevSetData && prevSetData.notes ? prevSetData.notes : '';
+            
+            return {
+              id: `new-${exercise.id}-${index}`,
+              weight: '', // Start with empty values for the new workout
+              reps: '',
+              type: prevSetData ? prevSetData.type || 'normal' : 'normal',
+              notes: '',
+              // Include previous workout data with explicit checks for undefined/null
+              prevWeight,
+              prevReps,
+              prevNotes
+            };
+          })
         };
       }) || [];
-      // Set exercises directly from plan without checking previous workouts
+      
       setExercises(planExercises);
-      setHasPreviousData(false);
+      
     } catch (error) {
       console.error('Error loading workout plan:', error);
       setError('Failed to load workout details');
@@ -328,12 +411,42 @@ export default function WorkoutDetailScreen() {
   const addSet = (exerciseId: string) => {
     setExercises(prev => prev.map(exercise => {
       if (exercise.id === exerciseId) {
+        // Find the current number of sets for this exercise
+        const currentSetCount = exercise.sets.length;
+        
+        // Try to find previous workout data for this exercise and set
+        let prevSetData = null;
+        
+        // Check if we have previous workout data available
+        if (previousWorkout && previousWorkout.exercises) {
+          // Find the matching exercise in previous workout
+          const prevExerciseData = previousWorkout.exercises.find(
+            prevEx => prevEx.id === exercise.id || prevEx.name === exercise.name
+          );
+          
+          // If we have previous exercise data and it has enough sets, get the corresponding set
+          if (prevExerciseData && 
+              prevExerciseData.setDetails && 
+              currentSetCount < prevExerciseData.setDetails.length) {
+            // Get the set data for the next set index
+            prevSetData = prevExerciseData.setDetails[currentSetCount];
+            console.log(`Using previous data for new set ${currentSetCount+1}: weight=${prevSetData.weight}, reps=${prevSetData.reps}`);
+          }
+        }
+        
+        // Create new set with previous data as placeholders if available
         const newSet: WorkoutSet = {
           id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
           weight: '',
           reps: '',
-          type: 'normal'
+          type: 'normal',
+          notes: '',
+          // Add previous data if available
+          prevWeight: prevSetData && prevSetData.weight !== undefined ? String(prevSetData.weight) : '',
+          prevReps: prevSetData && prevSetData.reps !== undefined ? String(prevSetData.reps) : '',
+          prevNotes: prevSetData && prevSetData.notes ? prevSetData.notes : ''
         };
+        
         return {
           ...exercise,
           sets: [...exercise.sets, newSet]
@@ -341,48 +454,38 @@ export default function WorkoutDetailScreen() {
       }
       return exercise;
     }));
+    
+    // Log status messages for clarity
+    if (!isWorkoutActive && !workoutStartTime) {
+      console.log("Set added - will update workout plan when saved");
+    } else {
+      console.log("Set added - will only affect this workout session, not the plan");
+    }
   };
 
-  // Create a more efficient updateSet function with optimizations for numeric input
   const updateSet = (exerciseId: string, setId: string, field: keyof WorkoutSet, value: string) => {
-    // Special handling for numeric fields
     if (field === 'weight' || field === 'reps') {
-      // Only allow digits and a single decimal point for weight
       const isValidNumericInput = field === 'weight' 
-        ? /^(\d*\.?\d*)$/.test(value)  // Allow decimal for weight
-        : /^\d*$/.test(value);         // Only digits for reps
+        ? /^(\d*\.?\d*)$/.test(value) 
+        : /^\d*$/.test(value);
       
       if (value !== '' && !isValidNumericInput) {
-        return; // Reject invalid input
+        return;
       }
     }
     
-    // Use immediate update pattern for better performance with fast typing
     setExercises(prev => {
-      // Create shallow copy of the exercises array
       const updatedExercises = [...prev];
-      
-      // Find the target exercise index
       const exerciseIndex = updatedExercises.findIndex(e => e.id === exerciseId);
       if (exerciseIndex === -1) return prev;
       
-      // Create shallow copy of the exercise
       const updatedExercise = {...updatedExercises[exerciseIndex]};
-      
-      // Find the target set index
       const setIndex = updatedExercise.sets.findIndex(s => s.id === setId);
       if (setIndex === -1) return prev;
       
-      // Create shallow copy of sets array
       const updatedSets = [...updatedExercise.sets];
-      
-      // Create new set object with updated value
       updatedSets[setIndex] = {...updatedSets[setIndex], [field]: value};
-      
-      // Update exercise with new sets array
       updatedExercise.sets = updatedSets;
-      
-      // Update exercises array with modified exercise
       updatedExercises[exerciseIndex] = updatedExercise;
       
       return updatedExercises;
@@ -442,32 +545,32 @@ export default function WorkoutDetailScreen() {
     if (!workoutPlan || !workoutId) return;
 
     try {
-      // Format exercises for workout plan (no reps/weight)
-      // Make sure we preserve the set count and type from the original exercises
+      const originalPlan = workoutPlan;
+      
       const planExercises = exercises.map(exercise => ({
         id: exercise.id,
         name: exercise.name,
-        type: exercise.type, // Include exercise type
-        sets: exercise.sets.length
+        type: exercise.type,
+        sets: isWorkoutActive || workoutStartTime ? 
+          (originalPlan.exercises?.find(e => e.id === exercise.id)?.sets || exercise.sets.length) : 
+          exercise.sets.length
       }));
 
-      // Always update the workout plan with the latest exercises
       await updateWorkoutPlan(workoutId, {
         title: workoutName,
         description: notes,
-        exercises: planExercises // Store only exercise structure in workout_plans table
+        exercises: planExercises
       });
       
-      console.log("Updated workout plan with new exercises");
+      console.log("Updated workout plan with" + 
+        (isWorkoutActive || workoutStartTime ? " preserved set counts" : " new set counts"));
       
-      // Only create a workout session if the workout was started
       if (isWorkoutActive || workoutStartTime) {
-        // Format exercises for workout tracking (with reps/weight/setDetails)
         const workoutExercises = exercises.map(exercise => {
           return {
             id: exercise.id,
             name: exercise.name,
-            type: exercise.type, // Include exercise type
+            type: exercise.type,
             sets: exercise.sets.length,
             setDetails: exercise.sets.map(set => ({
               id: set.id,
@@ -479,11 +582,7 @@ export default function WorkoutDetailScreen() {
           };
         });
         
-        // If the workout has been explicitly ended, use that end time
-        // Otherwise, if it was started but not explicitly ended, set the current time as end time
         const endTimeToUse = workoutEndTime || (isWorkoutActive ? new Date() : undefined);
-            
-        // Consider a workout done if it's been started (regardless of whether it has an explicit end time)
         const isDone = isWorkoutActive || !!workoutEndTime;
         
         const workoutData = {
@@ -493,11 +592,11 @@ export default function WorkoutDetailScreen() {
           start_time: workoutStartTime?.toISOString(),
           end_time: endTimeToUse?.toISOString(),
           notes: notes,
-          exercises: workoutExercises, // Include complete exercise data with sets and reps
+          exercises: workoutExercises,
           bodyweight: bodyWeight ? parseFloat(bodyWeight) : undefined,
           user_id: workoutPlan.user_id,
-          calories_burned: 0, // Calculate or leave as default
-          done: isDone // Mark as done if it was started or has an end time
+          calories_burned: 0,
+          done: isDone
         };
                 
         const savedWorkout = await createWorkout(workoutData);
@@ -547,25 +646,19 @@ export default function WorkoutDetailScreen() {
   };
 
   const navigateToExerciseStats = (exerciseId: string, exerciseName: string) => {
-    // First check if the exercise has an ID, as custom exercises may not have a unique ID
     let idToUse = exerciseId;
     
-    // If the ID starts with "custom-", create a special ID for the stats page
-    // This is needed because the stats page expects a unique ID for the exercise
     if (exerciseId.startsWith('custom-')) {
-      // For custom exercises, create an ID based on the name
       idToUse = `exercise-${exerciseName.toLowerCase().replace(/\s+/g, '-')}-stats`;
     }
     
-    // Navigate to the stats page with the exercise ID and name
-    // Also pass the current workoutId so we can navigate back to this workout
     router.push({
       pathname: '/stats/[id]',
       params: { 
         id: idToUse,
         exerciseName: exerciseName,
-        workoutId: workoutId, // Pass the workout ID to enable proper back navigation
-        returnPath: `/workouts/${workoutId}` // Add explicit return path for navigation
+        workoutId: workoutId,
+        returnPath: `/workouts/${workoutId}`
       }
     });
   };
@@ -597,7 +690,6 @@ export default function WorkoutDetailScreen() {
       <SafeAreaView style={styles.container}>
         <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
         
-        {/* Fixed header that stays visible while scrolling */}
         <View style={styles.fixedHeader}>
           <TouchableOpacity onPress={() => router.back()} style={styles.closeButton} activeOpacity={0.7}>
             <X size={24} color="#007AFF" />
@@ -629,14 +721,13 @@ export default function WorkoutDetailScreen() {
           style={[styles.content]}
           contentContainerStyle={{ 
             paddingTop: Platform.OS === 'android' ? 
-              80 + (StatusBar.currentHeight ?? 0) : 80, // Increase padding to ensure content isn't hidden
-            paddingBottom: 20 // Add bottom padding for better scrolling experience
+              80 + (StatusBar.currentHeight ?? 0) : 80, 
+            paddingBottom: 20 
           }}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={true}
         >
           <View style={styles.workoutInfo}>
-            {/* Remove the Swipeable component and keep only the inner View */}
             <View>
               <TextInput
                 style={styles.workoutNameInput}
@@ -736,10 +827,8 @@ export default function WorkoutDetailScreen() {
                 onPress={() => {
                   if (draggingExercise) {
                     if (draggingExercise === exercise.id) {
-                      // Cancel dragging when tapping the same exercise
                       handleDragEnd();
                     } else {
-                      // Handle moving exercise when tapping a different one
                       handleMoveExercise(draggingExercise, exercise.id);
                       handleDragEnd();
                     }
@@ -786,13 +875,13 @@ export default function WorkoutDetailScreen() {
                           keyboardType="numeric"
                           value={set.weight}
                           onChangeText={(text) => updateSet(exercise.id, set.id, 'weight', text)}
-                          placeholder="kg"
-                          placeholderTextColor="#C7C7CC"
+                          placeholder={set.prevWeight ? `${set.prevWeight}` : "kg"}
+                          placeholderTextColor={set.prevWeight ? "#C7C7CC" : "#C7C7CC"}
                           maxLength={6}
                           returnKeyType="done"
                           blurOnSubmit={true}
-                          selectTextOnFocus={true}  // Select all text when focused for easier editing
-                          caretHidden={false}       // Ensure caret is visible
+                          selectTextOnFocus={true}
+                          caretHidden={false}
                         />
                       </View>
 
@@ -803,13 +892,13 @@ export default function WorkoutDetailScreen() {
                           keyboardType="numeric"
                           value={set.reps}
                           onChangeText={(text) => updateSet(exercise.id, set.id, 'reps', text)}
-                          placeholder="#"
-                          placeholderTextColor="#C7C7CC"
+                          placeholder={set.prevReps ? set.prevReps : "#"}
+                          placeholderTextColor={set.prevReps ? "#C7C7CC" : "#C7C7CC"}
                           maxLength={3}
                           returnKeyType="done"
                           blurOnSubmit={true}
-                          selectTextOnFocus={true}  // Select all text when focused for easier editing
-                          caretHidden={false}       // Ensure caret is visible
+                          selectTextOnFocus={true}
+                          caretHidden={false}
                         />
                       </View>
 
@@ -819,8 +908,8 @@ export default function WorkoutDetailScreen() {
                           style={[styles.input, styles.multilineInput]}
                           value={set.notes}
                           onChangeText={(text) => updateSet(exercise.id, set.id, 'notes', text)}
-                          placeholder={set.notes || "Notes"}
-                          placeholderTextColor="#C7C7CC"
+                          placeholder={set.prevNotes || "Notes"}
+                          placeholderTextColor={set.prevNotes ? "#34C759" : "#C7C7CC"}
                           multiline
                           numberOfLines={1}
                         />
@@ -885,7 +974,6 @@ export default function WorkoutDetailScreen() {
           </View>
         </ScrollView>
 
-        {/* Timer Mini-Player */}
         {showRestTimer && (
           <View style={styles.miniPlayer}>
             <TouchableOpacity 
@@ -978,7 +1066,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: '#E5E5EA',
-    height: Platform.OS === 'android' ? 64 + (StatusBar.currentHeight ?? 0) : 64, // Increased height for Android
+    height: Platform.OS === 'android' ? 64 + (StatusBar.currentHeight ?? 0) : 64, 
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -989,22 +1077,22 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 4, // Add padding to prevent text clipping
+    paddingVertical: 4, 
   },
   date: {
-    fontSize: 18, // Slightly reduce font size to ensure it fits
+    fontSize: 18, 
     fontWeight: 'bold',
     color: '#000000',
     textAlign: 'center',
   },
   closeButton: {
     padding: 8,
-    width: 40, // Fixed width to help with alignment
+    width: 40, 
   },
   headerActions: {
     flexDirection: 'row',
     gap: 16,
-    width: 40, // Fixed width to match closeButton for balanced layout
+    width: 40, 
     alignItems: 'flex-end',
     justifyContent: 'flex-end',
   },
@@ -1461,5 +1549,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '500',
     marginLeft: 6,
+  },
+  prevValueHint: {
+    fontSize: 10,
+    color: '#34C759',
+    marginTop: 2,
+    textAlign: 'right',
   },
 });
