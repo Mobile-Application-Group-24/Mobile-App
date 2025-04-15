@@ -1,23 +1,42 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, Platform } from 'react-native';
+import { useLocalSearchParams, useRouter, useNavigation, usePathname } from 'expo-router';
 import { TrendingUp, ChartBar, Calendar, Dumbbell, ArrowLeft } from 'lucide-react-native';
 import { LineChart } from 'react-native-chart-kit';
 import { useSession } from '@/utils/auth';
 import { ExerciseStats, getExerciseStatsFromWorkouts, getExerciseHistoryData } from '@/utils/stats';
-import { format, subMonths } from 'date-fns';
+import { format, subMonths, subYears } from 'date-fns';
+
+interface ChartData {
+  volume: { labels: string[], data: number[] },
+  maxWeight: { labels: string[], data: number[] },
+  bestSetVolume: { labels: string[], data: number[] }
+}
+
+const calculateSetVolume = (set: any) => {
+  const weight = parseFloat(set.weight) || 0;
+  const reps = parseInt(set.reps) || 0;
+  return weight * reps;
+};
 
 export default function ExerciseStatsScreen() {
-  const { id, exerciseName, workoutId } = useLocalSearchParams(); // Add workoutId parameter
+  const { id, exerciseName, workoutId, returnPath } = useLocalSearchParams();
   const { session } = useSession();
   const router = useRouter();
+  const pathname = usePathname();
+  const navigation = useNavigation();
   const [exercise, setExercise] = useState<ExerciseStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [chartData, setChartData] = useState({
+  const [chartData, setChartData] = useState<ChartData>({
     volume: { labels: [], data: [] },
-    maxWeight: { labels: [], data: [] }
+    maxWeight: { labels: [], data: [] },
+    bestSetVolume: { labels: [], data: [] }
   });
+  const [timeFilter, setTimeFilter] = useState<'month' | 'year' | 'all'>('month');
+  const [weightProgress, setWeightProgress] = useState<number>(0);
+  const [volumeProgress, setVolumeProgress] = useState<number>(0);
+  const [repsProgress, setRepsProgress] = useState<number>(0);
 
   const chartConfig = {
     backgroundColor: '#FFFFFF',
@@ -35,6 +54,74 @@ export default function ExerciseStatsScreen() {
     },
   };
 
+  const calculateProgress = (data: any[]) => {
+    if (data.length < 2) return { weightProgress: 0, volumeProgress: 0, repsProgress: 0 };
+
+    const firstEntry = data[0];
+    const lastEntry = data[data.length - 1];
+
+    const weightProgress = firstEntry.maxWeight ? 
+      ((lastEntry.maxWeight - firstEntry.maxWeight) / firstEntry.maxWeight) * 100 : 0;
+    const volumeProgress = ((lastEntry.volume - firstEntry.volume) / firstEntry.volume) * 100;
+    const repsProgress = firstEntry.maxReps ? 
+      ((lastEntry.maxReps - firstEntry.maxReps) / firstEntry.maxReps) * 100 : 0;
+
+    return {
+      weightProgress: Math.round(weightProgress),
+      volumeProgress: Math.round(volumeProgress),
+      repsProgress: Math.round(repsProgress)
+    };
+  };
+
+  const filterDataByTime = (data: any[]) => {
+    const now = new Date();
+    return data.filter(entry => {
+      const entryDate = new Date(entry.date);
+      switch (timeFilter) {
+        case 'month':
+          return entryDate >= subMonths(now, 1);
+        case 'year':
+          return entryDate >= subYears(now, 1);
+        default:
+          return true;
+      }
+    });
+  };
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('tabPress', (e) => {
+      if (pathname?.includes('/stats/')) {
+        e.preventDefault();
+        if (workoutId) {
+          const path = returnPath 
+            ? returnPath.toString() 
+            : `/workouts/${workoutId}`;
+          
+          router.push(path);
+        } else {
+          router.replace('/(tabs)/stats/');
+        }
+      }
+    });
+
+    return unsubscribe;
+  }, [navigation, router, pathname, workoutId, returnPath]);
+
+  useEffect(() => {
+    if (workoutId && navigation.setOptions) {
+      navigation.setOptions({
+        headerShown: true,
+        headerLeft: () => null,
+        headerTitle: '',
+        headerStyle: {
+          height: Platform.OS === 'android' ? 60 : 44,
+          backgroundColor: '#FFFFFF',
+        },
+        headerShadowVisible: false
+      });
+    }
+  }, [navigation, workoutId]);
+
   useEffect(() => {
     async function loadExerciseData() {
       if (!session?.user?.id) return;
@@ -42,15 +129,12 @@ export default function ExerciseStatsScreen() {
       try {
         setLoading(true);
         
-        // If exerciseName is available from parameters, use it
         const nameToUse = exerciseName as string || '';
         
         let exerciseData: ExerciseStats | null = null;
         
-        // Load all exercise statistics
         const stats = await getExerciseStatsFromWorkouts(session.user.id);
         
-        // Search by ID or name (for custom exercises)
         if (nameToUse) {
           exerciseData = stats.find(ex => 
             ex.name.toLowerCase() === nameToUse.toLowerCase() || 
@@ -60,7 +144,6 @@ export default function ExerciseStatsScreen() {
           exerciseData = stats.find(ex => ex.id === id) || null;
         }
         
-        // If we still haven't found an exercise, create an empty placeholder entry
         if (!exerciseData && nameToUse) {
           exerciseData = {
             id: id as string || `exercise-${Date.now()}`,
@@ -82,34 +165,25 @@ export default function ExerciseStatsScreen() {
         
         setExercise(exerciseData);
         
-        // If the exercise was found, load its history data
         const historyData = await getExerciseHistoryData(session.user.id, exerciseData.name);
         
         if (historyData && historyData.length > 0) {
-          // Sort by date in ascending order
-          historyData.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+          const filteredData = filterDataByTime(historyData);
+          const progress = calculateProgress(filteredData);
+          setWeightProgress(progress.weightProgress);
+          setVolumeProgress(progress.volumeProgress);
+          setRepsProgress(progress.repsProgress);
+
+          filteredData.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
           
-          // Take at most the last 6 entries
-          const recentEntries = historyData.slice(-6);
-          
-          // Format data for volume chart
-          const volumeLabels = recentEntries.map(entry => 
-            format(new Date(entry.date), 'MMM d')
-          );
-          const volumeData = recentEntries.map(entry => entry.volume);
-          
-          // Format data for maximum weight chart
-          const maxWeightLabels = recentEntries.map(entry => 
-            format(new Date(entry.date), 'MMM d')
-          );
-          const maxWeightData = recentEntries.map(entry => entry.maxWeight);
+          const labels = filteredData.map(entry => format(new Date(entry.date), 'MMM d'));
           
           setChartData({
-            volume: { labels: volumeLabels, data: volumeData },
-            maxWeight: { labels: maxWeightLabels, data: maxWeightData }
+            volume: { labels, data: filteredData.map(entry => entry.volume) },
+            maxWeight: { labels, data: filteredData.map(entry => entry.maxWeight) },
+            bestSetVolume: { labels, data: filteredData.map(entry => entry.maxSetVolume) }
           });
         } else {
-          // Fallback to sample data if no history is available
           const volumeData = [
             exerciseData.totalVolume * 0.3, 
             exerciseData.totalVolume * 0.5,
@@ -124,7 +198,6 @@ export default function ExerciseStatsScreen() {
             exerciseData.maxWeight
           ];
           
-          // Generate date labels for the past 4 months
           const dateLabels = Array(4).fill(0).map((_, i) => {
             const date = subMonths(new Date(), 3 - i);
             return format(date, 'MMM');
@@ -138,6 +211,10 @@ export default function ExerciseStatsScreen() {
             maxWeight: { 
               labels: dateLabels, 
               data: weightData 
+            },
+            bestSetVolume: { 
+              labels: dateLabels, 
+              data: [0, 0, 0, 0] 
             }
           });
         }
@@ -150,19 +227,17 @@ export default function ExerciseStatsScreen() {
     }
     
     loadExerciseData();
-  }, [id, exerciseName, session?.user?.id]);
+  }, [id, exerciseName, session?.user?.id, timeFilter]);
   
-  // Updated navigation handler to return to workout if workoutId is provided
   const handleBackNavigation = () => {
     if (workoutId) {
-      // Navigate back to workout detail screen if workoutId is available
-      router.push({
-        pathname: '/workouts/[id]',
-        params: { id: workoutId }
-      });
+      const path = returnPath 
+        ? returnPath.toString() 
+        : `/workouts/${workoutId}`;
+      
+      router.push(path);
     } else {
-      // Default back behavior when not coming from a workout
-      router.back();
+      router.push('/(tabs)/stats/');
     }
   };
 
@@ -201,23 +276,107 @@ export default function ExerciseStatsScreen() {
         <Text style={styles.exerciseCategory}>{exercise.type}</Text>
       </View>
 
+      <ScrollView 
+        horizontal 
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.filterContainer}
+      >
+        <TouchableOpacity
+          style={[
+            styles.filterButton,
+            timeFilter === 'month' && styles.filterButtonActive
+          ]}
+          onPress={() => setTimeFilter('month')}
+        >
+          <Text style={[
+            styles.filterButtonText,
+            timeFilter === 'month' && styles.filterButtonTextActive
+          ]}>Last Month</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[
+            styles.filterButton,
+            timeFilter === 'year' && styles.filterButtonActive
+          ]}
+          onPress={() => setTimeFilter('year')}
+        >
+          <Text style={[
+            styles.filterButtonText,
+            timeFilter === 'year' && styles.filterButtonTextActive
+          ]}>Last Year</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[
+            styles.filterButton,
+            timeFilter === 'all' && styles.filterButtonActive
+          ]}
+          onPress={() => setTimeFilter('all')}
+        >
+          <Text style={[
+            styles.filterButtonText,
+            timeFilter === 'all' && styles.filterButtonTextActive
+          ]}>All Time</Text>
+        </TouchableOpacity>
+      </ScrollView>
+
       <View style={styles.statsGrid}>
         <View style={styles.statCard}>
           <TrendingUp size={24} color="#007AFF" />
           <Text style={styles.statValue}>{exercise.maxWeight} kg</Text>
           <Text style={styles.statLabel}>Max Weight</Text>
+          {weightProgress !== 0 && (
+            <View style={[
+              styles.progressBadge,
+              weightProgress > 0 ? styles.progressPositive : styles.progressNegative
+            ]}>
+              <Text style={[
+                styles.progressText,
+                weightProgress > 0 ? styles.progressTextPositive : styles.progressTextNegative
+              ]}>
+                {weightProgress > 0 ? '+' : ''}{weightProgress}%
+              </Text>
+            </View>
+          )}
         </View>
 
         <View style={styles.statCard}>
           <ChartBar size={24} color="#007AFF" />
           <Text style={styles.statValue}>{(exercise.totalVolume / 1000).toFixed(1)}k</Text>
           <Text style={styles.statLabel}>Total Volume</Text>
+          {volumeProgress !== 0 && (
+            <View style={[
+              styles.progressBadge,
+              volumeProgress > 0 ? styles.progressPositive : styles.progressNegative
+            ]}>
+              <Text style={[
+                styles.progressText,
+                volumeProgress > 0 ? styles.progressTextPositive : styles.progressTextNegative
+              ]}>
+                {volumeProgress > 0 ? '+' : ''}{volumeProgress}%
+              </Text>
+            </View>
+          )}
         </View>
 
         <View style={styles.statCard}>
           <Dumbbell size={24} color="#007AFF" />
           <Text style={styles.statValue}>{exercise.maxReps}</Text>
           <Text style={styles.statLabel}>Max Reps</Text>
+          {repsProgress !== 0 && (
+            <View style={[
+              styles.progressBadge,
+              repsProgress > 0 ? styles.progressPositive : styles.progressNegative
+            ]}>
+              <Text style={[
+                styles.progressText,
+                repsProgress > 0 ? styles.progressTextPositive : styles.progressTextNegative
+              ]}>
+                {repsProgress > 0 ? '+' : ''}{repsProgress}%
+              </Text>
+            </View>
+          )}
         </View>
 
         <View style={styles.statCard}>
@@ -240,7 +399,7 @@ export default function ExerciseStatsScreen() {
           bezier
           style={styles.chart}
           yAxisLabel=""
-          yAxisSuffix=""
+          yAxisSuffix=" kg"
           fromZero={true}
         />
       </View>
@@ -251,6 +410,24 @@ export default function ExerciseStatsScreen() {
           data={{
             labels: chartData.maxWeight.labels,
             datasets: [{ data: chartData.maxWeight.data }],
+          }}
+          width={340}
+          height={220}
+          chartConfig={chartConfig}
+          bezier
+          style={styles.chart}
+          yAxisLabel=""
+          yAxisSuffix=" kg"
+          fromZero={true}
+        />
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Best Set Volume Progress</Text>
+        <LineChart
+          data={{
+            labels: chartData.bestSetVolume.labels,
+            datasets: [{ data: chartData.bestSetVolume.data }],
           }}
           width={340}
           height={220}
@@ -366,5 +543,54 @@ const styles = StyleSheet.create({
   chart: {
     marginVertical: 8,
     borderRadius: 16,
+  },
+  filterContainer: {
+    padding: 16,
+    gap: 8,
+    justifyContent: 'center',
+    flexDirection: 'row',
+    width: '100%',
+  },
+  filterButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 16,
+    backgroundColor: '#F2F2F7',
+    marginHorizontal: 4,
+  },
+  filterButtonActive: {
+    backgroundColor: '#007AFF',
+  },
+  filterButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#8E8E93',
+  },
+  filterButtonTextActive: {
+    color: '#FFFFFF',
+  },
+  progressBadge: {
+    position: 'absolute',
+    top: -8,
+    right: -8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  progressPositive: {
+    backgroundColor: '#E8FFF1',
+  },
+  progressNegative: {
+    backgroundColor: '#FFF2F2',
+  },
+  progressText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  progressTextPositive: {
+    color: '#34C759',
+  },
+  progressTextNegative: {
+    color: '#FF3B30',
   },
 });

@@ -20,180 +20,73 @@ export interface ExerciseHistoryPoint {
   volume: number;
   maxWeight: number;
   avgWeight: number;
+  maxSetVolume?: number; // Add this field to include the highest set volume
 }
 
 export async function getExerciseStatsFromWorkouts(userId: string): Promise<ExerciseStats[]> {
-  // Fetch all workouts with exercise data directly from the workouts table
-  const { data: workouts, error: workoutError } = await supabase
-    .from('workouts')
-    .select('id, date, exercises')
-    .eq('user_id', userId)
-    .order('date', { ascending: false });
+  try {
+    const { data: workouts, error } = await supabase
+      .from('workouts')
+      .select('*')
+      .eq('user_id', userId);
 
-  if (workoutError) {
-    console.error('Error fetching workouts:', workoutError);
-    throw workoutError;
-  }
+    if (error) throw error;
 
-  console.log(`Fetched ${workouts?.length || 0} workouts for user`);
-  
-  // Process workout data to calculate statistics
-  const exerciseMap = new Map<string, ExerciseStats>();
-  
-  // For progress calculation: track most recent and second-most-recent workouts by exercise
-  const exerciseWorkouts = new Map<string, Array<{date: string, avgWeight: number}>>();
-  
-  // For volume progress calculation: track volume by workout date
-  const exerciseVolumeByWorkout = new Map<string, Array<{date: string, totalVolume: number}>>();
-  
-  // Process each workout to extract exercise data
-  workouts?.forEach(workout => {
-    if (!workout.exercises || !Array.isArray(workout.exercises)) return;
+    const exerciseStats: { [key: string]: ExerciseStats } = {};
 
-    const workoutDate = workout.date;
-    console.log(`Processing workout from ${workoutDate} with ${workout.exercises.length} exercises`);
+    workouts.forEach(workout => {
+      if (!workout.exercises) return;
 
-    workout.exercises.forEach(exercise => {
-      if (!exercise || !exercise.name) {
-        console.log('Skipping invalid exercise:', exercise);
-        return;
-      }
-      
-      // Use name as ID if no ID is present
-      const exerciseId = exercise.id || `name-${exercise.name}`;
-      const exerciseName = exercise.name;
-      const exerciseType = exercise.type || findExerciseType(exerciseName);
+      workout.exercises.forEach(exercise => {
+        if (!exerciseStats[exercise.name]) {
+          exerciseStats[exercise.name] = {
+            id: exercise.id,
+            name: exercise.name,
+            type: exercise.type || findExerciseType(exercise.name),
+            maxWeight: 0,
+            maxReps: 0,
+            totalVolume: 0,
+            totalSessions: 0,
+            lastUsed: workout.date
+          };
+        }
 
-      console.log(`Processing exercise: ${exerciseName} (${exerciseType || 'unknown type'})`);
+        let sessionMaxWeight = 0;
+        let sessionMaxReps = 0;
+        let sessionVolume = 0;
 
-      // Initialize or update stats object for this exercise
-      if (!exerciseMap.has(exerciseId)) {
-        exerciseMap.set(exerciseId, {
-          id: exerciseId,
-          name: exerciseName,
-          maxWeight: 0,
-          maxReps: 0,
-          totalVolume: 0,
-          totalSessions: 0,
-          lastUsed: workoutDate,
-          type: exerciseType,
-          progress: 0, // Will calculate later
-          volumeProgress: 0 // Will calculate later
-        });
-      }
+        exercise.setDetails?.forEach(set => {
+          const weight = Number(set.weight) || 0;
+          const reps = Number(set.reps) || 0;
 
-      const stats = exerciseMap.get(exerciseId)!;
-      stats.totalSessions += 1;
-      
-      // For workout progress tracking
-      let totalSetWeight = 0;
-      let weightedSetCount = 0;
-      let sessionVolume = 0;
-
-      // Process set details to calculate stats
-      if (exercise.setDetails && Array.isArray(exercise.setDetails)) {
-        exercise.setDetails.forEach(set => {
-          if (!set) return;
-          
-          const weight = typeof set.weight === 'number' ? set.weight : 
-                        (set.weight ? parseFloat(set.weight.toString()) : 0);
-                        
-          const reps = typeof set.reps === 'number' ? set.reps : 
-                      (set.reps ? parseInt(set.reps.toString(), 10) : 0);
-          
-          // Only count sets with both weight and reps
-          if (weight > 0 && reps > 0) {
-            // Update max weight
-            if (weight > stats.maxWeight) {
-              stats.maxWeight = weight;
-            }
-            
-            // Update max reps
-            if (reps > stats.maxReps) {
-              stats.maxReps = reps;
-            }
-            
-            // Add to total volume
-            const setVolume = weight * reps;
-            stats.totalVolume += setVolume;
-            sessionVolume += setVolume;
-            
-            // For average weight calculation
-            totalSetWeight += weight;
-            weightedSetCount++;
+          // Update maxReps unabhängig vom Gewicht
+          if (reps > exerciseStats[exercise.name].maxReps) {
+            exerciseStats[exercise.name].maxReps = reps;
           }
+
+          // Update maxWeight nur wenn Gewicht vorhanden
+          if (weight > 0 && weight > exerciseStats[exercise.name].maxWeight) {
+            exerciseStats[exercise.name].maxWeight = weight;
+          }
+
+          sessionVolume += weight * reps;
         });
-      }
 
-      // Track workout history for progress calculation
-      if (weightedSetCount > 0) {
-        const avgWeight = totalSetWeight / weightedSetCount;
-        const workoutInfo = {date: workoutDate, avgWeight};
-        
-        if (!exerciseWorkouts.has(exerciseId)) {
-          exerciseWorkouts.set(exerciseId, []);
-        }
-        
-        exerciseWorkouts.get(exerciseId)?.push(workoutInfo);
-      }
+        exerciseStats[exercise.name].totalVolume += sessionVolume;
+        exerciseStats[exercise.name].totalSessions++;
 
-      // Track workout volume history for progress calculation
-      if (sessionVolume > 0) {
-        const workoutInfo = {date: workoutDate, totalVolume: sessionVolume};
-        
-        if (!exerciseVolumeByWorkout.has(exerciseId)) {
-          exerciseVolumeByWorkout.set(exerciseId, []);
+        // Update lastUsed wenn das Workout neuer ist
+        if (workout.date > exerciseStats[exercise.name].lastUsed) {
+          exerciseStats[exercise.name].lastUsed = workout.date;
         }
-        
-        exerciseVolumeByWorkout.get(exerciseId)?.push(workoutInfo);
-      }
+      });
     });
-  });
 
-  // Calculate progress percentages
-  exerciseMap.forEach((stats, exerciseId) => {
-    const workoutHistory = exerciseWorkouts.get(exerciseId);
-    
-    if (workoutHistory && workoutHistory.length >= 2) {
-      // Sort by date (most recent first)
-      workoutHistory.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-      
-      const mostRecent = workoutHistory[0];
-      const secondMostRecent = workoutHistory[1];
-      
-      if (secondMostRecent.avgWeight > 0) {
-        const progressPercent = Math.round(((mostRecent.avgWeight - secondMostRecent.avgWeight) / secondMostRecent.avgWeight) * 100);
-        stats.progress = progressPercent;
-      }
-    }
-  });
-
-  // Calculate volume progress percentages
-  exerciseMap.forEach((stats, exerciseId) => {
-    const volumeHistory = exerciseVolumeByWorkout.get(exerciseId);
-    
-    if (volumeHistory && volumeHistory.length >= 2) {
-      // Sort by date (most recent first)
-      volumeHistory.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-      
-      const mostRecent = volumeHistory[0];
-      const secondMostRecent = volumeHistory[1];
-      
-      if (secondMostRecent.totalVolume > 0) {
-        // Calculate percentage change in volume between last two workouts
-        const progressPercent = Math.round(
-          ((mostRecent.totalVolume - secondMostRecent.totalVolume) / secondMostRecent.totalVolume) * 100
-        );
-        stats.volumeProgress = progressPercent;
-        
-        console.log(`Volume progress for ${stats.name}: ${progressPercent}% (${secondMostRecent.totalVolume} → ${mostRecent.totalVolume})`);
-      }
-    }
-  });
-
-  const result = Array.from(exerciseMap.values());
-  console.log(`Generated stats for ${result.length} exercises`);
-  return result;
+    return Object.values(exerciseStats);
+  } catch (error) {
+    console.error('Error in getExerciseStatsFromWorkouts:', error);
+    throw error;
+  }
 }
 
 /**
@@ -234,8 +127,7 @@ export async function getExerciseHistoryData(userId: string, exerciseName: strin
       // Calculate metrics for this workout session
       let sessionVolume = 0;
       let sessionMaxWeight = 0;
-      let totalWeight = 0;
-      let weightedSetCount = 0;
+      let maxSetVolume = 0; // Variable für das höchste Satzvolumen
       
       exercise.setDetails.forEach(set => {
         if (!set) return;
@@ -246,31 +138,30 @@ export async function getExerciseHistoryData(userId: string, exerciseName: strin
         const reps = typeof set.reps === 'number' ? set.reps : 
                   (set.reps ? parseInt(set.reps.toString(), 10) : 0);
         
-        // Only count sets with both weight and reps
         if (weight > 0 && reps > 0) {
-          // Update max weight
+          // Berechne das Volumen für diesen Satz
+          const setVolume = weight * reps;
+          
+          // Aktualisiere das höchste Satzvolumen wenn nötig
+          if (setVolume > maxSetVolume) {
+            maxSetVolume = setVolume;
+          }
+          
           if (weight > sessionMaxWeight) {
             sessionMaxWeight = weight;
           }
           
-          // Add to total volume
-          sessionVolume += weight * reps;
-          
-          // For average weight calculation
-          totalWeight += weight;
-          weightedSetCount++;
+          sessionVolume += setVolume;
         }
       });
       
-      // Only add data point if there's actual data
-      if (weightedSetCount > 0) {
-        const avgWeight = totalWeight / weightedSetCount;
-        
+      if (sessionVolume > 0) {
         historyPoints.push({
           date: workout.date,
           volume: sessionVolume,
           maxWeight: sessionMaxWeight,
-          avgWeight: avgWeight
+          maxSetVolume: maxSetVolume, // Füge das höchste Satzvolumen hinzu
+          avgWeight: 0 // Wir können avgWeight entfernen wenn nicht benötigt
         });
       }
     });

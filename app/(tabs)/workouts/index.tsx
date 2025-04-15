@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, StatusBar, SafeAreaView, Alert, Platform } from 'react-native';
-import { Plus, Star, Play, Clock, Calendar, Dumbbell, Trash2, Filter } from 'lucide-react-native';
+import { Plus, Star, Play, Clock, Calendar, Dumbbell, Trash2, Filter, Timer, GaugeCircle, Circle } from 'lucide-react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { getWorkoutPlans, WorkoutPlan, deleteWorkoutPlan, updateWorkoutPlan, getWorkouts } from '@/utils/supabase';
 import { useSession } from '@/utils/auth';
@@ -73,7 +73,6 @@ export default function WorkoutsScreen() {
       if (!session?.user?.id) return;
 
       const data = await getWorkoutPlans(session.user.id);
-      // Get all completed workouts to check if today's workout is already done
       const completedWorkouts = await getWorkouts(session.user.id);
       
       const currentDay = getCurrentDayOfWeek();
@@ -81,24 +80,41 @@ export default function WorkoutsScreen() {
         w => w.day_of_week === currentDay && w.workout_type === 'split'
       );
 
-      // Check if today's workout is already completed
-      const today = new Date();
-      const isTodaysWorkoutCompleted = completedWorkouts.some(w => {
-        const workoutDate = parseISO(w.date);
-        return isSameDay(workoutDate, today) && 
-               w.done && 
-               w.workout_plan_id === workoutPlanForToday?.id;
-      });
-
       if (workoutPlanForToday) {
+        // Berechne die durchschnittliche Dauer für diesen Workout-Typ
+        const similarWorkouts = completedWorkouts.filter(w => 
+          w.workout_plan_id === workoutPlanForToday.id && 
+          w.start_time && 
+          w.end_time
+        );
+
+        let averageDuration = 60; // Standardwert
+        if (similarWorkouts.length > 0) {
+          const totalDuration = similarWorkouts.reduce((acc, workout) => {
+            const start = new Date(workout.start_time);
+            const end = new Date(workout.end_time);
+            const duration = (end.getTime() - start.getTime()) / (1000 * 60); // Konvertiere zu Minuten
+            return acc + duration;
+          }, 0);
+          averageDuration = Math.round(totalDuration / similarWorkouts.length);
+        }
+
+        // Prüfe ob das Workout heute bereits abgeschlossen wurde
+        const today = new Date();
+        const isTodaysWorkoutCompleted = completedWorkouts.some(w => {
+          const workoutDate = parseISO(w.date);
+          return isSameDay(workoutDate, today) && 
+                 w.done && 
+                 w.workout_plan_id === workoutPlanForToday.id;
+        });
+
         setTodaysWorkout({
           id: workoutPlanForToday.id,
           isRestDay: false,
           name: workoutPlanForToday.title,
-          duration: `${workoutPlanForToday.duration_minutes} min`,
+          duration: `${averageDuration} min`,
           isCompleted: isTodaysWorkoutCompleted
         });
-        console.log(`Found today's workout plan: ${workoutPlanForToday.title}, completed: ${isTodaysWorkoutCompleted}`);
       } else {
         setTodaysWorkout({
           isRestDay: true,
@@ -106,7 +122,6 @@ export default function WorkoutsScreen() {
           duration: '0 min',
           isCompleted: false
         });
-        console.log(`No workout plan found for ${currentDay}, it's a rest day`);
       }
     } catch (error) {
       console.error('Error loading today\'s workout:', error);
@@ -127,17 +142,22 @@ export default function WorkoutsScreen() {
         return;
       }
 
+      // Fetch all workout plans first
       const data = await getWorkoutPlans(session.user.id);
+      
+      // Store the current filter type to use for filtering
+      const currentFilter = filterType;
+      console.log(`Applying filter: ${currentFilter}`);
       
       // Apply filter consistently every time workouts are loaded
       let filteredData = data;
-      if (filterType !== 'all') {
-        filteredData = data.filter(plan => plan.workout_type === filterType);
+      if (currentFilter !== 'all') {
+        filteredData = data.filter(plan => plan.workout_type === currentFilter);
       }
 
       // Only set the filtered workout plans
       setWorkoutPlans(filteredData);
-      console.log(`Loaded ${filteredData.length} ${filterType} workout plans for user ${session.user.id}`);
+      console.log(`Loaded ${filteredData.length} ${currentFilter} workout plans out of ${data.length} total plans`);
       
     } catch (error) {
       console.error('Error loading workout plans:', error);
@@ -334,36 +354,38 @@ export default function WorkoutsScreen() {
   };
 
   const toggleFilter = () => {
+    let newFilter: 'all' | 'split' | 'custom';
+    
     if (filterType === 'all') {
-      setFilterType('split');
+      newFilter = 'split';
     } else if (filterType === 'split') {
-      setFilterType('custom');
+      newFilter = 'custom';
     } else {
-      setFilterType('all');
+      newFilter = 'all';
     }
+    
+    // Set the new filter state
+    setFilterType(newFilter);
+    
+    console.log(`Filter changed to: ${newFilter}`);
   };
 
   useFocusEffect(
     useCallback(() => {
       if (session?.user?.id) {
-        // Only load today's workout once when the screen is first focused
-        // or when returning to the screen after being away
+        console.log("Screen focused, current filter:", filterType);
+        
+        // Load today's workout
         loadTodaysWorkout();
         
-        // Always refresh the workout plans with filters
+        // Load workout plans with current filter
         loadWorkoutPlans();
+        
+        // Calculate streak
         calculateStreak();
       }
-    }, [session?.user?.id]) // Remove filterType dependency from here
+    }, [session?.user?.id, filterType]) // Add filterType as a dependency
   );
-
-  // Use separate effect to handle filter changes
-  useEffect(() => {
-    if (session?.user?.id && !isLoading) {
-      // Only reload workout plans when filter changes, not today's workout
-      loadWorkoutPlans();
-    }
-  }, [filterType, session?.user?.id]);
 
   // Initial load effect
   useEffect(() => {
@@ -400,7 +422,10 @@ export default function WorkoutsScreen() {
                   {todaysWorkout.isRestDay ? 'Rest Day' : todaysWorkout.name}
                 </Text>
                 {!todaysWorkout.isRestDay && (
-                  <Text style={styles.workoutDuration}>{todaysWorkout.duration}</Text>
+                  <View style={styles.durationContainer}>
+                    <Clock size={16} color="#8E8E93" />
+                    <Text style={styles.workoutDuration}>{todaysWorkout.duration}</Text>
+                  </View>
                 )}
                 {todaysWorkout.isRestDay && (
                   <Text style={styles.workoutDuration}>Recovery and muscle growth</Text>
@@ -576,6 +601,16 @@ const styles = StyleSheet.create({
   workoutDuration: {
     fontSize: 16,
     color: '#8E8E93',
+  },
+  durationContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  durationSymbol: {
+    fontSize: 16,
+    color: '#8E8E93',
+    marginRight: 2,
   },
   startButton: {
     flexDirection: 'row',

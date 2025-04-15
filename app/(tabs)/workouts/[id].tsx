@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Platform, StatusBar, SafeAreaView, KeyboardAvoidingView, Keyboard, TouchableWithoutFeedback, Alert, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { X, Clock, ChartBar as BarChart3, Plus, CalendarClock, Scale, File as FileEdit, Dumbbell, Trash, Save, Trash2 } from 'lucide-react-native';
+import { X, Clock, ChartBar as BarChart3, Plus, CalendarClock, Scale, File as FileEdit, Dumbbell, Trash, Save, Trash2, Pencil } from 'lucide-react-native';
 import { format } from 'date-fns';
 import { getWorkoutPlan, deleteWorkoutPlan, createWorkout, WorkoutPlan, Workout } from '@/utils/workout';
-import { updateWorkoutPlan } from '@/utils/supabase'; // Import from supabase instead
+import { updateWorkoutPlan, supabase } from '@/utils/supabase'; // Import supabase from the same file
 import { Swipeable } from 'react-native-gesture-handler';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { findExerciseType, exercisesByWorkoutType } from '@/utils/exercises';
@@ -17,6 +17,9 @@ interface WorkoutSet {
   reps: string;
   type: SetType;
   notes?: string;
+  prevWeight?: string; // Add this for tracking previous workout values
+  prevReps?: string;   // Add this for tracking previous workout values
+  prevNotes?: string;  // Add this for tracking previous workout values
 }
 
 interface ExerciseProgress {
@@ -53,6 +56,7 @@ export default function WorkoutDetailScreen() {
   const [workoutStartTime, setWorkoutStartTime] = useState<Date | null>(null);
   const [workoutEndTime, setWorkoutEndTime] = useState<Date | null>(null);
   const [isWorkoutActive, setIsWorkoutActive] = useState(false);
+  const [editingExercise, setEditingExercise] = useState<string | null>(null);
 
   const startRestTimer = () => {
     setIsTimerRunning(true);
@@ -155,6 +159,28 @@ export default function WorkoutDetailScreen() {
     );
   };
 
+  const toggleEditMode = (exerciseId: string | null) => {
+    setEditingExercise(exerciseId === editingExercise ? null : exerciseId);
+  };
+
+  const handleDeleteSet = (exerciseId: string, setId: string) => {
+    setExercises(prev => prev.map(exercise => {
+      if (exercise.id === exerciseId) {
+        return {
+          ...exercise,
+          sets: exercise.sets.filter(set => set.id !== setId)
+        };
+      }
+      return exercise;
+    }));
+    
+    if (!isWorkoutActive && !workoutStartTime) {
+      console.log("Set removed - will update workout plan when saved");
+    } else {
+      console.log("Set removed - will only affect this workout session, not the plan");
+    }
+  };
+
   useEffect(() => {
     if (workoutId) {
       loadWorkoutPlan(workoutId);
@@ -174,25 +200,140 @@ export default function WorkoutDetailScreen() {
       setWorkoutPlan(plan);
       setWorkoutName(plan.title || '');
       setNotes(plan.description || '');
-      // Initialize exercises from the workout plan only, don't load previous workouts
+      
+      // Initialize a map to store the most recent exercise data
+      const exercisePreviousData = new Map();
+      
+      try {
+        // First try to get the most recent workout from the same plan (for body weight and general data)
+        const { data: previousPlanWorkouts, error: previousPlanError } = await supabase
+          .from('workouts')
+          .select('id, title, date, bodyweight, user_id, exercises')
+          .eq('workout_plan_id', workoutPlanId)
+          .eq('done', true)
+          .order('date', { ascending: false })
+          .limit(1);
+        
+        // Set the previous workout for the plan itself (useful for bodyweight, etc.)
+        let previousWorkoutData = null;
+        if (!previousPlanError && previousPlanWorkouts && previousPlanWorkouts.length > 0) {
+          previousWorkoutData = previousPlanWorkouts[0];
+          setPreviousWorkout(previousWorkoutData);
+          setHasPreviousData(true);
+          console.log('Found previous workout data for this plan:', previousWorkoutData.id);
+          
+          if (previousWorkoutData.bodyweight) {
+            // Pre-fill bodyweight from previous workout of the same plan
+            setBodyWeight(String(previousWorkoutData.bodyweight));
+          }
+        }
+        
+        // Now get ALL completed workouts to find the most recent data for each exercise
+        const { data: allCompletedWorkouts, error: allWorkoutsError } = await supabase
+          .from('workouts')
+          .select('id, date, exercises')
+          .eq('done', true)
+          .eq('user_id', plan.user_id)
+          .order('date', { ascending: false })
+          .limit(50); // Get the 50 most recent workouts to search through
+        
+        if (!allWorkoutsError && allCompletedWorkouts && allCompletedWorkouts.length > 0) {
+          console.log(`Found ${allCompletedWorkouts.length} completed workouts to search for exercise data`);
+          
+          // For each exercise in the current plan
+          if (plan.exercises) {
+            for (const exercise of plan.exercises) {
+              // Look through all workouts to find the most recent data for this specific exercise
+              for (const workout of allCompletedWorkouts) {
+                if (workout.exercises) {
+                  // Find this exercise in the workout
+                  const matchingExercise = workout.exercises.find(
+                    ex => ex.id === exercise.id || ex.name === exercise.name
+                  );
+                  
+                  if (matchingExercise && matchingExercise.setDetails && matchingExercise.setDetails.length > 0) {
+                    // Found data for this exercise - check if it's the most recent
+                    if (!exercisePreviousData.has(exercise.id) || 
+                        new Date(workout.date) > new Date(exercisePreviousData.get(exercise.id).date)) {
+                      
+                      // This is the most recent data for this exercise
+                      exercisePreviousData.set(exercise.id, {
+                        date: workout.date,
+                        exerciseData: matchingExercise
+                      });
+                      
+                      console.log(`Found most recent data for ${exercise.name} from workout on ${workout.date}`);
+                    }
+                    
+                    // No need to check more workouts if we found one with this exercise
+                    break;
+                  }
+                }
+              }
+            }
+          }
+        }
+        
+      } catch (prevError) {
+        console.log('Error fetching previous workout data:', prevError);
+        // Continue without previous data, not a critical error
+      }
+      
+      // Initialize exercises from the workout plan
       const planExercises = plan.exercises?.map(exercise => {
+        // Get the most recent data for this specific exercise
+        const mostRecentData = exercisePreviousData.get(exercise.id);
+        const prevExerciseData = mostRecentData ? mostRecentData.exerciseData : null;
+        
+        if (prevExerciseData) {
+          console.log(`Exercise ${exercise.name}: most recent data found from ${mostRecentData.date}, with ${prevExerciseData.setDetails?.length || 0} sets`);
+        } else {
+          console.log(`Exercise ${exercise.name}: no previous data found`);
+        }
+        
         return {
           id: exercise.id,
           name: exercise.name,
-          type: exercise.type, // Include exercise type
-          // Create empty sets based on the number specified in the plan
-          sets: Array(exercise.sets || 3).fill(null).map((_, index) => ({
-            id: `new-${exercise.id}-${index}`,
-            weight: '',
-            reps: '',
-            type: 'normal',
-            notes: ''
-          }))
+          type: exercise.type,
+          // Create sets based on the number specified in the plan
+          sets: Array(exercise.sets || 3).fill(null).map((_, index) => {
+            // Only use previous set data if index is within the available sets
+            const prevSetData = prevExerciseData && 
+                              prevExerciseData.setDetails && 
+                              index < prevExerciseData.setDetails.length ? 
+                              prevExerciseData.setDetails[index] : null;
+            
+            // Debug the specific set data we're working with
+            if (prevSetData) {
+              console.log(`Set ${index+1} for ${exercise.name}: prev weight=${prevSetData.weight}, reps=${prevSetData.reps}`);
+            }
+            
+            // Extract the values properly with fallbacks for each field
+            const prevWeight = prevSetData && prevSetData.weight !== undefined && prevSetData.weight !== null ? 
+              String(prevSetData.weight) : '';
+            
+            const prevReps = prevSetData && prevSetData.reps !== undefined && prevSetData.reps !== null ? 
+              String(prevSetData.reps) : '';
+            
+            const prevNotes = prevSetData && prevSetData.notes ? prevSetData.notes : '';
+            
+            return {
+              id: `new-${exercise.id}-${index}`,
+              weight: '', // Start with empty values for the new workout
+              reps: '',
+              type: prevSetData ? prevSetData.type || 'normal' : 'normal',
+              notes: '',
+              // Include previous workout data with explicit checks for undefined/null
+              prevWeight,
+              prevReps,
+              prevNotes
+            };
+          })
         };
       }) || [];
-      // Set exercises directly from plan without checking previous workouts
+      
       setExercises(planExercises);
-      setHasPreviousData(false);
+      
     } catch (error) {
       console.error('Error loading workout plan:', error);
       setError('Failed to load workout details');
@@ -311,12 +452,26 @@ export default function WorkoutDetailScreen() {
   const addSet = (exerciseId: string) => {
     setExercises(prev => prev.map(exercise => {
       if (exercise.id === exerciseId) {
+        // Find the current number of sets for this exercise
+        const currentSetCount = exercise.sets.length;
+        
+        // If we have a set in the current exercise with data (from any previous workout),
+        // use the last set's data as a reference for new sets
+        const lastSet = exercise.sets[currentSetCount - 1];
+        
+        // Create new set with previous data if available
         const newSet: WorkoutSet = {
           id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
           weight: '',
           reps: '',
-          type: 'normal'
+          type: 'normal',
+          notes: '',
+          // Add previous data either from the previous set's data or empty
+          prevWeight: lastSet?.prevWeight || '',
+          prevReps: lastSet?.prevReps || '', 
+          prevNotes: lastSet?.prevNotes || ''
         };
+        
         return {
           ...exercise,
           sets: [...exercise.sets, newSet]
@@ -324,23 +479,42 @@ export default function WorkoutDetailScreen() {
       }
       return exercise;
     }));
+    
+    // Log status messages for clarity
+    if (!isWorkoutActive && !workoutStartTime) {
+      console.log("Set added - will update workout plan when saved");
+    } else {
+      console.log("Set added - will only affect this workout session, not the plan");
+    }
   };
 
   const updateSet = (exerciseId: string, setId: string, field: keyof WorkoutSet, value: string) => {
-    setExercises(prev => prev.map(exercise => {
-      if (exercise.id === exerciseId) {
-        return {
-          ...exercise,
-          sets: exercise.sets.map(set => {
-            if (set.id === setId) {
-              return { ...set, [field]: value };
-            }
-            return set;
-          })
-        };
+    if (field === 'weight' || field === 'reps') {
+      const isValidNumericInput = field === 'weight' 
+        ? /^(\d*\.?\d*)$/.test(value) 
+        : /^\d*$/.test(value);
+      
+      if (value !== '' && !isValidNumericInput) {
+        return;
       }
-      return exercise;
-    }));
+    }
+    
+    setExercises(prev => {
+      const updatedExercises = [...prev];
+      const exerciseIndex = updatedExercises.findIndex(e => e.id === exerciseId);
+      if (exerciseIndex === -1) return prev;
+      
+      const updatedExercise = {...updatedExercises[exerciseIndex]};
+      const setIndex = updatedExercise.sets.findIndex(s => s.id === setId);
+      if (setIndex === -1) return prev;
+      
+      const updatedSets = [...updatedExercise.sets];
+      updatedSets[setIndex] = {...updatedSets[setIndex], [field]: value};
+      updatedExercise.sets = updatedSets;
+      updatedExercises[exerciseIndex] = updatedExercise;
+      
+      return updatedExercises;
+    });
   };
 
   const toggleSetType = (exerciseId: string, setId: string) => {
@@ -381,17 +555,6 @@ export default function WorkoutDetailScreen() {
     }));
   };
 
-  const renderRightActions = (exerciseId: string, setId: string) => {
-    return (
-      <TouchableOpacity
-        style={styles.deleteAction}
-        onPress={() => deleteSet(exerciseId, setId)}
-      >
-        <Trash2 size={24} color="#FFFFFF" />
-      </TouchableOpacity>
-    );
-  };
-
   const renderWorkoutDeleteAction = () => {
     return (
       <TouchableOpacity
@@ -407,32 +570,32 @@ export default function WorkoutDetailScreen() {
     if (!workoutPlan || !workoutId) return;
 
     try {
-      // Format exercises for workout plan (no reps/weight)
-      // Make sure we preserve the set count and type from the original exercises
+      const originalPlan = workoutPlan;
+      
       const planExercises = exercises.map(exercise => ({
         id: exercise.id,
         name: exercise.name,
-        type: exercise.type, // Include exercise type
-        sets: exercise.sets.length
+        type: exercise.type,
+        sets: isWorkoutActive || workoutStartTime ? 
+          (originalPlan.exercises?.find(e => e.id === exercise.id)?.sets || exercise.sets.length) : 
+          exercise.sets.length
       }));
 
-      // Always update the workout plan with the latest exercises
       await updateWorkoutPlan(workoutId, {
         title: workoutName,
         description: notes,
-        exercises: planExercises // Store only exercise structure in workout_plans table
+        exercises: planExercises
       });
       
-      console.log("Updated workout plan with new exercises");
+      console.log("Updated workout plan with" + 
+        (isWorkoutActive || workoutStartTime ? " preserved set counts" : " new set counts"));
       
-      // Only create a workout session if the workout was started
       if (isWorkoutActive || workoutStartTime) {
-        // Format exercises for workout tracking (with reps/weight/setDetails)
         const workoutExercises = exercises.map(exercise => {
           return {
             id: exercise.id,
             name: exercise.name,
-            type: exercise.type, // Include exercise type
+            type: exercise.type,
             sets: exercise.sets.length,
             setDetails: exercise.sets.map(set => ({
               id: set.id,
@@ -444,11 +607,7 @@ export default function WorkoutDetailScreen() {
           };
         });
         
-        // If the workout has been explicitly ended, use that end time
-        // Otherwise, if it was started but not explicitly ended, set the current time as end time
         const endTimeToUse = workoutEndTime || (isWorkoutActive ? new Date() : undefined);
-            
-        // Consider a workout done if it's been started (regardless of whether it has an explicit end time)
         const isDone = isWorkoutActive || !!workoutEndTime;
         
         const workoutData = {
@@ -458,11 +617,11 @@ export default function WorkoutDetailScreen() {
           start_time: workoutStartTime?.toISOString(),
           end_time: endTimeToUse?.toISOString(),
           notes: notes,
-          exercises: workoutExercises, // Include complete exercise data with sets and reps
+          exercises: workoutExercises,
           bodyweight: bodyWeight ? parseFloat(bodyWeight) : undefined,
           user_id: workoutPlan.user_id,
-          calories_burned: 0, // Calculate or leave as default
-          done: isDone // Mark as done if it was started or has an end time
+          calories_burned: 0,
+          done: isDone
         };
                 
         const savedWorkout = await createWorkout(workoutData);
@@ -512,24 +671,19 @@ export default function WorkoutDetailScreen() {
   };
 
   const navigateToExerciseStats = (exerciseId: string, exerciseName: string) => {
-    // First check if the exercise has an ID, as custom exercises may not have a unique ID
     let idToUse = exerciseId;
     
-    // If the ID starts with "custom-", create a special ID for the stats page
-    // This is needed because the stats page expects a unique ID for the exercise
     if (exerciseId.startsWith('custom-')) {
-      // For custom exercises, create an ID based on the name
       idToUse = `exercise-${exerciseName.toLowerCase().replace(/\s+/g, '-')}-stats`;
     }
     
-    // Navigate to the stats page with the exercise ID and name
-    // Also pass the current workoutId so we can navigate back to this workout
     router.push({
       pathname: '/stats/[id]',
       params: { 
         id: idToUse,
         exerciseName: exerciseName,
-        workoutId: workoutId // Pass the workout ID to enable proper back navigation
+        workoutId: workoutId,
+        returnPath: `/workouts/${workoutId}`
       }
     });
   };
@@ -560,13 +714,12 @@ export default function WorkoutDetailScreen() {
       keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}>
       <SafeAreaView style={styles.container}>
         <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
-        <ScrollView
-          style={styles.content}
-          keyboardShouldPersistTaps="handled">
-          <View style={styles.header}>
-            <TouchableOpacity onPress={() => router.back()} style={styles.closeButton} activeOpacity={0.7}>
-              <X size={24} color="#007AFF" />
-            </TouchableOpacity>
+        
+        <View style={styles.fixedHeader}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.closeButton} activeOpacity={0.7}>
+            <X size={24} color="#007AFF" />
+          </TouchableOpacity>
+          <View style={styles.headerCenter}>
             <Text style={styles.date}>
               {(() => {
                 try {
@@ -577,100 +730,106 @@ export default function WorkoutDetailScreen() {
                 }
               })()}
             </Text>
-            <View style={styles.headerActions}>
-              <TouchableOpacity 
-                style={[styles.headerButton, showRestTimer && styles.headerButtonActive]} 
-                onPress={toggleRestTimer} 
-                activeOpacity={0.7}
-              >
-                <Clock size={24} color={showRestTimer ? "#34C759" : "#007AFF"} />
-              </TouchableOpacity>
-            </View>
           </View>
-
-          <View style={styles.workoutInfo}>
-            <Swipeable
-              renderRightActions={renderWorkoutDeleteAction}
-              rightThreshold={40}
+          <View style={styles.headerActions}>
+            <TouchableOpacity 
+              style={[styles.headerButton, showRestTimer && styles.headerButtonActive]} 
+              onPress={toggleRestTimer} 
+              activeOpacity={0.7}
             >
-              <View>
-                <TextInput
-                  style={styles.workoutNameInput}
-                  value={workoutName}
-                  onChangeText={setWorkoutName}
-                  placeholder="Workout Name"
-                  placeholderTextColor="#8E8E93"
-                />
+              <Clock size={24} color={showRestTimer ? "#34C759" : "#007AFF"} />
+            </TouchableOpacity>
+          </View>
+        </View>
+        
+        <ScrollView
+          style={[styles.content]}
+          contentContainerStyle={{ 
+            paddingTop: Platform.OS === 'android' ? 
+              80 + (StatusBar.currentHeight ?? 0) : 80, 
+            paddingBottom: 20 
+          }}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={true}
+        >
+          <View style={styles.workoutInfo}>
+            <View>
+              <TextInput
+                style={styles.workoutNameInput}
+                value={workoutName}
+                onChangeText={setWorkoutName}
+                placeholder="Workout Name"
+                placeholderTextColor="#8E8E93"
+              />
 
-                <View style={styles.workoutTimes}>
-                  <View style={styles.timeInfo}>
-                    <Clock size={20} color="#007AFF" />
-                    <Text style={styles.timeText}>
-                      {(() => {
-                        try {
-                          if (workoutStartTime) {
-                            return `${format(workoutStartTime, 'HH:mm')}${
-                              workoutEndTime ? ` - ${format(workoutEndTime, 'HH:mm')}` : ''
-                            }`;
-                          }
-                          return 'Not started';
-                        } catch (error) {
-                          console.warn('Error formatting workout time:', error);
-                          return 'Time unavailable';
+              <View style={styles.workoutTimes}>
+                <View style={styles.timeInfo}>
+                  <Clock size={20} color="#007AFF" />
+                  <Text style={styles.timeText}>
+                    {(() => {
+                      try {
+                        if (workoutStartTime) {
+                          return `${format(workoutStartTime, 'HH:mm')}${
+                            workoutEndTime ? ` - ${format(workoutEndTime, 'HH:mm')}` : ''
+                          }`;
                         }
-                      })()}
-                    </Text>
-                  </View>
-                  <TouchableOpacity
-                    style={[
-                      styles.workoutStateButton,
-                      isWorkoutActive && styles.workoutStateButtonActive
-                    ]}
-                    onPress={isWorkoutActive ? endWorkout : startWorkout}
-                  >
-                    <Text style={styles.workoutStateButtonText}>
-                      {isWorkoutActive ? 'End Workout' : 'Start Workout'}
-                    </Text>
-                  </TouchableOpacity>
+                        return 'Not started';
+                      } catch (error) {
+                        console.warn('Error formatting workout time:', error);
+                        return 'Time unavailable';
+                      }
+                    })()}
+                  </Text>
                 </View>
-                
-                <View style={styles.infoGrid}>
-                  <View style={styles.infoCard}>
-                    <View style={styles.infoIconContainer}>
-                      <Scale size={20} color="#FF9500" />
-                    </View>
-                    <View style={styles.infoContent}>
-                      <Text style={styles.infoLabel}>Body Weight</Text>
-                      <TextInput
-                        style={styles.infoInput}
-                        value={bodyWeight}
-                        onChangeText={setBodyWeight}
-                        placeholder="Enter weight"
-                        keyboardType="numeric"
-                        placeholderTextColor="#8E8E93"
-                      />
-                    </View>
+                <TouchableOpacity
+                  style={[
+                    styles.workoutStateButton,
+                    isWorkoutActive && styles.workoutStateButtonActive
+                  ]}
+                  onPress={isWorkoutActive ? endWorkout : startWorkout}
+                >
+                  <Text style={styles.workoutStateButtonText}>
+                    {isWorkoutActive ? 'End Workout' : 'Start Workout'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              
+              <View style={styles.infoGrid}>
+                <View style={styles.infoCard}>
+                  <View style={styles.infoIconContainer}>
+                    <Scale size={20} color="#FF9500" />
                   </View>
+                  <View style={styles.infoContent}>
+                    <Text style={styles.infoLabel}>Body Weight</Text>
+                    <TextInput
+                      style={styles.infoInput}
+                      value={bodyWeight}
+                      onChangeText={setBodyWeight}
+                      placeholder="Enter weight"
+                      keyboardType="numeric"
+                      placeholderTextColor="#8E8E93"
+                    />
+                  </View>
+                </View>
 
-                  <View style={[styles.infoCard, styles.notesCard]}>
-                    <View style={styles.infoIconContainer}>
-                      <FileEdit size={20} color="#FF3B30" />
-                    </View>
-                    <View style={styles.infoContent}>
-                      <Text style={styles.infoLabel}>Notes</Text>
-                      <TextInput
-                        style={[styles.infoInput, styles.notesInput]}
-                        value={notes}
-                        onChangeText={setNotes}
-                        placeholder="Add workout notes..."
-                        placeholderTextColor="#8E8E93"
-                        multiline
-                      />
-                    </View>
+                <View style={[styles.infoCard, styles.notesCard]}>
+                  <View style={styles.infoIconContainer}>
+                    <FileEdit size={20} color="#FF3B30" />
+                  </View>
+                  <View style={styles.infoContent}>
+                    <Text style={styles.infoLabel}>Notes</Text>
+                    <TextInput
+                      style={[styles.infoInput, styles.notesInput]}
+                      value={notes}
+                      onChangeText={setNotes}
+                      placeholder="Add workout notes..."
+                      placeholderTextColor="#8E8E93"
+                      multiline
+                    />
                   </View>
                 </View>
               </View>
-            </Swipeable>
+            </View>
           </View>
 
           {exercises.length === 0 ? (
@@ -691,9 +850,13 @@ export default function WorkoutDetailScreen() {
                 ]}
                 onLongPress={() => handleDragStart(exercise.id)}
                 onPress={() => {
-                  if (draggingExercise && draggingExercise !== exercise.id) {
-                    handleMoveExercise(draggingExercise, exercise.id);
-                    handleDragEnd();
+                  if (draggingExercise) {
+                    if (draggingExercise === exercise.id) {
+                      handleDragEnd();
+                    } else {
+                      handleMoveExercise(draggingExercise, exercise.id);
+                      handleDragEnd();
+                    }
                   }
                 }}
                 delayLongPress={200}
@@ -703,70 +866,81 @@ export default function WorkoutDetailScreen() {
                   <Text style={styles.exerciseName}>{exercise.name}</Text>
                   {exercise.type && <Text style={styles.exerciseType}>{exercise.type}</Text>}
                 </View>
+                
+                
                 {exercise.sets.map((set, setIndex) => (
-                  <Swipeable
-                    key={setIndex}
-                    renderRightActions={() => renderRightActions(exercise.id, set.id)}
-                    rightThreshold={40}
-                  >
-                    <View style={styles.setContainer}>
-                      <TouchableOpacity
-                        onPress={() => toggleSetType(exercise.id, set.id)}
-                        style={[
-                          styles.setNumber,
-                          set.type === 'warmup' && styles.warmupNumber,
-                          set.type === 'dropset' && styles.dropsetNumber,
-                        ]}>
-                        <Text style={[
-                          styles.setNumberText,
-                          showTypeLabel.id === set.id && showTypeLabel.show ? styles.hideNumber : null
-                        ]}>
-                          {showTypeLabel.id === set.id && showTypeLabel.show ?
-                            (set.type === 'warmup' ? 'W' : set.type === 'dropset' ? 'D' : 'N') :
-                            (setIndex + 1)
-                          }
-                        </Text>
-                      </TouchableOpacity>
-                      <View style={styles.setInputs}>
-                        <View style={styles.inputGroup}>
-                          <Text style={styles.inputLabel}>Weight</Text>
-                          <TextInput
-                            style={styles.input}
-                            keyboardType="numeric"
-                            value={set.weight}
-                            onChangeText={(text) => updateSet(exercise.id, set.id, 'weight', text)}
-                            placeholder={set.weight || "kg"}
-                            placeholderTextColor="#C7C7CC"
-                          />
-                        </View>
+                  <View key={setIndex} style={styles.setContainer}>
+                    <TouchableOpacity
+                      onPress={() => editingExercise === exercise.id 
+                        ? handleDeleteSet(exercise.id, set.id) 
+                        : toggleSetType(exercise.id, set.id)}
+                      style={[
+                        styles.setNumber,
+                        set.type === 'warmup' && styles.warmupNumber,
+                        set.type === 'dropset' && styles.dropsetNumber,
+                      ]}>
+                      <Text style={[
+                        styles.setNumberText,
+                        showTypeLabel.id === set.id && showTypeLabel.show ? styles.hideNumber : null
+                      ]}>
+                        {editingExercise === exercise.id 
+                          ? 'X' 
+                          : (showTypeLabel.id === set.id && showTypeLabel.show
+                              ? (set.type === 'warmup' ? 'W' : set.type === 'dropset' ? 'D' : 'N') 
+                              : (setIndex + 1)
+                            )
+                        }
+                      </Text>
+                    </TouchableOpacity>
+                    <View style={styles.setInputs}>
+                      <View style={styles.inputGroup}>
+                        <Text style={styles.inputLabel}>Weight</Text>
+                        <TextInput
+                          style={styles.input}
+                          keyboardType="numeric"
+                          value={set.weight}
+                          onChangeText={(text) => updateSet(exercise.id, set.id, 'weight', text)}
+                          placeholder={set.prevWeight ? `${set.prevWeight}` : "kg"}
+                          placeholderTextColor={set.prevWeight ? "#C7C7CC" : "#C7C7CC"}
+                          maxLength={6}
+                          returnKeyType="done"
+                          blurOnSubmit={true}
+                          selectTextOnFocus={true}
+                          caretHidden={false}
+                        />
+                      </View>
 
-                        <View style={[styles.inputGroup, styles.smallInputGroup]}>
-                          <Text style={styles.inputLabel}>Reps</Text>
-                          <TextInput
-                            style={styles.input}
-                            keyboardType="numeric"
-                            value={set.reps}
-                            onChangeText={(text) => updateSet(exercise.id, set.id, 'reps', text)}
-                            placeholder={set.reps || "#"}
-                            placeholderTextColor="#C7C7CC"
-                          />
-                        </View>
+                      <View style={[styles.inputGroup, styles.smallInputGroup]}>
+                        <Text style={styles.inputLabel}>Reps</Text>
+                        <TextInput
+                          style={styles.input}
+                          keyboardType="numeric"
+                          value={set.reps}
+                          onChangeText={(text) => updateSet(exercise.id, set.id, 'reps', text)}
+                          placeholder={set.prevReps ? set.prevReps : "#"}
+                          placeholderTextColor={set.prevReps ? "#C7C7CC" : "#C7C7CC"}
+                          maxLength={3}
+                          returnKeyType="done"
+                          blurOnSubmit={true}
+                          selectTextOnFocus={true}
+                          caretHidden={false}
+                        />
+                      </View>
 
-                        <View style={[styles.inputGroup, styles.notesGroup]}>
-                          <Text style={styles.inputLabel}>Notes</Text>
-                          <TextInput
-                            style={[styles.input, styles.multilineInput]}
-                            value={set.notes}
-                            onChangeText={(text) => updateSet(exercise.id, set.id, 'notes', text)}
-                            placeholder={set.notes || "Notes"}
-                            placeholderTextColor="#C7C7CC"
-                            multiline
-                            numberOfLines={1}
-                          />
-                        </View>
+                      <View style={[styles.inputGroup, styles.notesGroup]}>
+                        <Text style={styles.inputLabel}>Notes</Text>
+                        <TextInput
+                          style={[styles.input, styles.multilineInput]}
+                          value={set.notes}
+                          onChangeText={(text) => updateSet(exercise.id, set.id, 'notes', text)}
+                          placeholder={set.prevNotes || "Notes"}
+                          placeholderTextColor={set.prevNotes ? "#C7C7CC" : "#C7C7CC"}
+                          multiline
+                          numberOfLines={1}
+                        />
                       </View>
                     </View>
-                  </Swipeable>
+                  </View>
                 ))}
 
                 <View style={styles.setActions}>
@@ -779,8 +953,12 @@ export default function WorkoutDetailScreen() {
                   </TouchableOpacity>
 
                   <View style={styles.setActionButtons}>
-                    <TouchableOpacity style={styles.actionButton} activeOpacity={0.7}>
-                      <Clock size={20} color="#007AFF" />
+                    <TouchableOpacity 
+                      style={[styles.actionButton, editingExercise === exercise.id && styles.actionButtonActive]} 
+                      onPress={() => toggleEditMode(exercise.id)}
+                      activeOpacity={0.7}
+                    >
+                      <Pencil size={20} color={editingExercise === exercise.id ? "#FFFFFF" : "#007AFF"} />
                     </TouchableOpacity>
                     <TouchableOpacity 
                       style={styles.actionButton} 
@@ -821,7 +999,6 @@ export default function WorkoutDetailScreen() {
           </View>
         </ScrollView>
 
-        {/* Timer Mini-Player */}
         {showRestTimer && (
           <View style={styles.miniPlayer}>
             <TouchableOpacity 
@@ -900,7 +1077,12 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
   },
-  header: {
+  fixedHeader: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -909,24 +1091,35 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: '#E5E5EA',
+    height: Platform.OS === 'android' ? 64 + (StatusBar.currentHeight ?? 0) : 64, 
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  headerCenter: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 4, 
+  },
+  date: {
+    fontSize: 18, 
+    fontWeight: 'bold',
+    color: '#000000',
+    textAlign: 'center',
   },
   closeButton: {
     padding: 8,
-  },
-  date: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#000000',
+    width: 40, 
   },
   headerActions: {
     flexDirection: 'row',
     gap: 16,
-  },
-  headerButton: {
-    padding: 8,
-  },
-  headerButtonActive: {
-    backgroundColor: '#E6FEE9',
+    width: 40, 
+    alignItems: 'flex-end',
+    justifyContent: 'flex-end',
   },
   workoutInfo: {
     backgroundColor: '#FFFFFF',
@@ -1092,7 +1285,7 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: '700',
     color: '#000000',
-    marginBottom: 12,
+    marginBottom: 0,
     flex: 1,
   },
   exerciseType: {
@@ -1206,6 +1399,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 2,
     elevation: 1,
+  },
+  actionButtonActive: {
+    backgroundColor: '#007AFF',
   },
   deleteButton: {
     backgroundColor: '#FFF2F2',
@@ -1362,5 +1558,27 @@ const styles = StyleSheet.create({
     height: '100%',
     borderTopRightRadius: 16,
     borderBottomRightRadius: 16,
+  },
+  editModeIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#007AFF',
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    marginBottom: 8,
+    alignSelf: 'flex-start',
+  },
+  editModeText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '500',
+    marginLeft: 6,
+  },
+  prevValueHint: {
+    fontSize: 10,
+    color: '#34C759',
+    marginTop: 2,
+    textAlign: 'right',
   },
 });
