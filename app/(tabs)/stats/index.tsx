@@ -4,16 +4,21 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { Search, ChartBar, TrendingUp, Dumbbell, ArrowRight, FolderIcon } from 'lucide-react-native';
 import { supabase } from '@/utils/supabase';
 import { useSession } from '@/utils/auth';
-import { ExerciseStats, getExerciseStatsFromWorkouts } from '@/utils/stats';
+import { ExerciseStats, getExerciseStatsFromWorkouts, getExerciseHistoryData } from '@/utils/stats';
 
 const categories = ['All', 'Chest', 'Back', 'Legs', 'Shoulders', 'Arms', 'Core'];
+
+// Add volumeProgress to the interface
+interface ExtendedExerciseStats extends ExerciseStats {
+  volumeProgress?: number;
+}
 
 export default function StatsScreen() {
   const router = useRouter();
   const { session } = useSession();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
-  const [exercises, setExercises] = useState<ExerciseStats[]>([]);
+  const [exercises, setExercises] = useState<ExtendedExerciseStats[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -23,12 +28,32 @@ export default function StatsScreen() {
       
       setLoading(true);
       console.log('Fetching exercise stats for user:', session.user.id);
-      // Use the new function that directly processes the workout JSONB data
       const stats = await getExerciseStatsFromWorkouts(session.user.id);
-      console.log(`Loaded ${stats.length} exercise stats`);
       
-      // Sort by last used date (most recent first)
-      const sortedStats = stats.sort((a, b) => {
+      // Calculate progress for each exercise
+      const statsWithProgress = await Promise.all(stats.map(async (exercise) => {
+        const historyData = await getExerciseHistoryData(session.user.id, exercise.name);
+        
+        if (historyData && historyData.length >= 2) {
+          const sortedData = historyData.sort((a, b) => 
+            new Date(a.date).getTime() - new Date(b.date).getTime()
+          );
+          
+          const firstEntry = sortedData[0];
+          const lastEntry = sortedData[sortedData.length - 1];
+          
+          const volumeProgress = ((lastEntry.volume - firstEntry.volume) / firstEntry.volume) * 100;
+          
+          return {
+            ...exercise,
+            volumeProgress: Math.round(volumeProgress)
+          };
+        }
+        
+        return exercise;
+      }));
+      
+      const sortedStats = statsWithProgress.sort((a, b) => {
         return new Date(b.lastUsed).getTime() - new Date(a.lastUsed).getTime();
       });
       
@@ -202,6 +227,7 @@ export default function StatsScreen() {
                     <Text style={styles.statValue}>{(exercise.totalVolume / 1000).toFixed(1)}k</Text>
                     <Text style={styles.statLabel}>Total Volume</Text>
                   </View>
+                  
                 </View>
               </View>
 
