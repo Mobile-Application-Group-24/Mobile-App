@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Platform, StatusBar, SafeAreaView, KeyboardAvoidingView, Keyboard, TouchableWithoutFeedback, Alert, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { X, Clock, ChartBar as BarChart3, Plus, CalendarClock, Scale, File as FileEdit, Dumbbell, Trash, Save, Trash2 } from 'lucide-react-native';
+import { X, Clock, ChartBar as BarChart3, Plus, CalendarClock, Scale, File as FileEdit, Dumbbell, Trash, Save, Trash2, Pencil } from 'lucide-react-native';
 import { format } from 'date-fns';
 import { getWorkoutPlan, deleteWorkoutPlan, createWorkout, WorkoutPlan, Workout } from '@/utils/workout';
 import { updateWorkoutPlan } from '@/utils/supabase'; // Import from supabase instead
@@ -53,6 +53,7 @@ export default function WorkoutDetailScreen() {
   const [workoutStartTime, setWorkoutStartTime] = useState<Date | null>(null);
   const [workoutEndTime, setWorkoutEndTime] = useState<Date | null>(null);
   const [isWorkoutActive, setIsWorkoutActive] = useState(false);
+  const [editingExercise, setEditingExercise] = useState<string | null>(null);
 
   const startRestTimer = () => {
     setIsTimerRunning(true);
@@ -153,6 +154,22 @@ export default function WorkoutDetailScreen() {
       ],
       { cancelable: true }
     );
+  };
+
+  const toggleEditMode = (exerciseId: string | null) => {
+    setEditingExercise(exerciseId === editingExercise ? null : exerciseId);
+  };
+
+  const handleDeleteSet = (exerciseId: string, setId: string) => {
+    setExercises(prev => prev.map(exercise => {
+      if (exercise.id === exerciseId) {
+        return {
+          ...exercise,
+          sets: exercise.sets.filter(set => set.id !== setId)
+        };
+      }
+      return exercise;
+    }));
   };
 
   useEffect(() => {
@@ -326,21 +343,50 @@ export default function WorkoutDetailScreen() {
     }));
   };
 
+  // Create a more efficient updateSet function with optimizations for numeric input
   const updateSet = (exerciseId: string, setId: string, field: keyof WorkoutSet, value: string) => {
-    setExercises(prev => prev.map(exercise => {
-      if (exercise.id === exerciseId) {
-        return {
-          ...exercise,
-          sets: exercise.sets.map(set => {
-            if (set.id === setId) {
-              return { ...set, [field]: value };
-            }
-            return set;
-          })
-        };
+    // Special handling for numeric fields
+    if (field === 'weight' || field === 'reps') {
+      // Only allow digits and a single decimal point for weight
+      const isValidNumericInput = field === 'weight' 
+        ? /^(\d*\.?\d*)$/.test(value)  // Allow decimal for weight
+        : /^\d*$/.test(value);         // Only digits for reps
+      
+      if (value !== '' && !isValidNumericInput) {
+        return; // Reject invalid input
       }
-      return exercise;
-    }));
+    }
+    
+    // Use immediate update pattern for better performance with fast typing
+    setExercises(prev => {
+      // Create shallow copy of the exercises array
+      const updatedExercises = [...prev];
+      
+      // Find the target exercise index
+      const exerciseIndex = updatedExercises.findIndex(e => e.id === exerciseId);
+      if (exerciseIndex === -1) return prev;
+      
+      // Create shallow copy of the exercise
+      const updatedExercise = {...updatedExercises[exerciseIndex]};
+      
+      // Find the target set index
+      const setIndex = updatedExercise.sets.findIndex(s => s.id === setId);
+      if (setIndex === -1) return prev;
+      
+      // Create shallow copy of sets array
+      const updatedSets = [...updatedExercise.sets];
+      
+      // Create new set object with updated value
+      updatedSets[setIndex] = {...updatedSets[setIndex], [field]: value};
+      
+      // Update exercise with new sets array
+      updatedExercise.sets = updatedSets;
+      
+      // Update exercises array with modified exercise
+      updatedExercises[exerciseIndex] = updatedExercise;
+      
+      return updatedExercises;
+    });
   };
 
   const toggleSetType = (exerciseId: string, setId: string) => {
@@ -379,17 +425,6 @@ export default function WorkoutDetailScreen() {
       }
       return exercise;
     }));
-  };
-
-  const renderRightActions = (exerciseId: string, setId: string) => {
-    return (
-      <TouchableOpacity
-        style={styles.deleteAction}
-        onPress={() => deleteSet(exerciseId, setId)}
-      >
-        <Trash2 size={24} color="#FFFFFF" />
-      </TouchableOpacity>
-    );
   };
 
   const renderWorkoutDeleteAction = () => {
@@ -560,13 +595,13 @@ export default function WorkoutDetailScreen() {
       keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}>
       <SafeAreaView style={styles.container}>
         <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
-        <ScrollView
-          style={styles.content}
-          keyboardShouldPersistTaps="handled">
-          <View style={styles.header}>
-            <TouchableOpacity onPress={() => router.back()} style={styles.closeButton} activeOpacity={0.7}>
-              <X size={24} color="#007AFF" />
-            </TouchableOpacity>
+        
+        {/* Fixed header that stays visible while scrolling */}
+        <View style={styles.fixedHeader}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.closeButton} activeOpacity={0.7}>
+            <X size={24} color="#007AFF" />
+          </TouchableOpacity>
+          <View style={styles.headerCenter}>
             <Text style={styles.date}>
               {(() => {
                 try {
@@ -577,17 +612,28 @@ export default function WorkoutDetailScreen() {
                 }
               })()}
             </Text>
-            <View style={styles.headerActions}>
-              <TouchableOpacity 
-                style={[styles.headerButton, showRestTimer && styles.headerButtonActive]} 
-                onPress={toggleRestTimer} 
-                activeOpacity={0.7}
-              >
-                <Clock size={24} color={showRestTimer ? "#34C759" : "#007AFF"} />
-              </TouchableOpacity>
-            </View>
           </View>
-
+          <View style={styles.headerActions}>
+            <TouchableOpacity 
+              style={[styles.headerButton, showRestTimer && styles.headerButtonActive]} 
+              onPress={toggleRestTimer} 
+              activeOpacity={0.7}
+            >
+              <Clock size={24} color={showRestTimer ? "#34C759" : "#007AFF"} />
+            </TouchableOpacity>
+          </View>
+        </View>
+        
+        <ScrollView
+          style={[styles.content]}
+          contentContainerStyle={{ 
+            paddingTop: Platform.OS === 'android' ? 
+              80 + (StatusBar.currentHeight ?? 0) : 80, // Increase padding to ensure content isn't hidden
+            paddingBottom: 20 // Add bottom padding for better scrolling experience
+          }}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={true}
+        >
           <View style={styles.workoutInfo}>
             <Swipeable
               renderRightActions={renderWorkoutDeleteAction}
@@ -703,70 +749,88 @@ export default function WorkoutDetailScreen() {
                   <Text style={styles.exerciseName}>{exercise.name}</Text>
                   {exercise.type && <Text style={styles.exerciseType}>{exercise.type}</Text>}
                 </View>
+                
+                {/* Add edit mode indicator with pencil icon when editing is active */}
+                {editingExercise === exercise.id && (
+                  <View style={styles.editModeIndicator}>
+                    <Pencil size={16} color="#FFFFFF" />
+                    <Text style={styles.editModeText}>Tap X to delete sets</Text>
+                  </View>
+                )}
+                
                 {exercise.sets.map((set, setIndex) => (
-                  <Swipeable
-                    key={setIndex}
-                    renderRightActions={() => renderRightActions(exercise.id, set.id)}
-                    rightThreshold={40}
-                  >
-                    <View style={styles.setContainer}>
-                      <TouchableOpacity
-                        onPress={() => toggleSetType(exercise.id, set.id)}
-                        style={[
-                          styles.setNumber,
-                          set.type === 'warmup' && styles.warmupNumber,
-                          set.type === 'dropset' && styles.dropsetNumber,
-                        ]}>
-                        <Text style={[
-                          styles.setNumberText,
-                          showTypeLabel.id === set.id && showTypeLabel.show ? styles.hideNumber : null
-                        ]}>
-                          {showTypeLabel.id === set.id && showTypeLabel.show ?
-                            (set.type === 'warmup' ? 'W' : set.type === 'dropset' ? 'D' : 'N') :
-                            (setIndex + 1)
-                          }
-                        </Text>
-                      </TouchableOpacity>
-                      <View style={styles.setInputs}>
-                        <View style={styles.inputGroup}>
-                          <Text style={styles.inputLabel}>Weight</Text>
-                          <TextInput
-                            style={styles.input}
-                            keyboardType="numeric"
-                            value={set.weight}
-                            onChangeText={(text) => updateSet(exercise.id, set.id, 'weight', text)}
-                            placeholder={set.weight || "kg"}
-                            placeholderTextColor="#C7C7CC"
-                          />
-                        </View>
+                  <View key={setIndex} style={styles.setContainer}>
+                    <TouchableOpacity
+                      onPress={() => editingExercise === exercise.id 
+                        ? handleDeleteSet(exercise.id, set.id) 
+                        : toggleSetType(exercise.id, set.id)}
+                      style={[
+                        styles.setNumber,
+                        set.type === 'warmup' && styles.warmupNumber,
+                        set.type === 'dropset' && styles.dropsetNumber,
+                      ]}>
+                      <Text style={[
+                        styles.setNumberText,
+                        showTypeLabel.id === set.id && showTypeLabel.show ? styles.hideNumber : null
+                      ]}>
+                        {editingExercise === exercise.id 
+                          ? 'X' 
+                          : (showTypeLabel.id === set.id && showTypeLabel.show
+                              ? (set.type === 'warmup' ? 'W' : set.type === 'dropset' ? 'D' : 'N') 
+                              : (setIndex + 1)
+                            )
+                        }
+                      </Text>
+                    </TouchableOpacity>
+                    <View style={styles.setInputs}>
+                      <View style={styles.inputGroup}>
+                        <Text style={styles.inputLabel}>Weight</Text>
+                        <TextInput
+                          style={styles.input}
+                          keyboardType="numeric"
+                          value={set.weight}
+                          onChangeText={(text) => updateSet(exercise.id, set.id, 'weight', text)}
+                          placeholder="kg"
+                          placeholderTextColor="#C7C7CC"
+                          maxLength={6}
+                          returnKeyType="done"
+                          blurOnSubmit={true}
+                          selectTextOnFocus={true}  // Select all text when focused for easier editing
+                          caretHidden={false}       // Ensure caret is visible
+                        />
+                      </View>
 
-                        <View style={[styles.inputGroup, styles.smallInputGroup]}>
-                          <Text style={styles.inputLabel}>Reps</Text>
-                          <TextInput
-                            style={styles.input}
-                            keyboardType="numeric"
-                            value={set.reps}
-                            onChangeText={(text) => updateSet(exercise.id, set.id, 'reps', text)}
-                            placeholder={set.reps || "#"}
-                            placeholderTextColor="#C7C7CC"
-                          />
-                        </View>
+                      <View style={[styles.inputGroup, styles.smallInputGroup]}>
+                        <Text style={styles.inputLabel}>Reps</Text>
+                        <TextInput
+                          style={styles.input}
+                          keyboardType="numeric"
+                          value={set.reps}
+                          onChangeText={(text) => updateSet(exercise.id, set.id, 'reps', text)}
+                          placeholder="#"
+                          placeholderTextColor="#C7C7CC"
+                          maxLength={3}
+                          returnKeyType="done"
+                          blurOnSubmit={true}
+                          selectTextOnFocus={true}  // Select all text when focused for easier editing
+                          caretHidden={false}       // Ensure caret is visible
+                        />
+                      </View>
 
-                        <View style={[styles.inputGroup, styles.notesGroup]}>
-                          <Text style={styles.inputLabel}>Notes</Text>
-                          <TextInput
-                            style={[styles.input, styles.multilineInput]}
-                            value={set.notes}
-                            onChangeText={(text) => updateSet(exercise.id, set.id, 'notes', text)}
-                            placeholder={set.notes || "Notes"}
-                            placeholderTextColor="#C7C7CC"
-                            multiline
-                            numberOfLines={1}
-                          />
-                        </View>
+                      <View style={[styles.inputGroup, styles.notesGroup]}>
+                        <Text style={styles.inputLabel}>Notes</Text>
+                        <TextInput
+                          style={[styles.input, styles.multilineInput]}
+                          value={set.notes}
+                          onChangeText={(text) => updateSet(exercise.id, set.id, 'notes', text)}
+                          placeholder={set.notes || "Notes"}
+                          placeholderTextColor="#C7C7CC"
+                          multiline
+                          numberOfLines={1}
+                        />
                       </View>
                     </View>
-                  </Swipeable>
+                  </View>
                 ))}
 
                 <View style={styles.setActions}>
@@ -779,8 +843,12 @@ export default function WorkoutDetailScreen() {
                   </TouchableOpacity>
 
                   <View style={styles.setActionButtons}>
-                    <TouchableOpacity style={styles.actionButton} activeOpacity={0.7}>
-                      <Clock size={20} color="#007AFF" />
+                    <TouchableOpacity 
+                      style={[styles.actionButton, editingExercise === exercise.id && styles.actionButtonActive]} 
+                      onPress={() => toggleEditMode(exercise.id)}
+                      activeOpacity={0.7}
+                    >
+                      <Pencil size={20} color={editingExercise === exercise.id ? "#FFFFFF" : "#007AFF"} />
                     </TouchableOpacity>
                     <TouchableOpacity 
                       style={styles.actionButton} 
@@ -900,7 +968,12 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
   },
-  header: {
+  fixedHeader: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -909,24 +982,35 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: '#E5E5EA',
+    height: Platform.OS === 'android' ? 64 + (StatusBar.currentHeight ?? 0) : 64, // Increased height for Android
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  headerCenter: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 4, // Add padding to prevent text clipping
+  },
+  date: {
+    fontSize: 18, // Slightly reduce font size to ensure it fits
+    fontWeight: 'bold',
+    color: '#000000',
+    textAlign: 'center',
   },
   closeButton: {
     padding: 8,
-  },
-  date: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#000000',
+    width: 40, // Fixed width to help with alignment
   },
   headerActions: {
     flexDirection: 'row',
     gap: 16,
-  },
-  headerButton: {
-    padding: 8,
-  },
-  headerButtonActive: {
-    backgroundColor: '#E6FEE9',
+    width: 40, // Fixed width to match closeButton for balanced layout
+    alignItems: 'flex-end',
+    justifyContent: 'flex-end',
   },
   workoutInfo: {
     backgroundColor: '#FFFFFF',
@@ -1092,7 +1176,7 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: '700',
     color: '#000000',
-    marginBottom: 12,
+    marginBottom: 0,
     flex: 1,
   },
   exerciseType: {
@@ -1206,6 +1290,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 2,
     elevation: 1,
+  },
+  actionButtonActive: {
+    backgroundColor: '#007AFF',
   },
   deleteButton: {
     backgroundColor: '#FFF2F2',
@@ -1362,5 +1449,21 @@ const styles = StyleSheet.create({
     height: '100%',
     borderTopRightRadius: 16,
     borderBottomRightRadius: 16,
+  },
+  editModeIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#007AFF',
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    marginBottom: 8,
+    alignSelf: 'flex-start',
+  },
+  editModeText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '500',
+    marginLeft: 6,
   },
 });
