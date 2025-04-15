@@ -20,6 +20,7 @@ export interface ExerciseHistoryPoint {
   volume: number;
   maxWeight: number;
   avgWeight: number;
+  maxSetVolume?: number; // Add this field to include the highest set volume
 }
 
 export async function getExerciseStatsFromWorkouts(userId: string): Promise<ExerciseStats[]> {
@@ -126,8 +127,7 @@ export async function getExerciseHistoryData(userId: string, exerciseName: strin
       // Calculate metrics for this workout session
       let sessionVolume = 0;
       let sessionMaxWeight = 0;
-      let totalWeight = 0;
-      let weightedSetCount = 0;
+      let maxSetVolume = 0; // Variable für das höchste Satzvolumen
       
       exercise.setDetails.forEach(set => {
         if (!set) return;
@@ -138,31 +138,30 @@ export async function getExerciseHistoryData(userId: string, exerciseName: strin
         const reps = typeof set.reps === 'number' ? set.reps : 
                   (set.reps ? parseInt(set.reps.toString(), 10) : 0);
         
-        // Only count sets with both weight and reps
         if (weight > 0 && reps > 0) {
-          // Update max weight
+          // Berechne das Volumen für diesen Satz
+          const setVolume = weight * reps;
+          
+          // Aktualisiere das höchste Satzvolumen wenn nötig
+          if (setVolume > maxSetVolume) {
+            maxSetVolume = setVolume;
+          }
+          
           if (weight > sessionMaxWeight) {
             sessionMaxWeight = weight;
           }
           
-          // Add to total volume
-          sessionVolume += weight * reps;
-          
-          // For average weight calculation
-          totalWeight += weight;
-          weightedSetCount++;
+          sessionVolume += setVolume;
         }
       });
       
-      // Only add data point if there's actual data
-      if (weightedSetCount > 0) {
-        const avgWeight = totalWeight / weightedSetCount;
-        
+      if (sessionVolume > 0) {
         historyPoints.push({
           date: workout.date,
           volume: sessionVolume,
           maxWeight: sessionMaxWeight,
-          avgWeight: avgWeight
+          maxSetVolume: maxSetVolume, // Füge das höchste Satzvolumen hinzu
+          avgWeight: 0 // Wir können avgWeight entfernen wenn nicht benötigt
         });
       }
     });

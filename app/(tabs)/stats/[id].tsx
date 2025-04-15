@@ -7,6 +7,18 @@ import { useSession } from '@/utils/auth';
 import { ExerciseStats, getExerciseStatsFromWorkouts, getExerciseHistoryData } from '@/utils/stats';
 import { format, subMonths, subYears } from 'date-fns';
 
+interface ChartData {
+  volume: { labels: string[], data: number[] },
+  maxWeight: { labels: string[], data: number[] },
+  bestSetVolume: { labels: string[], data: number[] }
+}
+
+const calculateSetVolume = (set: any) => {
+  const weight = parseFloat(set.weight) || 0;
+  const reps = parseInt(set.reps) || 0;
+  return weight * reps;
+};
+
 export default function ExerciseStatsScreen() {
   const { id, exerciseName, workoutId, returnPath } = useLocalSearchParams();
   const { session } = useSession();
@@ -16,9 +28,10 @@ export default function ExerciseStatsScreen() {
   const [exercise, setExercise] = useState<ExerciseStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [chartData, setChartData] = useState({
+  const [chartData, setChartData] = useState<ChartData>({
     volume: { labels: [], data: [] },
-    maxWeight: { labels: [], data: [] }
+    maxWeight: { labels: [], data: [] },
+    bestSetVolume: { labels: [], data: [] }
   });
   const [timeFilter, setTimeFilter] = useState<'month' | 'year' | 'all'>('month');
   const [weightProgress, setWeightProgress] = useState<number>(0);
@@ -75,15 +88,10 @@ export default function ExerciseStatsScreen() {
     });
   };
 
-  // Add a listener for tab presses - navigate to index if the stats tab is pressed
   useEffect(() => {
     const unsubscribe = navigation.addListener('tabPress', (e) => {
-      // If we're on a stats detail page and the tab is pressed
       if (pathname?.includes('/stats/')) {
-        e.preventDefault(); // Prevent default navigation
-        
-        // If we have a workoutId, we should navigate back to the workout
-        // instead of going to the stats index
+        e.preventDefault();
         if (workoutId) {
           const path = returnPath 
             ? returnPath.toString() 
@@ -91,7 +99,6 @@ export default function ExerciseStatsScreen() {
           
           router.push(path);
         } else {
-          // Only go to stats index if we're not coming from a workout
           router.replace('/(tabs)/stats/');
         }
       }
@@ -100,20 +107,17 @@ export default function ExerciseStatsScreen() {
     return unsubscribe;
   }, [navigation, router, pathname, workoutId, returnPath]);
 
-  // Hide the back arrow in the header if we came from a workout
   useEffect(() => {
     if (workoutId && navigation.setOptions) {
-      // @ts-ignore - setOptions exists but might not be in the type definitions
       navigation.setOptions({
-        headerShown: true, // Keep the header shown
-        headerLeft: () => null, // Remove the back button
-        headerTitle: '', // Remove or customize the title as needed
-        // On Android, ensure proper status bar padding
+        headerShown: true,
+        headerLeft: () => null,
+        headerTitle: '',
         headerStyle: {
           height: Platform.OS === 'android' ? 60 : 44,
           backgroundColor: '#FFFFFF',
         },
-        headerShadowVisible: false // Remove the shadow for cleaner appearance
+        headerShadowVisible: false
       });
     }
   }, [navigation, workoutId]);
@@ -125,15 +129,12 @@ export default function ExerciseStatsScreen() {
       try {
         setLoading(true);
         
-        // If exerciseName is available from parameters, use it
         const nameToUse = exerciseName as string || '';
         
         let exerciseData: ExerciseStats | null = null;
         
-        // Load all exercise statistics
         const stats = await getExerciseStatsFromWorkouts(session.user.id);
         
-        // Search by ID or name (for custom exercises)
         if (nameToUse) {
           exerciseData = stats.find(ex => 
             ex.name.toLowerCase() === nameToUse.toLowerCase() || 
@@ -143,7 +144,6 @@ export default function ExerciseStatsScreen() {
           exerciseData = stats.find(ex => ex.id === id) || null;
         }
         
-        // If we still haven't found an exercise, create an empty placeholder entry
         if (!exerciseData && nameToUse) {
           exerciseData = {
             id: id as string || `exercise-${Date.now()}`,
@@ -165,7 +165,6 @@ export default function ExerciseStatsScreen() {
         
         setExercise(exerciseData);
         
-        // If the exercise was found, load its history data
         const historyData = await getExerciseHistoryData(session.user.id, exerciseData.name);
         
         if (historyData && historyData.length > 0) {
@@ -175,27 +174,16 @@ export default function ExerciseStatsScreen() {
           setVolumeProgress(progress.volumeProgress);
           setRepsProgress(progress.repsProgress);
 
-          // Sort by date in ascending order
           filteredData.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
           
-          // Format data for volume chart
-          const volumeLabels = filteredData.map(entry => 
-            format(new Date(entry.date), 'MMM d')
-          );
-          const volumeData = filteredData.map(entry => entry.volume);
-          
-          // Format data for maximum weight chart
-          const maxWeightLabels = filteredData.map(entry => 
-            format(new Date(entry.date), 'MMM d')
-          );
-          const maxWeightData = filteredData.map(entry => entry.maxWeight);
+          const labels = filteredData.map(entry => format(new Date(entry.date), 'MMM d'));
           
           setChartData({
-            volume: { labels: volumeLabels, data: volumeData },
-            maxWeight: { labels: maxWeightLabels, data: maxWeightData }
+            volume: { labels, data: filteredData.map(entry => entry.volume) },
+            maxWeight: { labels, data: filteredData.map(entry => entry.maxWeight) },
+            bestSetVolume: { labels, data: filteredData.map(entry => entry.maxSetVolume) }
           });
         } else {
-          // Fallback to sample data if no history is available
           const volumeData = [
             exerciseData.totalVolume * 0.3, 
             exerciseData.totalVolume * 0.5,
@@ -210,7 +198,6 @@ export default function ExerciseStatsScreen() {
             exerciseData.maxWeight
           ];
           
-          // Generate date labels for the past 4 months
           const dateLabels = Array(4).fill(0).map((_, i) => {
             const date = subMonths(new Date(), 3 - i);
             return format(date, 'MMM');
@@ -224,6 +211,10 @@ export default function ExerciseStatsScreen() {
             maxWeight: { 
               labels: dateLabels, 
               data: weightData 
+            },
+            bestSetVolume: { 
+              labels: dateLabels, 
+              data: [0, 0, 0, 0] 
             }
           });
         }
@@ -238,18 +229,14 @@ export default function ExerciseStatsScreen() {
     loadExerciseData();
   }, [id, exerciseName, session?.user?.id, timeFilter]);
   
-  // Updated navigation handler to return to workout if workoutId is provided
   const handleBackNavigation = () => {
     if (workoutId) {
-      // Navigate back to workout detail screen if workoutId is available
-      // Use returnPath if available, otherwise construct the path
       const path = returnPath 
         ? returnPath.toString() 
         : `/workouts/${workoutId}`;
       
       router.push(path);
     } else {
-      // Default back behavior when not coming from a workout
       router.push('/(tabs)/stats/');
     }
   };
@@ -412,7 +399,7 @@ export default function ExerciseStatsScreen() {
           bezier
           style={styles.chart}
           yAxisLabel=""
-          yAxisSuffix=""
+          yAxisSuffix=" kg"
           fromZero={true}
         />
       </View>
@@ -423,6 +410,24 @@ export default function ExerciseStatsScreen() {
           data={{
             labels: chartData.maxWeight.labels,
             datasets: [{ data: chartData.maxWeight.data }],
+          }}
+          width={340}
+          height={220}
+          chartConfig={chartConfig}
+          bezier
+          style={styles.chart}
+          yAxisLabel=""
+          yAxisSuffix=" kg"
+          fromZero={true}
+        />
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Best Set Volume Progress</Text>
+        <LineChart
+          data={{
+            labels: chartData.bestSetVolume.labels,
+            datasets: [{ data: chartData.bestSetVolume.data }],
           }}
           width={340}
           height={220}
