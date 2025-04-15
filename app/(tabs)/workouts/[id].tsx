@@ -635,88 +635,84 @@ export default function WorkoutDetailScreen() {
           showsVerticalScrollIndicator={true}
         >
           <View style={styles.workoutInfo}>
-            <Swipeable
-              renderRightActions={renderWorkoutDeleteAction}
-              rightThreshold={40}
-            >
-              <View>
-                <TextInput
-                  style={styles.workoutNameInput}
-                  value={workoutName}
-                  onChangeText={setWorkoutName}
-                  placeholder="Workout Name"
-                  placeholderTextColor="#8E8E93"
-                />
+            {/* Remove the Swipeable component and keep only the inner View */}
+            <View>
+              <TextInput
+                style={styles.workoutNameInput}
+                value={workoutName}
+                onChangeText={setWorkoutName}
+                placeholder="Workout Name"
+                placeholderTextColor="#8E8E93"
+              />
 
-                <View style={styles.workoutTimes}>
-                  <View style={styles.timeInfo}>
-                    <Clock size={20} color="#007AFF" />
-                    <Text style={styles.timeText}>
-                      {(() => {
-                        try {
-                          if (workoutStartTime) {
-                            return `${format(workoutStartTime, 'HH:mm')}${
-                              workoutEndTime ? ` - ${format(workoutEndTime, 'HH:mm')}` : ''
-                            }`;
-                          }
-                          return 'Not started';
-                        } catch (error) {
-                          console.warn('Error formatting workout time:', error);
-                          return 'Time unavailable';
+              <View style={styles.workoutTimes}>
+                <View style={styles.timeInfo}>
+                  <Clock size={20} color="#007AFF" />
+                  <Text style={styles.timeText}>
+                    {(() => {
+                      try {
+                        if (workoutStartTime) {
+                          return `${format(workoutStartTime, 'HH:mm')}${
+                            workoutEndTime ? ` - ${format(workoutEndTime, 'HH:mm')}` : ''
+                          }`;
                         }
-                      })()}
-                    </Text>
-                  </View>
-                  <TouchableOpacity
-                    style={[
-                      styles.workoutStateButton,
-                      isWorkoutActive && styles.workoutStateButtonActive
-                    ]}
-                    onPress={isWorkoutActive ? endWorkout : startWorkout}
-                  >
-                    <Text style={styles.workoutStateButtonText}>
-                      {isWorkoutActive ? 'End Workout' : 'Start Workout'}
-                    </Text>
-                  </TouchableOpacity>
+                        return 'Not started';
+                      } catch (error) {
+                        console.warn('Error formatting workout time:', error);
+                        return 'Time unavailable';
+                      }
+                    })()}
+                  </Text>
                 </View>
-                
-                <View style={styles.infoGrid}>
-                  <View style={styles.infoCard}>
-                    <View style={styles.infoIconContainer}>
-                      <Scale size={20} color="#FF9500" />
-                    </View>
-                    <View style={styles.infoContent}>
-                      <Text style={styles.infoLabel}>Body Weight</Text>
-                      <TextInput
-                        style={styles.infoInput}
-                        value={bodyWeight}
-                        onChangeText={setBodyWeight}
-                        placeholder="Enter weight"
-                        keyboardType="numeric"
-                        placeholderTextColor="#8E8E93"
-                      />
-                    </View>
+                <TouchableOpacity
+                  style={[
+                    styles.workoutStateButton,
+                    isWorkoutActive && styles.workoutStateButtonActive
+                  ]}
+                  onPress={isWorkoutActive ? endWorkout : startWorkout}
+                >
+                  <Text style={styles.workoutStateButtonText}>
+                    {isWorkoutActive ? 'End Workout' : 'Start Workout'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              
+              <View style={styles.infoGrid}>
+                <View style={styles.infoCard}>
+                  <View style={styles.infoIconContainer}>
+                    <Scale size={20} color="#FF9500" />
                   </View>
+                  <View style={styles.infoContent}>
+                    <Text style={styles.infoLabel}>Body Weight</Text>
+                    <TextInput
+                      style={styles.infoInput}
+                      value={bodyWeight}
+                      onChangeText={setBodyWeight}
+                      placeholder="Enter weight"
+                      keyboardType="numeric"
+                      placeholderTextColor="#8E8E93"
+                    />
+                  </View>
+                </View>
 
-                  <View style={[styles.infoCard, styles.notesCard]}>
-                    <View style={styles.infoIconContainer}>
-                      <FileEdit size={20} color="#FF3B30" />
-                    </View>
-                    <View style={styles.infoContent}>
-                      <Text style={styles.infoLabel}>Notes</Text>
-                      <TextInput
-                        style={[styles.infoInput, styles.notesInput]}
-                        value={notes}
-                        onChangeText={setNotes}
-                        placeholder="Add workout notes..."
-                        placeholderTextColor="#8E8E93"
-                        multiline
-                      />
-                    </View>
+                <View style={[styles.infoCard, styles.notesCard]}>
+                  <View style={styles.infoIconContainer}>
+                    <FileEdit size={20} color="#FF3B30" />
+                  </View>
+                  <View style={styles.infoContent}>
+                    <Text style={styles.infoLabel}>Notes</Text>
+                    <TextInput
+                      style={[styles.infoInput, styles.notesInput]}
+                      value={notes}
+                      onChangeText={setNotes}
+                      placeholder="Add workout notes..."
+                      placeholderTextColor="#8E8E93"
+                      multiline
+                    />
                   </View>
                 </View>
               </View>
-            </Swipeable>
+            </View>
           </View>
 
           {exercises.length === 0 ? (
@@ -737,9 +733,15 @@ export default function WorkoutDetailScreen() {
                 ]}
                 onLongPress={() => handleDragStart(exercise.id)}
                 onPress={() => {
-                  if (draggingExercise && draggingExercise !== exercise.id) {
-                    handleMoveExercise(draggingExercise, exercise.id);
-                    handleDragEnd();
+                  if (draggingExercise) {
+                    if (draggingExercise === exercise.id) {
+                      // Cancel dragging when tapping the same exercise
+                      handleDragEnd();
+                    } else {
+                      // Handle moving exercise when tapping a different one
+                      handleMoveExercise(draggingExercise, exercise.id);
+                      handleDragEnd();
+                    }
                   }
                 }}
                 delayLongPress={200}
@@ -750,13 +752,6 @@ export default function WorkoutDetailScreen() {
                   {exercise.type && <Text style={styles.exerciseType}>{exercise.type}</Text>}
                 </View>
                 
-                {/* Add edit mode indicator with pencil icon when editing is active */}
-                {editingExercise === exercise.id && (
-                  <View style={styles.editModeIndicator}>
-                    <Pencil size={16} color="#FFFFFF" />
-                    <Text style={styles.editModeText}>Tap X to delete sets</Text>
-                  </View>
-                )}
                 
                 {exercise.sets.map((set, setIndex) => (
                   <View key={setIndex} style={styles.setContainer}>
