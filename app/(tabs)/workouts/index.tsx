@@ -142,17 +142,22 @@ export default function WorkoutsScreen() {
         return;
       }
 
+      // Fetch all workout plans first
       const data = await getWorkoutPlans(session.user.id);
+      
+      // Store the current filter type to use for filtering
+      const currentFilter = filterType;
+      console.log(`Applying filter: ${currentFilter}`);
       
       // Apply filter consistently every time workouts are loaded
       let filteredData = data;
-      if (filterType !== 'all') {
-        filteredData = data.filter(plan => plan.workout_type === filterType);
+      if (currentFilter !== 'all') {
+        filteredData = data.filter(plan => plan.workout_type === currentFilter);
       }
 
       // Only set the filtered workout plans
       setWorkoutPlans(filteredData);
-      console.log(`Loaded ${filteredData.length} ${filterType} workout plans for user ${session.user.id}`);
+      console.log(`Loaded ${filteredData.length} ${currentFilter} workout plans out of ${data.length} total plans`);
       
     } catch (error) {
       console.error('Error loading workout plans:', error);
@@ -349,36 +354,38 @@ export default function WorkoutsScreen() {
   };
 
   const toggleFilter = () => {
+    let newFilter: 'all' | 'split' | 'custom';
+    
     if (filterType === 'all') {
-      setFilterType('split');
+      newFilter = 'split';
     } else if (filterType === 'split') {
-      setFilterType('custom');
+      newFilter = 'custom';
     } else {
-      setFilterType('all');
+      newFilter = 'all';
     }
+    
+    // Set the new filter state
+    setFilterType(newFilter);
+    
+    console.log(`Filter changed to: ${newFilter}`);
   };
 
   useFocusEffect(
     useCallback(() => {
       if (session?.user?.id) {
-        // Only load today's workout once when the screen is first focused
-        // or when returning to the screen after being away
+        console.log("Screen focused, current filter:", filterType);
+        
+        // Load today's workout
         loadTodaysWorkout();
         
-        // Always refresh the workout plans with filters
+        // Load workout plans with current filter
         loadWorkoutPlans();
+        
+        // Calculate streak
         calculateStreak();
       }
-    }, [session?.user?.id]) // Remove filterType dependency from here
+    }, [session?.user?.id, filterType]) // Add filterType as a dependency
   );
-
-  // Use separate effect to handle filter changes
-  useEffect(() => {
-    if (session?.user?.id && !isLoading) {
-      // Only reload workout plans when filter changes, not today's workout
-      loadWorkoutPlans();
-    }
-  }, [filterType, session?.user?.id]);
 
   // Initial load effect
   useEffect(() => {
