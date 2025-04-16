@@ -57,6 +57,7 @@ export default function WorkoutDetailScreen() {
   const [workoutEndTime, setWorkoutEndTime] = useState<Date | null>(null);
   const [isWorkoutActive, setIsWorkoutActive] = useState(false);
   const [editingExercise, setEditingExercise] = useState<string | null>(null);
+  const [exercisePreviousDataMap, setExercisePreviousDataMap] = useState<Map<string, any>>(new Map());
 
   const startRestTimer = () => {
     setIsTimerRunning(true);
@@ -272,7 +273,39 @@ export default function WorkoutDetailScreen() {
               }
             }
           }
+          
+          // Additionally, process all exercises in completed workouts to have this data available for newly added exercises
+          for (const workout of allCompletedWorkouts) {
+            if (workout.exercises) {
+              for (const exerciseData of workout.exercises) {
+                // Store by both ID and name to make lookups easier
+                if (exerciseData.setDetails && exerciseData.setDetails.length > 0) {
+                  // Check if we already have more recent data for this exercise ID
+                  if (!exercisePreviousData.has(exerciseData.id) || 
+                      new Date(workout.date) > new Date(exercisePreviousData.get(exerciseData.id).date)) {
+                    exercisePreviousData.set(exerciseData.id, {
+                      date: workout.date,
+                      exerciseData: exerciseData
+                    });
+                  }
+                  
+                  // Also store by exercise name for custom exercises
+                  const nameKey = `name:${exerciseData.name.toLowerCase()}`;
+                  if (!exercisePreviousData.has(nameKey) || 
+                      new Date(workout.date) > new Date(exercisePreviousData.get(nameKey).date)) {
+                    exercisePreviousData.set(nameKey, {
+                      date: workout.date,
+                      exerciseData: exerciseData
+                    });
+                  }
+                }
+              }
+            }
+          }
         }
+        
+        // Store the map for later use when adding new exercises
+        setExercisePreviousDataMap(exercisePreviousData);
         
       } catch (prevError) {
         console.log('Error fetching previous workout data:', prevError);
@@ -346,6 +379,28 @@ export default function WorkoutDetailScreen() {
     if (selectedExercise && typeof selectedExercise === 'string') {
       const timestamp = Date.now();
       
+      // Check if this exercise is already in the workout
+      const exerciseAlreadyExists = exercises.some(ex => 
+        ex.name.toLowerCase() === selectedExercise.toLowerCase()
+      );
+      
+      if (exerciseAlreadyExists) {
+        // Alert the user and don't add the duplicate exercise
+        Alert.alert(
+          "Duplicate Exercise",
+          `"${selectedExercise}" is already in this workout. Each exercise can only be added once.`,
+          [{ text: "OK" }]
+        );
+        
+        // Reset the selectedExercise param
+        const timeout = setTimeout(() => {
+          router.setParams({ id: workoutId });
+        }, 0);
+        
+        return () => clearTimeout(timeout);
+      }
+      
+      // Continue with normal exercise adding process since it's not a duplicate
       // Try to find the exercise ID in our predefined lists
       let exerciseId = '';
       let exerciseType: 'chest' | 'back' | 'arms' | 'legs' | 'shoulders' | 'core' | undefined;
@@ -369,35 +424,65 @@ export default function WorkoutDetailScreen() {
         exerciseType = findExerciseType(selectedExercise);
       }
       
+      // Check for previous data in our map
+      let prevExerciseData = null;
+      
+      // Try to find by ID first
+      if (exercisePreviousDataMap.has(exerciseId)) {
+        prevExerciseData = exercisePreviousDataMap.get(exerciseId).exerciseData;
+        console.log(`Found previous data for ${selectedExercise} by ID ${exerciseId}`);
+      } 
+      // If not found by ID, try by name
+      else {
+        const nameKey = `name:${selectedExercise.toLowerCase()}`;
+        if (exercisePreviousDataMap.has(nameKey)) {
+          prevExerciseData = exercisePreviousDataMap.get(nameKey).exerciseData;
+          console.log(`Found previous data for ${selectedExercise} by name`);
+        }
+      }
+      
+      // Create sets with previous data if available
+      const sets = [];
+      const numSets = prevExerciseData?.setDetails?.length || 3; // Use previous count or default to 3
+      
+      for (let i = 0; i < numSets; i++) {
+        const prevSetData = prevExerciseData?.setDetails && i < prevExerciseData.setDetails.length ? 
+                             prevExerciseData.setDetails[i] : null;
+                             
+        // Extract values with fallbacks
+        const prevWeight = prevSetData && prevSetData.weight !== undefined && prevSetData.weight !== null ? 
+          String(prevSetData.weight) : '';
+        
+        const prevReps = prevSetData && prevSetData.reps !== undefined && prevSetData.reps !== null ? 
+          String(prevSetData.reps) : '';
+        
+        const prevNotes = prevSetData && prevSetData.notes ? prevSetData.notes : '';
+        
+        sets.push({
+          id: `${timestamp}-set${i+1}`,
+          weight: '',
+          reps: '',
+          type: prevSetData?.type || 'normal',
+          notes: '',
+          // Include previous data
+          prevWeight,
+          prevReps,
+          prevNotes
+        });
+      }
+      
       const exerciseToAdd: ExerciseProgress = {
         id: exerciseId,
         name: selectedExercise,
         type: exerciseType,
-        sets: [
-          // Create 3 sets by default instead of just 1
-          {
-            id: `${timestamp}-set1`,
-            weight: '',
-            reps: '',
-            type: 'normal',
-            notes: ''
-          },
-          {
-            id: `${timestamp}-set2`,
-            weight: '',
-            reps: '',
-            type: 'normal',
-            notes: ''
-          },
-          {
-            id: `${timestamp}-set3`,
-            weight: '',
-            reps: '',
-            type: 'normal',
-            notes: ''
-          }
-        ]
+        sets: sets
       };
+
+      if (prevExerciseData) {
+        console.log(`Added exercise ${selectedExercise} with ${sets.length} sets using previous data`);
+      } else {
+        console.log(`Added exercise ${selectedExercise} with ${sets.length} sets (no previous data found)`);
+      }
 
       setExercises(prev => [...prev, exerciseToAdd]);
 
@@ -407,7 +492,7 @@ export default function WorkoutDetailScreen() {
 
       return () => clearTimeout(timeout);
     }
-  }, [selectedExercise, workoutId]);
+  }, [selectedExercise, workoutId, exercisePreviousDataMap, exercises]);
 
   // Add a new effect to auto-start the workout if opened from the start workout button
   useEffect(() => {
@@ -452,24 +537,38 @@ export default function WorkoutDetailScreen() {
   const addSet = (exerciseId: string) => {
     setExercises(prev => prev.map(exercise => {
       if (exercise.id === exerciseId) {
-        // Find the current number of sets for this exercise
         const currentSetCount = exercise.sets.length;
         
-        // If we have a set in the current exercise with data (from any previous workout),
-        // use the last set's data as a reference for new sets
-        const lastSet = exercise.sets[currentSetCount - 1];
+        // Instead of just copying from the last set, check if we have historical data for this specific set
+        let prevSetData = null;
+        const exerciseData = exercisePreviousDataMap.get(exercise.id)?.exerciseData;
         
-        // Create new set with previous data if available
+        // If there's historical data for this exercise and it has enough sets
+        if (exerciseData && exerciseData.setDetails && currentSetCount < exerciseData.setDetails.length) {
+          // Get data for the next set from historical data
+          prevSetData = exerciseData.setDetails[currentSetCount];
+          console.log(`Found historical data for new set ${currentSetCount+1} in exercise ${exercise.name}`);
+        }
+        
+        // Prepare previous values with proper fallbacks
+        const prevWeight = prevSetData && prevSetData.weight !== undefined && prevSetData.weight !== null ? 
+          String(prevSetData.weight) : '';
+        
+        const prevReps = prevSetData && prevSetData.reps !== undefined && prevSetData.reps !== null ? 
+          String(prevSetData.reps) : '';
+        
+        const prevNotes = prevSetData && prevSetData.notes ? prevSetData.notes : '';
+        
+        // Create the new set
         const newSet: WorkoutSet = {
           id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
           weight: '',
           reps: '',
-          type: 'normal',
+          type: prevSetData?.type || 'normal',
           notes: '',
-          // Add previous data either from the previous set's data or empty
-          prevWeight: lastSet?.prevWeight || '',
-          prevReps: lastSet?.prevReps || '', 
-          prevNotes: lastSet?.prevNotes || ''
+          prevWeight,
+          prevReps,
+          prevNotes
         };
         
         return {

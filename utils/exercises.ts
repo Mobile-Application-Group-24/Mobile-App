@@ -262,3 +262,14 @@ export function findExerciseType(exerciseName: string): 'chest' | 'back' | 'arms
 export function getDefaultSetsForExercise(): number {
   return 3; // Most exercises default to 3 sets
 }
+
+// Function to check if an exercise already exists in a workout
+export function isExerciseDuplicate(exerciseName: string, existingExercises: any[]): boolean {
+  // Normalize the exercise name for comparison
+  const normalizedName = exerciseName.toLowerCase().trim();
+  
+  // Check if any existing exercise matches by name (case insensitive)
+  return existingExercises.some(exercise => 
+    exercise.name.toLowerCase().trim() === normalizedName
+  );
+}
