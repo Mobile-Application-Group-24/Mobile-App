@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, StatusBar, Platform } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Search, ChartBar, TrendingUp, Dumbbell, ArrowRight, FolderIcon } from 'lucide-react-native';
 import { supabase } from '@/utils/supabase';
@@ -140,159 +140,192 @@ export default function StatsScreen() {
   };
 
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.safeArea} />
-      
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Exercise Statistics</Text>
-        <Text style={styles.headerSubtitle}>Track your progress over time</Text>
-      </View>
-
-      <View style={styles.searchContainer}>
-        <View style={styles.searchBar}>
-          <Search size={20} color="#8E8E93" />
-          <TextInput
-            style={styles.searchInput}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            placeholder="Search exercises..."
-            placeholderTextColor="#8E8E93"
-          />
+    <View style={styles.mainContainer}>
+      {/* Fixed header section */}
+      <View style={styles.fixedHeader}>
+        <View style={[styles.safeArea, Platform.OS === 'android' && { height: StatusBar.currentHeight || 0 }]} />
+        <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+        
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Exercise Statistics</Text>
+          <Text style={styles.headerSubtitle}>Track your progress over time</Text>
         </View>
-      </View>
 
-      <ScrollView 
-        horizontal 
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.categoriesContainer}
-      >
-        {categories.map((category) => (
-          <TouchableOpacity
-            key={category}
-            style={[
-              styles.categoryButton,
-              selectedCategory === category && styles.categoryButtonActive
-            ]}
-            onPress={() => setSelectedCategory(category)}
-          >
-            <Text style={[
-              styles.categoryButtonText,
-              selectedCategory === category && styles.categoryButtonTextActive
-            ]}>
-              {category}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
+        <View style={styles.searchContainer}>
+          <View style={styles.searchBar}>
+            <Search size={20} color="#8E8E93" />
+            <TextInput
+              style={styles.searchInput}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholder="Search exercises..."
+              placeholderTextColor="#8E8E93"
+            />
+          </View>
+        </View>
 
-      {loading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#007AFF" />
-        </View>
-      ) : error ? (
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>{error}</Text>
-        </View>
-      ) : filteredExercises.length === 0 ? (
-        renderEmptyState()
-      ) : (
-        <View style={styles.exercisesContainer}>
-          {filteredExercises.map((exercise) => (
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.categoriesContainer}
+        >
+          {categories.map((category) => (
             <TouchableOpacity
-              key={exercise.id}
-              style={styles.exerciseCard}
-              onPress={() => router.push(`/stats/${exercise.id}`)}
+              key={category}
+              style={[
+                styles.categoryButton,
+                selectedCategory === category && styles.categoryButtonActive
+              ]}
+              onPress={() => setSelectedCategory(category)}
             >
-              <View style={styles.exerciseHeader}>
-                <View style={styles.exerciseInfo}>
-                  <Text style={styles.exerciseName}>{exercise.name}</Text>
-                  <Text style={styles.exerciseCategory}>
-                    {exercise.type?.charAt(0).toUpperCase() + 
-                    exercise.type?.slice(1) || 'Other'}
-                  </Text>
-                </View>
-                
-                {exercise.totalSessions > 1 && 
-                 (exercise.totalVolume > 0 ? exercise.volumeProgress : exercise.progress) !== 0 && (
-                  <View style={[
-                    styles.progressBadge,
-                    (exercise.totalVolume > 0 ? exercise.volumeProgress : exercise.progress) > 0 
-                      ? styles.progressPositive 
-                      : styles.progressNegative
-                  ]}>
-                    <Text style={[
-                      styles.progressText,
-                      (exercise.totalVolume > 0 ? exercise.volumeProgress : exercise.progress) > 0 
-                        ? styles.progressTextPositive 
-                        : styles.progressTextNegative
-                    ]}>
-                      {(exercise.totalVolume > 0 ? exercise.volumeProgress : exercise.progress) > 0 ? '+' : ''}
-                      {exercise.totalVolume > 0 ? exercise.volumeProgress : exercise.progress}%
-                    </Text>
-                  </View>
-                )}
-              </View>
-
-              <View style={styles.statsGrid}>
-                {exercise.totalVolume > 0 ? (
-                  <>
-                    <View style={styles.statItem}>
-                      <TrendingUp size={20} color="#007AFF" />
-                      <View>
-                        <Text style={styles.statValue}>{exercise.maxWeight} kg</Text>
-                        <Text style={styles.statLabel}>Max Weight</Text>
-                      </View>
-                    </View>
-
-                    <View style={styles.statDivider} />
-
-                    <View style={styles.statItem}>
-                      <ChartBar size={20} color="#007AFF" />
-                      <View>
-                        <Text style={styles.statValue}>{(exercise.totalVolume / 1000).toFixed(1)}k</Text>
-                        <Text style={styles.statLabel}>Total Volume</Text>
-                      </View>
-                    </View>
-                  </>
-                ) : (
-                  <>
-                    <View style={styles.statItem}>
-                      <Dumbbell size={20} color="#007AFF" />
-                      <View>
-                        <Text style={styles.statValue}>{exercise.maxReps}</Text>
-                        <Text style={styles.statLabel}>Max Reps</Text>
-                      </View>
-                    </View>
-
-                    <View style={styles.statDivider} />
-
-                    <View style={styles.statItem}>
-                      <ChartBar size={20} color="#007AFF" />
-                      <View>
-                        <Text style={styles.statValue}>{exercise.totalReps || 0}</Text>
-                        <Text style={styles.statLabel}>Total Reps</Text>
-                      </View>
-                    </View>
-                  </>
-                )}
-              </View>
-
-              <TouchableOpacity 
-                style={styles.viewStatsButton}
-                onPress={() => router.push(`/stats/${exercise.id}`)}
-              >
-                <Text style={styles.viewStatsText}>View Statistics</Text>
-                <ArrowRight size={20} color="#007AFF" />
-              </TouchableOpacity>
+              <Text style={[
+                styles.categoryButtonText,
+                selectedCategory === category && styles.categoryButtonTextActive
+              ]}>
+                {category}
+              </Text>
             </TouchableOpacity>
           ))}
-        </View>
-      )}
-    </ScrollView>
+        </ScrollView>
+      </View>
+
+      {/* Scrollable content */}
+      <ScrollView 
+        style={styles.scrollableContent}
+        contentContainerStyle={styles.scrollableContentContainer}
+      >
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#007AFF" />
+          </View>
+        ) : error ? (
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        ) : filteredExercises.length === 0 ? (
+          renderEmptyState()
+        ) : (
+          <View style={styles.exercisesContainer}>
+            {filteredExercises.map((exercise) => (
+              <TouchableOpacity
+                key={exercise.id}
+                style={styles.exerciseCard}
+                onPress={() => router.push(`/stats/${exercise.id}`)}
+              >
+                <View style={styles.exerciseHeader}>
+                  <View style={styles.exerciseInfo}>
+                    <Text style={styles.exerciseName}>{exercise.name}</Text>
+                    <Text style={styles.exerciseCategory}>
+                      {exercise.type?.charAt(0).toUpperCase() + 
+                      exercise.type?.slice(1) || 'Other'}
+                    </Text>
+                  </View>
+                  
+                  {exercise.totalSessions > 1 && 
+                   (exercise.totalVolume > 0 ? exercise.volumeProgress : exercise.progress) !== 0 && (
+                    <View style={[
+                      styles.progressBadge,
+                      (exercise.totalVolume > 0 ? exercise.volumeProgress : exercise.progress) > 0 
+                        ? styles.progressPositive 
+                        : styles.progressNegative
+                    ]}>
+                      <Text style={[
+                        styles.progressText,
+                        (exercise.totalVolume > 0 ? exercise.volumeProgress : exercise.progress) > 0 
+                          ? styles.progressTextPositive 
+                          : styles.progressTextNegative
+                      ]}>
+                        {(exercise.totalVolume > 0 ? exercise.volumeProgress : exercise.progress) > 0 ? '+' : ''}
+                        {exercise.totalVolume > 0 ? exercise.volumeProgress : exercise.progress}%
+                      </Text>
+                    </View>
+                  )}
+                </View>
+
+                <View style={styles.statsGrid}>
+                  {exercise.totalVolume > 0 ? (
+                    <>
+                      <View style={styles.statItem}>
+                        <TrendingUp size={20} color="#007AFF" />
+                        <View>
+                          <Text style={styles.statValue}>{exercise.maxWeight} kg</Text>
+                          <Text style={styles.statLabel}>Max Weight</Text>
+                        </View>
+                      </View>
+
+                      <View style={styles.statDivider} />
+
+                      <View style={styles.statItem}>
+                        <ChartBar size={20} color="#007AFF" />
+                        <View>
+                          <Text style={styles.statValue}>{(exercise.totalVolume / 1000).toFixed(1)}k</Text>
+                          <Text style={styles.statLabel}>Total Volume</Text>
+                        </View>
+                      </View>
+                    </>
+                  ) : (
+                    <>
+                      <View style={styles.statItem}>
+                        <Dumbbell size={20} color="#007AFF" />
+                        <View>
+                          <Text style={styles.statValue}>{exercise.maxReps}</Text>
+                          <Text style={styles.statLabel}>Max Reps</Text>
+                        </View>
+                      </View>
+
+                      <View style={styles.statDivider} />
+
+                      <View style={styles.statItem}>
+                        <ChartBar size={20} color="#007AFF" />
+                        <View>
+                          <Text style={styles.statValue}>{exercise.totalReps || 0}</Text>
+                          <Text style={styles.statLabel}>Total Reps</Text>
+                        </View>
+                      </View>
+                    </>
+                  )}
+                </View>
+
+                <TouchableOpacity 
+                  style={styles.viewStatsButton}
+                  onPress={() => router.push(`/stats/${exercise.id}`)}
+                >
+                  <Text style={styles.viewStatsText}>View Statistics</Text>
+                  <ArrowRight size={20} color="#007AFF" />
+                </TouchableOpacity>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  mainContainer: {
+    flex: 1,
+    backgroundColor: '#F2F2F7',
+  },
+  fixedHeader: {
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E5EA',
+    zIndex: 10,
+    // Shadow for iOS
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    // Elevation for Android
+    elevation: 3,
+  },
+  scrollableContent: {
+    flex: 1,
+  },
+  scrollableContentContainer: {
+    paddingBottom: 20,
+  },
   loadingContainer: {
     padding: 40,
     alignItems: 'center',
@@ -325,19 +358,13 @@ const styles = StyleSheet.create({
     color: '#8E8E93',
     textAlign: 'center',
   },
-  container: {
-    flex: 1,
-    backgroundColor: '#F2F2F7',
-  },
   safeArea: {
-    height: 44,
+    height: Platform.OS === 'ios' ? 44 : 0,
     backgroundColor: '#FFFFFF',
   },
   header: {
     backgroundColor: '#FFFFFF',
     padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
   },
   headerTitle: {
     fontSize: 28,
@@ -351,13 +378,14 @@ const styles = StyleSheet.create({
   searchContainer: {
     padding: 16,
     backgroundColor: '#FFFFFF',
+    paddingTop: 0,
   },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#F2F2F7',
     borderRadius: 12,
-    padding: 12,
+    padding: 8,
   },
   searchInput: {
     flex: 1,
@@ -367,6 +395,7 @@ const styles = StyleSheet.create({
   },
   categoriesContainer: {
     padding: 16,
+    paddingTop: 0,
     gap: 8,
   },
   categoryButton: {

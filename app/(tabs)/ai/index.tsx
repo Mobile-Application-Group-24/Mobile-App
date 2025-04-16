@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, SafeAreaView, ActivityIndicator, Modal, FlatList } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, SafeAreaView, ActivityIndicator, Modal, FlatList, StatusBar, Platform } from 'react-native';
 import { ThumbsUp, ThumbsDown, MessageSquare, X } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { checkDatabaseSchema, createWorkoutsTable } from '@/utils/database-checker';
@@ -248,7 +248,7 @@ export default function AIScreen() {
   if (isLoading) {
     return (
       <View style={styles.container}>
-        <SafeAreaView style={styles.safeAreaHeader}>
+        <SafeAreaView style={[styles.safeAreaHeader, Platform.OS === 'android' && { paddingTop: StatusBar.currentHeight }]}>
           <View style={styles.header}>
             <View>
               <Text style={styles.headerTitle}>AI Workout Assistant</Text>
@@ -273,7 +273,8 @@ export default function AIScreen() {
 
   return (
     <View style={styles.container}>
-      <SafeAreaView style={styles.safeAreaHeader}>
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+      <SafeAreaView style={[styles.safeAreaHeader, Platform.OS === 'android' && { paddingTop: StatusBar.currentHeight }]}>
         <View style={styles.header}>
           <View>
             <Text style={styles.headerTitle}>AI Workout Assistant</Text>
@@ -476,6 +477,7 @@ const styles = StyleSheet.create({
   },
   safeAreaHeader: {
     backgroundColor: '#FFFFFF',
+    width: '100%',
   },
   scrollContent: {
     flex: 1,
