@@ -11,6 +11,8 @@ const categories = ['All', 'Chest', 'Back', 'Legs', 'Shoulders', 'Arms', 'Core']
 // Add volumeProgress to the interface
 interface ExtendedExerciseStats extends ExerciseStats {
   volumeProgress?: number;
+  totalReps?: number;
+  progress?: number;
 }
 
 export default function StatsScreen() {
@@ -42,12 +44,27 @@ export default function StatsScreen() {
           const firstEntry = sortedData[0];
           const lastEntry = sortedData[sortedData.length - 1];
           
-          const volumeProgress = ((lastEntry.volume - firstEntry.volume) / firstEntry.volume) * 100;
-          
-          return {
-            ...exercise,
-            volumeProgress: Math.round(volumeProgress)
-          };
+          if (exercise.totalVolume > 0) {
+            // Für Übungen mit Gewicht: Berechne Volume Progress
+            const volumeProgress = ((lastEntry.volume - firstEntry.volume) / firstEntry.volume) * 100;
+            return {
+              ...exercise,
+              volumeProgress: Math.round(volumeProgress)
+            };
+          } else {
+            // Für Übungen ohne Gewicht: Berechne Reps Progress
+            const firstReps = firstEntry.totalReps || 0;
+            const lastReps = lastEntry.totalReps || 0;
+            const totalReps = sortedData.reduce((sum, entry) => sum + (entry.totalReps || 0), 0);
+            
+            const repsProgress = firstReps ? ((lastReps - firstReps) / firstReps) * 100 : 0;
+            
+            return {
+              ...exercise,
+              totalReps: totalReps, // Gesamtsumme aller Wiederholungen
+              progress: Math.round(repsProgress)
+            };
+          }
         }
         
         return exercise;
@@ -195,40 +212,69 @@ export default function StatsScreen() {
                   </Text>
                 </View>
                 
-                {exercise.totalSessions > 1 && exercise.volumeProgress !== undefined && exercise.volumeProgress !== 0 && (
+                {exercise.totalSessions > 1 && 
+                 (exercise.totalVolume > 0 ? exercise.volumeProgress : exercise.progress) !== 0 && (
                   <View style={[
                     styles.progressBadge,
-                    exercise.volumeProgress > 0 ? styles.progressPositive : styles.progressNegative
+                    (exercise.totalVolume > 0 ? exercise.volumeProgress : exercise.progress) > 0 
+                      ? styles.progressPositive 
+                      : styles.progressNegative
                   ]}>
                     <Text style={[
                       styles.progressText,
-                      exercise.volumeProgress > 0 ? styles.progressTextPositive : styles.progressTextNegative
+                      (exercise.totalVolume > 0 ? exercise.volumeProgress : exercise.progress) > 0 
+                        ? styles.progressTextPositive 
+                        : styles.progressTextNegative
                     ]}>
-                      {exercise.volumeProgress > 0 ? '+' : ''}{exercise.volumeProgress}%
+                      {(exercise.totalVolume > 0 ? exercise.volumeProgress : exercise.progress) > 0 ? '+' : ''}
+                      {exercise.totalVolume > 0 ? exercise.volumeProgress : exercise.progress}%
                     </Text>
                   </View>
                 )}
               </View>
 
               <View style={styles.statsGrid}>
-                <View style={styles.statItem}>
-                  <TrendingUp size={20} color="#007AFF" />
-                  <View>
-                    <Text style={styles.statValue}>{exercise.maxWeight} kg</Text>
-                    <Text style={styles.statLabel}>Max Weight</Text>
-                  </View>
-                </View>
+                {exercise.totalVolume > 0 ? (
+                  <>
+                    <View style={styles.statItem}>
+                      <TrendingUp size={20} color="#007AFF" />
+                      <View>
+                        <Text style={styles.statValue}>{exercise.maxWeight} kg</Text>
+                        <Text style={styles.statLabel}>Max Weight</Text>
+                      </View>
+                    </View>
 
-                <View style={styles.statDivider} />
+                    <View style={styles.statDivider} />
 
-                <View style={styles.statItem}>
-                  <ChartBar size={20} color="#007AFF" />
-                  <View>
-                    <Text style={styles.statValue}>{(exercise.totalVolume / 1000).toFixed(1)}k</Text>
-                    <Text style={styles.statLabel}>Total Volume</Text>
-                  </View>
-                  
-                </View>
+                    <View style={styles.statItem}>
+                      <ChartBar size={20} color="#007AFF" />
+                      <View>
+                        <Text style={styles.statValue}>{(exercise.totalVolume / 1000).toFixed(1)}k</Text>
+                        <Text style={styles.statLabel}>Total Volume</Text>
+                      </View>
+                    </View>
+                  </>
+                ) : (
+                  <>
+                    <View style={styles.statItem}>
+                      <Dumbbell size={20} color="#007AFF" />
+                      <View>
+                        <Text style={styles.statValue}>{exercise.maxReps}</Text>
+                        <Text style={styles.statLabel}>Max Reps</Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.statDivider} />
+
+                    <View style={styles.statItem}>
+                      <ChartBar size={20} color="#007AFF" />
+                      <View>
+                        <Text style={styles.statValue}>{exercise.totalReps || 0}</Text>
+                        <Text style={styles.statLabel}>Total Reps</Text>
+                      </View>
+                    </View>
+                  </>
+                )}
               </View>
 
               <TouchableOpacity 

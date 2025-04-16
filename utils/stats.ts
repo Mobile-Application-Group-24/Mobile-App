@@ -21,6 +21,8 @@ export interface ExerciseHistoryPoint {
   maxWeight: number;
   avgWeight: number;
   maxSetVolume?: number; // Add this field to include the highest set volume
+  totalReps?: number; // Add this field to include total repetitions
+  bestSetReps?: number; // Add this field to include the best set repetitions
 }
 
 export async function getExerciseStatsFromWorkouts(userId: string): Promise<ExerciseStats[]> {
@@ -59,7 +61,7 @@ export async function getExerciseStatsFromWorkouts(userId: string): Promise<Exer
           const weight = Number(set.weight) || 0;
           const reps = Number(set.reps) || 0;
 
-          // Update maxReps unabhängig vom Gewicht
+          // Aktualisiere maxReps nur wenn die Wiederholungen in diesem Satz höher sind
           if (reps > exerciseStats[exercise.name].maxReps) {
             exerciseStats[exercise.name].maxReps = reps;
           }
@@ -127,41 +129,44 @@ export async function getExerciseHistoryData(userId: string, exerciseName: strin
       // Calculate metrics for this workout session
       let sessionVolume = 0;
       let sessionMaxWeight = 0;
-      let maxSetVolume = 0; // Variable für das höchste Satzvolumen
+      let totalReps = 0;
+      let bestSetReps = 0;
+      let maxSetVolume = 0; // Für das beste Satz-Volumen
       
+      // Verarbeite alle Sätze der Übung
       exercise.setDetails.forEach(set => {
         if (!set) return;
-        
-        const weight = typeof set.weight === 'number' ? set.weight : 
-                    (set.weight ? parseFloat(set.weight.toString()) : 0);
-                    
+
+        // Stelle sicher, dass wir die Werte korrekt parsen
         const reps = typeof set.reps === 'number' ? set.reps : 
-                  (set.reps ? parseInt(set.reps.toString(), 10) : 0);
+                    set.reps ? parseInt(set.reps.toString(), 10) : 0;
+        const weight = typeof set.weight === 'number' ? set.weight :
+                      set.weight ? parseFloat(set.weight.toString()) : 0;
         
-        if (weight > 0 && reps > 0) {
-          // Berechne das Volumen für diesen Satz
-          const setVolume = weight * reps;
-          
-          // Aktualisiere das höchste Satzvolumen wenn nötig
-          if (setVolume > maxSetVolume) {
-            maxSetVolume = setVolume;
-          }
-          
-          if (weight > sessionMaxWeight) {
-            sessionMaxWeight = weight;
-          }
-          
-          sessionVolume += setVolume;
+        // Aktualisiere bestSetReps für den besten einzelnen Satz
+        bestSetReps = Math.max(bestSetReps, reps);
+        totalReps += reps;
+        
+        // Berechne das Volumen für diesen Satz
+        const setVolume = weight * reps;
+        maxSetVolume = Math.max(maxSetVolume, setVolume); // Update maxSetVolume
+        sessionVolume += setVolume;
+        
+        if (weight > 0) {
+          sessionMaxWeight = Math.max(sessionMaxWeight, weight);
         }
       });
       
-      if (sessionVolume > 0) {
+      // Füge den Datenpunkt nur hinzu, wenn wir tatsächlich Daten haben
+      if (totalReps > 0 || sessionVolume > 0) {
         historyPoints.push({
           date: workout.date,
           volume: sessionVolume,
           maxWeight: sessionMaxWeight,
-          maxSetVolume: maxSetVolume, // Füge das höchste Satzvolumen hinzu
-          avgWeight: 0 // Wir können avgWeight entfernen wenn nicht benötigt
+          totalReps,
+          bestSetReps,
+          maxSetVolume, // Füge maxSetVolume zum Datenpunkt hinzu
+          avgWeight: sessionVolume > 0 ? sessionVolume / totalReps : 0
         });
       }
     });
