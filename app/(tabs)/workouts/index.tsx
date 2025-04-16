@@ -155,7 +155,25 @@ export default function WorkoutsScreen() {
         filteredData = data.filter(plan => plan.workout_type === currentFilter);
       }
 
-      // Only set the filtered workout plans
+      // Sort the plans by weekday (only matters for split plans)
+      const weekdayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+      filteredData.sort((a, b) => {
+        // Sort split plans by weekday
+        if (a.workout_type === 'split' && b.workout_type === 'split') {
+          return weekdayOrder.indexOf(a.day_of_week || '') - weekdayOrder.indexOf(b.day_of_week || '');
+        }
+        // Always show split plans before custom plans
+        else if (a.workout_type === 'split' && b.workout_type === 'custom') {
+          return -1;
+        }
+        else if (a.workout_type === 'custom' && b.workout_type === 'split') {
+          return 1;
+        }
+        // Default sort by title for plans of the same type
+        return a.title.localeCompare(b.title);
+      });
+
+      // Only set the filtered and sorted workout plans
       setWorkoutPlans(filteredData);
       console.log(`Loaded ${filteredData.length} ${currentFilter} workout plans out of ${data.length} total plans`);
       
