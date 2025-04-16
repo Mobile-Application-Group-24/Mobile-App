@@ -288,6 +288,12 @@ export default function ProfileScreen() {
           <View style={styles.sectionHeader}>
             <Award size={24} color="#007AFF" />
             <Text style={styles.sectionTitle}>Achievements</Text>
+            <TouchableOpacity 
+              style={styles.viewAllButton}
+              onPress={() => router.push('/profile/all-achievements')}
+            >
+              <Text style={styles.viewAllButtonText}>View All</Text>
+            </TouchableOpacity>
           </View>
           
           {achievements.length === 0 ? (
@@ -298,138 +304,29 @@ export default function ProfileScreen() {
               </Text>
             </View>
           ) : (
-            <ScrollView 
-              style={styles.achievementsScrollView}
-              nestedScrollEnabled={true}
-              showsVerticalScrollIndicator={false}
-            >
-              {overallAchievements.length > 0 && (
-                <View style={styles.achievementCategory}>
-                  <Text style={styles.achievementCategoryTitle}>Overall Achievements</Text>
-                  {overallAchievements.map((achievement, index) => (
-                    <View key={`overall-${index}`} style={styles.achievementCard}>
-                      <View style={styles.achievementHeader}>
-                        <Award size={20} color="#007AFF" />
-                        <Text style={styles.achievementTitle}>{achievement.title}</Text>
-                      </View>
-                      <Text style={styles.achievementDescription}>
-                        {achievement.description}
-                      </Text>
-                      {achievement.date_earned && (
-                        <Text style={styles.achievementDate}>
-                          Earned on {new Date(achievement.date_earned).toLocaleDateString()}
-                        </Text>
-                      )}
-                    </View>
-                  ))}
+            // Display only the top 3 achievements across all categories
+            achievements.slice(0, 3).map((achievement, index) => (
+              <View 
+                key={`achievement-${index}`} 
+                style={[
+                  styles.achievementCard,
+                  { borderLeftWidth: 4, borderLeftColor: achievement.icon_color || '#007AFF' }
+                ]}
+              >
+                <View style={styles.achievementHeader}>
+                  {achievement.icon || <Award size={20} color={achievement.icon_color || '#007AFF'} />}
+                  <Text style={styles.achievementTitle}>{achievement.title}</Text>
                 </View>
-              )}
-              
-              {volumeAchievements.length > 0 && (
-                <View style={styles.achievementCategory}>
-                  <Text style={styles.achievementCategoryTitle}>Volume Achievements</Text>
-                  {volumeAchievements.map((achievement, index) => (
-                    <View key={`volume-${index}`} style={[
-                      styles.achievementCard,
-                      { borderLeftWidth: 4, borderLeftColor: achievement.icon_color || '#FF9500' }
-                    ]}>
-                      <View style={styles.achievementHeader}>
-                        {achievement.icon || <Dumbbell size={20} color={achievement.icon_color || '#FF9500'} />}
-                        <Text style={styles.achievementTitle}>{achievement.title}</Text>
-                      </View>
-                      <Text style={styles.achievementDescription}>
-                        {achievement.description}
-                      </Text>
-                      {achievement.date_earned && (
-                        <Text style={styles.achievementDate}>
-                          Earned on {new Date(achievement.date_earned).toLocaleDateString()}
-                        </Text>
-                      )}
-                    </View>
-                  ))}
-                </View>
-              )}
-              
-              {workoutAchievements.length > 0 && (
-                <View style={styles.achievementCategory}>
-                  <Text style={styles.achievementCategoryTitle}>Workout Achievements</Text>
-                  {workoutAchievements.map((achievement, index) => (
-                    <View key={`workout-${index}`} style={[
-                      styles.achievementCard,
-                      { borderLeftWidth: 4, borderLeftColor: achievement.icon_color || '#34C759' }
-                    ]}>
-                      <View style={styles.achievementHeader}>
-                        {achievement.icon || <Flame size={20} color={achievement.icon_color || '#34C759'} />}
-                        <Text style={styles.achievementTitle}>{achievement.title}</Text>
-                      </View>
-                      <Text style={styles.achievementDescription}>
-                        {achievement.description}
-                      </Text>
-                      {achievement.date_earned && (
-                        <Text style={styles.achievementDate}>
-                          Earned on {new Date(achievement.date_earned).toLocaleDateString()}
-                        </Text>
-                      )}
-                    </View>
-                  ))}
-                </View>
-              )}
-              
-              {hourAchievements.length > 0 && (
-                <View style={styles.achievementCategory}>
-                  <Text style={styles.achievementCategoryTitle}>Time Achievements</Text>
-                  {hourAchievements.map((achievement, index) => (
-                    <View key={`hour-${index}`} style={[
-                      styles.achievementCard,
-                      { borderLeftWidth: 4, borderLeftColor: achievement.icon_color || '#5856D6' }
-                    ]}>
-                      <View style={styles.achievementHeader}>
-                        {achievement.icon || <Timer size={20} color={achievement.icon_color || '#5856D6'} />}
-                        <Text style={styles.achievementTitle}>{achievement.title}</Text>
-                      </View>
-                      <Text style={styles.achievementDescription}>
-                        {achievement.description}
-                      </Text>
-                      {achievement.date_earned && (
-                        <Text style={styles.achievementDate}>
-                          Earned on {new Date(achievement.date_earned).toLocaleDateString()}
-                        </Text>
-                      )}
-                    </View>
-                  ))}
-                </View>
-              )}
-              
-              {exerciseAchievements.length > 0 && (
-                <View style={styles.achievementCategory}>
-                  <Text style={styles.achievementCategoryTitle}>Exercise Achievements</Text>
-                  {exerciseAchievements.map((achievement, index) => (
-                    <View key={`exercise-${index}`} style={[
-                      styles.achievementCard,
-                      { borderLeftWidth: 4, borderLeftColor: achievement.icon_color || '#007AFF' }
-                    ]}>
-                      <View style={styles.achievementHeader}>
-                        {achievement.icon || <Target size={20} color={achievement.icon_color || '#007AFF'} />}
-                        <Text style={styles.achievementTitle}>{achievement.title}</Text>
-                      </View>
-                      <Text style={styles.achievementDescription}>
-                        {achievement.description}
-                      </Text>
-                      {achievement.exercise_name && (
-                        <Text style={styles.exerciseName}>
-                          Exercise: {achievement.exercise_name}
-                        </Text>
-                      )}
-                      {achievement.date_earned && (
-                        <Text style={styles.achievementDate}>
-                          Earned on {new Date(achievement.date_earned).toLocaleDateString()}
-                        </Text>
-                      )}
-                    </View>
-                  ))}
-                </View>
-              )}
-            </ScrollView>
+                <Text style={styles.achievementDescription}>
+                  {achievement.description}
+                </Text>
+                {achievement.date_earned && (
+                  <Text style={styles.achievementDate}>
+                    Earned on {new Date(achievement.date_earned).toLocaleDateString()}
+                  </Text>
+                )}
+              </View>
+            ))
           )}
         </View>
 
