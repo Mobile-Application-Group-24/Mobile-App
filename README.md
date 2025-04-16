@@ -1,5 +1,5 @@
 
-![Alt-Text](assets/images/icon.png)
+<img src="assets/images/icon.png" alt="TrainRepublic Logo" width="200">
 
 # TrainRepublic - Mobile Fitness Tracking Application
 
