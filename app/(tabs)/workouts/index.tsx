@@ -155,7 +155,25 @@ export default function WorkoutsScreen() {
         filteredData = data.filter(plan => plan.workout_type === currentFilter);
       }
 
-      // Only set the filtered workout plans
+      // Sort the plans by weekday (only matters for split plans)
+      const weekdayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+      filteredData.sort((a, b) => {
+        // Sort split plans by weekday
+        if (a.workout_type === 'split' && b.workout_type === 'split') {
+          return weekdayOrder.indexOf(a.day_of_week || '') - weekdayOrder.indexOf(b.day_of_week || '');
+        }
+        // Always show split plans before custom plans
+        else if (a.workout_type === 'split' && b.workout_type === 'custom') {
+          return -1;
+        }
+        else if (a.workout_type === 'custom' && b.workout_type === 'split') {
+          return 1;
+        }
+        // Default sort by title for plans of the same type
+        return a.title.localeCompare(b.title);
+      });
+
+      // Only set the filtered and sorted workout plans
       setWorkoutPlans(filteredData);
       console.log(`Loaded ${filteredData.length} ${currentFilter} workout plans out of ${data.length} total plans`);
       
@@ -221,30 +239,32 @@ export default function WorkoutsScreen() {
       let completedDaysThisWeek = 0;
       let plannedDaysThisWeek = 0;
 
-      // Check each day of the week up to today
+      // Count all training days for the full week, not just up to today
       for (let i = 0; i < 7; i++) {
         const currentDay = addDays(startOfCurrentWeek, i);
-        if (currentDay > today) break;
-
         const dayName = format(currentDay, 'EEEE');
 
         if (schedule[dayName]) {
           plannedDaysThisWeek++;
 
-          const workoutForThisDay = workouts.find(w => {
-            const workoutDate = parseISO(w.date);
-            return isSameDay(workoutDate, currentDay) && w.done && 
-              w.workout_plan_id === schedule[dayName]?.id;
-          });
+          // Only count completed workouts for days that have already passed
+          if (currentDay <= today) {
+            const workoutForThisDay = workouts.find(w => {
+              const workoutDate = parseISO(w.date);
+              return isSameDay(workoutDate, currentDay) && w.done && 
+                w.workout_plan_id === schedule[dayName]?.id;
+            });
 
-          if (workoutForThisDay) {
-            completedDaysThisWeek++;
+            if (workoutForThisDay) {
+              completedDaysThisWeek++;
+            }
           }
         }
       }
 
       setCompletedTrainingDays(completedDaysThisWeek);
 
+      // Calculate percentage based on total planned workouts for the whole week
       const weeklyPercentage = plannedDaysThisWeek > 0 
         ? Math.round((completedDaysThisWeek / plannedDaysThisWeek) * 100)
         : 0;

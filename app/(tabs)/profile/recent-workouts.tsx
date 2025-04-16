@@ -143,8 +143,8 @@ export default function RecentWorkoutsScreen() {
         <TouchableOpacity 
           style={styles.viewDetailsButton}
           onPress={() => router.push({
-            pathname: '/workout/[id]',
-            params: { id: item.id }
+            pathname: '/(tabs)/workouts/[id]',
+            params: { id: item.id, fromHistory: 'true' }
           })}
         >
           <Text style={styles.viewDetailsText}>View Details</Text>

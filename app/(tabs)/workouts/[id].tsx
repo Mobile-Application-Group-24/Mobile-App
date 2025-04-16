@@ -34,6 +34,7 @@ export default function WorkoutDetailScreen() {
   const workoutId = params.id as string;
   const selectedExercise = params.selectedExercise;
   const autoStart = params.autoStart === 'true';
+  const fromHistory = params.fromHistory === 'true';
   const router = useRouter();
   const [workoutPlan, setWorkoutPlan] = useState<WorkoutPlan | null>(null);
   const [previousWorkout, setPreviousWorkout] = useState<Workout | null>(null);
@@ -57,6 +58,9 @@ export default function WorkoutDetailScreen() {
   const [workoutEndTime, setWorkoutEndTime] = useState<Date | null>(null);
   const [isWorkoutActive, setIsWorkoutActive] = useState(false);
   const [editingExercise, setEditingExercise] = useState<string | null>(null);
+  const [exercisePreviousDataMap, setExercisePreviousDataMap] = useState<Map<string, any>>(new Map());
+  const [editingTime, setEditingTime] = useState<'start' | 'end' | null>(null);
+  const [showTimePicker, setShowTimePicker] = useState(false);
 
   const startRestTimer = () => {
     setIsTimerRunning(true);
@@ -195,6 +199,75 @@ export default function WorkoutDetailScreen() {
       setLoading(true);
       setError(null);
       
+      // Zusätzlich prüfen, ob dies ein bereits durchgeführtes Workout ist
+      if (fromHistory) {
+        try {
+          const { data: workoutData, error: workoutError } = await supabase
+            .from('workouts')
+            .select('*')
+            .eq('id', workoutPlanId)
+            .single();
+            
+          if (workoutError) throw workoutError;
+          
+          if (workoutData) {
+            // Es handelt sich um ein gespeichertes Workout aus der History
+            setWorkoutPlan({
+              id: workoutData.id,
+              title: workoutData.title,
+              description: workoutData.notes || '',
+              workout_type: 'custom',
+              duration_minutes: 0,
+              exercises: workoutData.exercises?.map(ex => ({
+                id: ex.id,
+                name: ex.name,
+                sets: ex.sets,
+                type: ex.type
+              })) || [],
+              user_id: workoutData.user_id,
+              created_at: workoutData.created_at,
+              updated_at: workoutData.created_at
+            });
+            
+            setWorkoutName(workoutData.title || '');
+            setNotes(workoutData.notes || '');
+            setBodyWeight(workoutData.bodyweight ? String(workoutData.bodyweight) : '');
+            
+            if (workoutData.start_time) {
+              setWorkoutStartTime(new Date(workoutData.start_time));
+            }
+            
+            if (workoutData.end_time) {
+              setWorkoutEndTime(new Date(workoutData.end_time));
+            }
+            
+            // Exercises mit den Set-Details verarbeiten
+            const exercisesWithDetails = workoutData.exercises?.map(exercise => {
+              return {
+                id: exercise.id,
+                name: exercise.name,
+                type: exercise.type,
+                sets: exercise.setDetails?.map(set => ({
+                  id: set.id,
+                  weight: set.weight ? String(set.weight) : '',
+                  reps: set.reps ? String(set.reps) : '',
+                  type: set.type || 'normal',
+                  notes: set.notes || ''
+                })) || []
+              };
+            }) || [];
+            
+            setExercises(exercisesWithDetails);
+            setLoading(false);
+            return;
+          }
+        } catch (historyError) {
+          console.error('Error loading workout from history:', historyError);
+          // Fallback zum normalen Plan-Laden
+        }
+      }
+      
+      // Normales Laden des Workout-Plans, wenn es kein History-Workout ist oder wenn History-Laden fehlschlägt
       // Get the workout plan from workout_plans table
       const plan = await getWorkoutPlan(workoutPlanId);
       setWorkoutPlan(plan);
@@ -272,7 +345,39 @@ export default function WorkoutDetailScreen() {
               }
             }
           }
+          
+          // Additionally, process all exercises in completed workouts to have this data available for newly added exercises
+          for (const workout of allCompletedWorkouts) {
+            if (workout.exercises) {
+              for (const exerciseData of workout.exercises) {
+                // Store by both ID and name to make lookups easier
+                if (exerciseData.setDetails && exerciseData.setDetails.length > 0) {
+                  // Check if we already have more recent data for this exercise ID
+                  if (!exercisePreviousData.has(exerciseData.id) || 
+                      new Date(workout.date) > new Date(exercisePreviousData.get(exerciseData.id).date)) {
+                    exercisePreviousData.set(exerciseData.id, {
+                      date: workout.date,
+                      exerciseData: exerciseData
+                    });
+                  }
+                  
+                  // Also store by exercise name for custom exercises
+                  const nameKey = `name:${exerciseData.name.toLowerCase()}`;
+                  if (!exercisePreviousData.has(nameKey) || 
+                      new Date(workout.date) > new Date(exercisePreviousData.get(nameKey).date)) {
+                    exercisePreviousData.set(nameKey, {
+                      date: workout.date,
+                      exerciseData: exerciseData
+                    });
+                  }
+                }
+              }
+            }
+          }
         }
+        
+        // Store the map for later use when adding new exercises
+        setExercisePreviousDataMap(exercisePreviousData);
         
       } catch (prevError) {
         console.log('Error fetching previous workout data:', prevError);
@@ -346,6 +451,28 @@ export default function WorkoutDetailScreen() {
     if (selectedExercise && typeof selectedExercise === 'string') {
       const timestamp = Date.now();
       
+      // Check if this exercise is already in the workout
+      const exerciseAlreadyExists = exercises.some(ex => 
+        ex.name.toLowerCase() === selectedExercise.toLowerCase()
+      );
+      
+      if (exerciseAlreadyExists) {
+        // Alert the user and don't add the duplicate exercise
+        Alert.alert(
+          "Duplicate Exercise",
+          `"${selectedExercise}" is already in this workout. Each exercise can only be added once.`,
+          [{ text: "OK" }]
+        );
+        
+        // Reset the selectedExercise param
+        const timeout = setTimeout(() => {
+          router.setParams({ id: workoutId });
+        }, 0);
+        
+        return () => clearTimeout(timeout);
+      }
+      
+      // Continue with normal exercise adding process since it's not a duplicate
       // Try to find the exercise ID in our predefined lists
       let exerciseId = '';
       let exerciseType: 'chest' | 'back' | 'arms' | 'legs' | 'shoulders' | 'core' | undefined;
@@ -369,35 +496,65 @@ export default function WorkoutDetailScreen() {
         exerciseType = findExerciseType(selectedExercise);
       }
       
+      // Check for previous data in our map
+      let prevExerciseData = null;
+      
+      // Try to find by ID first
+      if (exercisePreviousDataMap.has(exerciseId)) {
+        prevExerciseData = exercisePreviousDataMap.get(exerciseId).exerciseData;
+        console.log(`Found previous data for ${selectedExercise} by ID ${exerciseId}`);
+      } 
+      // If not found by ID, try by name
+      else {
+        const nameKey = `name:${selectedExercise.toLowerCase()}`;
+        if (exercisePreviousDataMap.has(nameKey)) {
+          prevExerciseData = exercisePreviousDataMap.get(nameKey).exerciseData;
+          console.log(`Found previous data for ${selectedExercise} by name`);
+        }
+      }
+      
+      // Create sets with previous data if available
+      const sets = [];
+      const numSets = prevExerciseData?.setDetails?.length || 3; // Use previous count or default to 3
+      
+      for (let i = 0; i < numSets; i++) {
+        const prevSetData = prevExerciseData?.setDetails && i < prevExerciseData.setDetails.length ? 
+                             prevExerciseData.setDetails[i] : null;
+                             
+        // Extract values with fallbacks
+        const prevWeight = prevSetData && prevSetData.weight !== undefined && prevSetData.weight !== null ? 
+          String(prevSetData.weight) : '';
+        
+        const prevReps = prevSetData && prevSetData.reps !== undefined && prevSetData.reps !== null ? 
+          String(prevSetData.reps) : '';
+        
+        const prevNotes = prevSetData && prevSetData.notes ? prevSetData.notes : '';
+        
+        sets.push({
+          id: `${timestamp}-set${i+1}`,
+          weight: '',
+          reps: '',
+          type: prevSetData?.type || 'normal',
+          notes: '',
+          // Include previous data
+          prevWeight,
+          prevReps,
+          prevNotes
+        });
+      }
+      
       const exerciseToAdd: ExerciseProgress = {
         id: exerciseId,
         name: selectedExercise,
         type: exerciseType,
-        sets: [
-          // Create 3 sets by default instead of just 1
-          {
-            id: `${timestamp}-set1`,
-            weight: '',
-            reps: '',
-            type: 'normal',
-            notes: ''
-          },
-          {
-            id: `${timestamp}-set2`,
-            weight: '',
-            reps: '',
-            type: 'normal',
-            notes: ''
-          },
-          {
-            id: `${timestamp}-set3`,
-            weight: '',
-            reps: '',
-            type: 'normal',
-            notes: ''
-          }
-        ]
+        sets: sets
       };
+
+      if (prevExerciseData) {
+        console.log(`Added exercise ${selectedExercise} with ${sets.length} sets using previous data`);
+      } else {
+        console.log(`Added exercise ${selectedExercise} with ${sets.length} sets (no previous data found)`);
+      }
 
       setExercises(prev => [...prev, exerciseToAdd]);
 
@@ -407,7 +564,7 @@ export default function WorkoutDetailScreen() {
 
       return () => clearTimeout(timeout);
     }
-  }, [selectedExercise, workoutId]);
+  }, [selectedExercise, workoutId, exercisePreviousDataMap, exercises]);
 
   // Add a new effect to auto-start the workout if opened from the start workout button
   useEffect(() => {
@@ -452,24 +609,38 @@ export default function WorkoutDetailScreen() {
   const addSet = (exerciseId: string) => {
     setExercises(prev => prev.map(exercise => {
       if (exercise.id === exerciseId) {
-        // Find the current number of sets for this exercise
         const currentSetCount = exercise.sets.length;
         
-        // If we have a set in the current exercise with data (from any previous workout),
-        // use the last set's data as a reference for new sets
-        const lastSet = exercise.sets[currentSetCount - 1];
+        // Instead of just copying from the last set, check if we have historical data for this specific set
+        let prevSetData = null;
+        const exerciseData = exercisePreviousDataMap.get(exercise.id)?.exerciseData;
         
-        // Create new set with previous data if available
+        // If there's historical data for this exercise and it has enough sets
+        if (exerciseData && exerciseData.setDetails && currentSetCount < exerciseData.setDetails.length) {
+          // Get data for the next set from historical data
+          prevSetData = exerciseData.setDetails[currentSetCount];
+          console.log(`Found historical data for new set ${currentSetCount+1} in exercise ${exercise.name}`);
+        }
+        
+        // Prepare previous values with proper fallbacks
+        const prevWeight = prevSetData && prevSetData.weight !== undefined && prevSetData.weight !== null ? 
+          String(prevSetData.weight) : '';
+        
+        const prevReps = prevSetData && prevSetData.reps !== undefined && prevSetData.reps !== null ? 
+          String(prevSetData.reps) : '';
+        
+        const prevNotes = prevSetData && prevSetData.notes ? prevSetData.notes : '';
+        
+        // Create the new set
         const newSet: WorkoutSet = {
           id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
           weight: '',
           reps: '',
-          type: 'normal',
+          type: prevSetData?.type || 'normal',
           notes: '',
-          // Add previous data either from the previous set's data or empty
-          prevWeight: lastSet?.prevWeight || '',
-          prevReps: lastSet?.prevReps || '', 
-          prevNotes: lastSet?.prevNotes || ''
+          prevWeight,
+          prevReps,
+          prevNotes
         };
         
         return {
@@ -572,6 +743,41 @@ export default function WorkoutDetailScreen() {
     try {
       const originalPlan = workoutPlan;
       
+      // Wenn es ein History-Workout ist, aktualisieren wir das vorhandene Workout
+      if (fromHistory) {
+        const workoutExercises = exercises.map(exercise => {
+          return {
+            id: exercise.id,
+            name: exercise.name,
+            type: exercise.type,
+            sets: exercise.sets.length,
+            setDetails: exercise.sets.map(set => ({
+              id: set.id,
+              weight: set.weight ? parseFloat(set.weight) : undefined,
+              reps: set.reps ? parseInt(set.reps, 10) : undefined,
+              type: set.type,
+              notes: set.notes || ''
+            }))
+          };
+        });
+        
+        // Update the workout record
+        await supabase
+          .from('workouts')
+          .update({
+            title: workoutName,
+            notes: notes,
+            bodyweight: bodyWeight ? parseFloat(bodyWeight) : undefined,
+            exercises: workoutExercises
+          })
+          .eq('id', workoutId);
+        
+        console.log("Updated existing workout from history");
+        router.back();
+        return;
+      }
+      
+      // Normale Speicherlogik für Workout-Pläne
       const planExercises = exercises.map(exercise => ({
         id: exercise.id,
         name: exercise.name,
@@ -688,6 +894,31 @@ export default function WorkoutDetailScreen() {
     });
   };
 
+  const handleTimeChange = (event: any, selectedDate?: Date) => {
+    setShowTimePicker(Platform.OS === 'ios');
+    
+    if (selectedDate) {
+      if (editingTime === 'start') {
+        setWorkoutStartTime(selectedDate);
+        if (!isWorkoutActive) {
+          setIsWorkoutActive(true);
+        }
+      } else if (editingTime === 'end') {
+        setWorkoutEndTime(selectedDate);
+        setIsWorkoutActive(false);
+      }
+    }
+    
+    if (Platform.OS === 'android') {
+      setEditingTime(null);
+    }
+  };
+
+  const openTimePicker = (timeType: 'start' | 'end') => {
+    setEditingTime(timeType);
+    setShowTimePicker(true);
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -721,7 +952,7 @@ export default function WorkoutDetailScreen() {
           </TouchableOpacity>
           <View style={styles.headerCenter}>
             <Text style={styles.date}>
-              {(() => {
+              {fromHistory ? 'Edit Workout' : (() => {
                 try {
                   return format(new Date(), 'dd. MMMM');
                 } catch (error) {
@@ -762,40 +993,75 @@ export default function WorkoutDetailScreen() {
                 placeholderTextColor="#8E8E93"
               />
 
-              <View style={styles.workoutTimes}>
-                <View style={styles.timeInfo}>
-                  <Clock size={20} color="#007AFF" />
-                  <Text style={styles.timeText}>
-                    {(() => {
-                      try {
-                        if (workoutStartTime) {
-                          return `${format(workoutStartTime, 'HH:mm')}${
-                            workoutEndTime ? ` - ${format(workoutEndTime, 'HH:mm')}` : ''
-                          }`;
-                        }
-                        return 'Not started';
-                      } catch (error) {
-                        console.warn('Error formatting workout time:', error);
-                        return 'Time unavailable';
-                      }
-                    })()}
-                  </Text>
-                </View>
-                <TouchableOpacity
-                  style={[
-                    styles.workoutStateButton,
-                    isWorkoutActive && styles.workoutStateButtonActive
-                  ]}
-                  onPress={isWorkoutActive ? endWorkout : startWorkout}
-                >
-                  <Text style={styles.workoutStateButtonText}>
-                    {isWorkoutActive ? 'End Workout' : 'Start Workout'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-              
               <View style={styles.infoGrid}>
-                <View style={styles.infoCard}>
+                <View style={[styles.infoCard, styles.fullWidthCard]}>
+                  <View style={styles.infoIconContainer}>
+                    <CalendarClock size={20} color="#007AFF" />
+                  </View>
+                  <View style={styles.infoContent}>
+                    <View style={styles.workoutTimeRow}>
+                      <View>
+                        <Text style={styles.infoLabel}>Workout Time</Text>
+                        {workoutStartTime ? (
+                          <View style={styles.timeTextContainer}>
+                            <TouchableOpacity 
+                              onPress={() => openTimePicker('start')}
+                              style={styles.timeWithEditButton}
+                            >
+                              <Text style={styles.infoValue}>
+                                {(() => {
+                                  try {
+                                    return format(workoutStartTime, 'HH:mm');
+                                  } catch (error) {
+                                    console.warn('Error formatting start time:', error);
+                                    return 'Time unavailable';
+                                  }
+                                })()}
+                              </Text>
+                            </TouchableOpacity>
+                            
+                            {workoutEndTime && (
+                              <>
+                                <Text style={styles.infoValue}> - </Text>
+                                <TouchableOpacity 
+                                  onPress={() => openTimePicker('end')}
+                                  style={styles.timeWithEditButton}
+                                >
+                                  <Text style={styles.infoValue}>
+                                    {(() => {
+                                      try {
+                                        return format(workoutEndTime, 'HH:mm');
+                                      } catch (error) {
+                                        console.warn('Error formatting end time:', error);
+                                        return 'Time unavailable';
+                                      }
+                                    })()}
+                                  </Text>
+                                </TouchableOpacity>
+                              </>
+                            )}
+                          </View>
+                        ) : null}
+                      </View>
+                      {/* Only show workout state button if not already saved with times */}
+                      {(!workoutStartTime || (workoutStartTime && !workoutEndTime && isWorkoutActive)) && (
+                        <TouchableOpacity
+                          style={[
+                            styles.workoutStateButton,
+                            isWorkoutActive && styles.workoutStateButtonActive
+                          ]}
+                          onPress={isWorkoutActive ? endWorkout : startWorkout}
+                        >
+                          <Text style={styles.workoutStateButtonText}>
+                            {isWorkoutActive ? 'End Workout' : 'Start Workout'}
+                          </Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  </View>
+                </View>
+
+                <View style={[styles.infoCard, styles.fullWidthCard]}>
                   <View style={styles.infoIconContainer}>
                     <Scale size={20} color="#FF9500" />
                   </View>
@@ -1064,6 +1330,46 @@ export default function WorkoutDetailScreen() {
             )}
           </View>
         )}
+
+        {/* Time picker for iOS */}
+        {showTimePicker && Platform.OS === 'ios' && (
+          <View style={styles.timePickerContainer}>
+            <View style={styles.timePickerHeader}>
+              <TouchableOpacity onPress={() => setShowTimePicker(false)}>
+                <Text style={styles.timePickerCancel}>Cancel</Text>
+              </TouchableOpacity>
+              <Text style={styles.timePickerTitle}>
+                {editingTime === 'start' ? 'Start Time' : 'End Time'}
+              </Text>
+              <TouchableOpacity onPress={() => setShowTimePicker(false)}>
+                <Text style={styles.timePickerDone}>Done</Text>
+              </TouchableOpacity>
+            </View>
+            <DateTimePicker
+              value={editingTime === 'start' 
+                ? (workoutStartTime || new Date()) 
+                : (workoutEndTime || new Date())}
+              mode="time"
+              is24Hour={true}
+              display="spinner"
+              onChange={handleTimeChange}
+              style={styles.timePicker}
+            />
+          </View>
+        )}
+
+        {/* Time picker for Android */}
+        {showTimePicker && Platform.OS === 'android' && (
+          <DateTimePicker
+            value={editingTime === 'start' 
+              ? (workoutStartTime || new Date()) 
+              : (workoutEndTime || new Date())}
+            mode="time"
+            is24Hour={true}
+            display="default"
+            onChange={handleTimeChange}
+          />
+        )}
       </SafeAreaView>
     </KeyboardAvoidingView>
   );
@@ -1161,11 +1467,29 @@ const styles = StyleSheet.create({
     color: '#000000',
     fontWeight: '600',
   },
+  timeTextContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  timeWithEditButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  timeEditButton: {
+    padding: 4,
+    backgroundColor: '#F2F2F7',
+    borderRadius: 12,
+    marginLeft: 8,
+  },
   workoutStateButton: {
     backgroundColor: '#34C759',
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 8,
+    marginTop: 8,
+    alignSelf: 'flex-start',
   },
   workoutStateButtonActive: {
     backgroundColor: '#FF3B30',
@@ -1175,20 +1499,26 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
-  infoGrid: {
+  workoutTimeRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  infoGrid: {
+    flexDirection: 'column',
     gap: 12,
+    marginTop: 4,
   },
   infoCard: {
-    flex: 1,
-    minWidth: '45%',
     backgroundColor: '#F8F8FA',
     borderRadius: 12,
     padding: 12,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+  },
+  fullWidthCard: {
+    width: '100%',
   },
   notesCard: {
     flex: 2,
@@ -1580,5 +1910,45 @@ const styles = StyleSheet.create({
     color: '#34C759',
     marginTop: 2,
     textAlign: 'right',
+  },
+  timePickerContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  timePickerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E5EA',
+  },
+  timePickerTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#000000',
+  },
+  timePickerCancel: {
+    fontSize: 16,
+    color: '#FF3B30',
+  },
+  timePickerDone: {
+    fontSize: 16,
+    color: '#007AFF',
+    fontWeight: '600',
+  },
+  timePicker: {
+    height: 200,
   },
 });

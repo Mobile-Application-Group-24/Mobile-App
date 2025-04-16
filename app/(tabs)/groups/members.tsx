@@ -243,10 +243,16 @@ export default function MembersScreen() {
             <TouchableOpacity 
               key={member.id} 
               style={styles.memberCard}
-              onPress={() => router.push({
-                pathname: '/profile/Profileview',
-                params: { userId: member.user_id }
-              })}
+              onPress={() => {
+                console.log("Navigating to profile with userId:", member.user_id);
+                router.push({
+                  pathname: "/(tabs)/profile/Profileview",
+                  params: { 
+                    userId: member.user_id,
+                    groupId: groupId 
+                  }
+                });
+              }}
             >
               <View style={styles.memberInfo}>
                 <Image 

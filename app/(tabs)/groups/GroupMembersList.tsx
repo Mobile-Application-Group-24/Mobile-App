@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, FlatList, Image, StyleSheet } from 'react-native';
-import { GroupMember } from '../utils/supabase';
-import { getAvatarUrl, getDisplayName } from '../utils/avatar';
+import { GroupMember } from '../../../utils/supabase';
+import { getAvatarUrl, getDisplayName } from '../../../utils/avatar';
 
 interface GroupMembersListProps {
   members: GroupMember[];

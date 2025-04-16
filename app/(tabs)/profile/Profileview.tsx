@@ -1,35 +1,47 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, ActivityIndicator, StatusBar, SafeAreaView } from 'react-native';
-import { ArrowLeft, Award, Calendar, ChartBar as BarChart, Clock, Flame } from 'lucide-react-native';
+import { ArrowLeft, Award, Calendar, ChartBar as BarChart, Clock, Flame, Users } from 'lucide-react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { getProfile, type Profile, getRecentWorkouts, type Workout } from '@/utils/supabase';
+import { useAuth } from '@/providers/AuthProvider';
 
 export default function ViewProfileScreen() {
-  const { userId } = useLocalSearchParams();
+  const { userId, groupId } = useLocalSearchParams();
   const router = useRouter();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [recentWorkouts, setRecentWorkouts] = useState<Workout[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { session } = useAuth();
+  const [isOwnProfile, setIsOwnProfile] = useState(false);
+
+  const getCurrentUserId = () => {
+    if (!userId || (userId === 'undefined' && !groupId)) {
+      return session?.user?.id;
+    }
+    return userId as string;
+  };
 
   useEffect(() => {
-    if (userId) {
-      loadProfile();
+    const currentUserId = getCurrentUserId();
+    
+    if (currentUserId) {
+      setIsOwnProfile(currentUserId === session?.user?.id);
+      loadProfile(currentUserId);
     }
-  }, [userId]);
+  }, [userId, session, groupId]);
 
-  const loadProfile = async () => {
-    if (!userId) return;
+  const loadProfile = async (profileId: string) => {
+    if (!profileId) return;
 
     try {
       setLoading(true);
       setError(null);
       const [data, workoutsData] = await Promise.all([
-        getProfile(userId as string),
-        getRecentWorkouts(userId as string, 3)
+        getProfile(profileId),
+        getRecentWorkouts(profileId, 3)
       ]);
       
-      // Ensure achievements and stats have default values
       setProfile({
         ...data,
         achievements: data.achievements || [],
@@ -54,6 +66,22 @@ export default function ViewProfileScreen() {
     });
   };
 
+  const handleBackNavigation = () => {
+    if (isOwnProfile && !groupId) {
+      return;
+    }
+    
+    if (groupId) {
+      router.push(`/groups/${groupId}`);
+    } else {
+      router.back();
+    }
+  };
+
+  const retryLoading = () => {
+    loadProfile(getCurrentUserId());
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -68,7 +96,7 @@ export default function ViewProfileScreen() {
         <Text style={styles.errorText}>{error || 'Profile not found'}</Text>
         <TouchableOpacity 
           style={styles.retryButton}
-          onPress={loadProfile}
+          onPress={retryLoading}
         >
           <Text style={styles.retryButtonText}>Retry</Text>
         </TouchableOpacity>
@@ -86,13 +114,17 @@ export default function ViewProfileScreen() {
       <SafeAreaView style={styles.safeAreaTop} />
       
       <View style={styles.navigationHeader}>
-        <TouchableOpacity 
-          style={styles.backButton}
-          onPress={() => router.back()}
-        >
-          <ArrowLeft size={24} color="#007AFF" />
-        </TouchableOpacity>
-        <Text style={styles.navTitle}>Profile</Text>
+        {(!isOwnProfile || groupId) && (
+          <TouchableOpacity 
+            style={styles.backButton}
+            onPress={handleBackNavigation}
+          >
+            <ArrowLeft size={24} color="#007AFF" />
+          </TouchableOpacity>
+        )}
+        <Text style={styles.navTitle}>
+          {isOwnProfile && !groupId ? "My Profile" : "Profile"}
+        </Text>
         <View style={styles.placeholder} />
       </View>
       
@@ -105,9 +137,7 @@ export default function ViewProfileScreen() {
             style={styles.profileImage}
             onError={(e) => {
               console.log("Fehler beim Laden des Profilbilds:", profile.avatar_url);
-              // If image failed to load, try to use default image
               if (e.nativeEvent.error && profile.avatar_url) {
-                // Update the component state to use default image
                 setProfile(prev => prev ? {...prev, avatar_url: null} : null);
               }
             }}
@@ -243,7 +273,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   placeholder: {
-    width: 40, // Same width as backButton for symmetry
+    width: 40,
   },
   loadingContainer: {
     flex: 1,
