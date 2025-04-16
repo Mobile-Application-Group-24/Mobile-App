@@ -58,6 +58,8 @@ export default function WorkoutDetailScreen() {
   const [isWorkoutActive, setIsWorkoutActive] = useState(false);
   const [editingExercise, setEditingExercise] = useState<string | null>(null);
   const [exercisePreviousDataMap, setExercisePreviousDataMap] = useState<Map<string, any>>(new Map());
+  const [editingTime, setEditingTime] = useState<'start' | 'end' | null>(null);
+  const [showTimePicker, setShowTimePicker] = useState(false);
 
   const startRestTimer = () => {
     setIsTimerRunning(true);
@@ -787,6 +789,31 @@ export default function WorkoutDetailScreen() {
     });
   };
 
+  const handleTimeChange = (event: any, selectedDate?: Date) => {
+    setShowTimePicker(Platform.OS === 'ios');
+    
+    if (selectedDate) {
+      if (editingTime === 'start') {
+        setWorkoutStartTime(selectedDate);
+        if (!isWorkoutActive) {
+          setIsWorkoutActive(true);
+        }
+      } else if (editingTime === 'end') {
+        setWorkoutEndTime(selectedDate);
+        setIsWorkoutActive(false);
+      }
+    }
+    
+    if (Platform.OS === 'android') {
+      setEditingTime(null);
+    }
+  };
+
+  const openTimePicker = (timeType: 'start' | 'end') => {
+    setEditingTime(timeType);
+    setShowTimePicker(true);
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -861,40 +888,75 @@ export default function WorkoutDetailScreen() {
                 placeholderTextColor="#8E8E93"
               />
 
-              <View style={styles.workoutTimes}>
-                <View style={styles.timeInfo}>
-                  <Clock size={20} color="#007AFF" />
-                  <Text style={styles.timeText}>
-                    {(() => {
-                      try {
-                        if (workoutStartTime) {
-                          return `${format(workoutStartTime, 'HH:mm')}${
-                            workoutEndTime ? ` - ${format(workoutEndTime, 'HH:mm')}` : ''
-                          }`;
-                        }
-                        return 'Not started';
-                      } catch (error) {
-                        console.warn('Error formatting workout time:', error);
-                        return 'Time unavailable';
-                      }
-                    })()}
-                  </Text>
-                </View>
-                <TouchableOpacity
-                  style={[
-                    styles.workoutStateButton,
-                    isWorkoutActive && styles.workoutStateButtonActive
-                  ]}
-                  onPress={isWorkoutActive ? endWorkout : startWorkout}
-                >
-                  <Text style={styles.workoutStateButtonText}>
-                    {isWorkoutActive ? 'End Workout' : 'Start Workout'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-              
               <View style={styles.infoGrid}>
-                <View style={styles.infoCard}>
+                <View style={[styles.infoCard, styles.fullWidthCard]}>
+                  <View style={styles.infoIconContainer}>
+                    <CalendarClock size={20} color="#007AFF" />
+                  </View>
+                  <View style={styles.infoContent}>
+                    <View style={styles.workoutTimeRow}>
+                      <View>
+                        <Text style={styles.infoLabel}>Workout Time</Text>
+                        {workoutStartTime ? (
+                          <View style={styles.timeTextContainer}>
+                            <TouchableOpacity 
+                              onPress={() => openTimePicker('start')}
+                              style={styles.timeWithEditButton}
+                            >
+                              <Text style={styles.infoValue}>
+                                {(() => {
+                                  try {
+                                    return format(workoutStartTime, 'HH:mm');
+                                  } catch (error) {
+                                    console.warn('Error formatting start time:', error);
+                                    return 'Time unavailable';
+                                  }
+                                })()}
+                              </Text>
+                            </TouchableOpacity>
+                            
+                            {workoutEndTime && (
+                              <>
+                                <Text style={styles.infoValue}> - </Text>
+                                <TouchableOpacity 
+                                  onPress={() => openTimePicker('end')}
+                                  style={styles.timeWithEditButton}
+                                >
+                                  <Text style={styles.infoValue}>
+                                    {(() => {
+                                      try {
+                                        return format(workoutEndTime, 'HH:mm');
+                                      } catch (error) {
+                                        console.warn('Error formatting end time:', error);
+                                        return 'Time unavailable';
+                                      }
+                                    })()}
+                                  </Text>
+                                </TouchableOpacity>
+                              </>
+                            )}
+                          </View>
+                        ) : null}
+                      </View>
+                      {/* Only show workout state button if not already saved with times */}
+                      {(!workoutStartTime || (workoutStartTime && !workoutEndTime && isWorkoutActive)) && (
+                        <TouchableOpacity
+                          style={[
+                            styles.workoutStateButton,
+                            isWorkoutActive && styles.workoutStateButtonActive
+                          ]}
+                          onPress={isWorkoutActive ? endWorkout : startWorkout}
+                        >
+                          <Text style={styles.workoutStateButtonText}>
+                            {isWorkoutActive ? 'End Workout' : 'Start Workout'}
+                          </Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  </View>
+                </View>
+
+                <View style={[styles.infoCard, styles.fullWidthCard]}>
                   <View style={styles.infoIconContainer}>
                     <Scale size={20} color="#FF9500" />
                   </View>
@@ -1163,6 +1225,46 @@ export default function WorkoutDetailScreen() {
             )}
           </View>
         )}
+
+        {/* Time picker for iOS */}
+        {showTimePicker && Platform.OS === 'ios' && (
+          <View style={styles.timePickerContainer}>
+            <View style={styles.timePickerHeader}>
+              <TouchableOpacity onPress={() => setShowTimePicker(false)}>
+                <Text style={styles.timePickerCancel}>Cancel</Text>
+              </TouchableOpacity>
+              <Text style={styles.timePickerTitle}>
+                {editingTime === 'start' ? 'Start Time' : 'End Time'}
+              </Text>
+              <TouchableOpacity onPress={() => setShowTimePicker(false)}>
+                <Text style={styles.timePickerDone}>Done</Text>
+              </TouchableOpacity>
+            </View>
+            <DateTimePicker
+              value={editingTime === 'start' 
+                ? (workoutStartTime || new Date()) 
+                : (workoutEndTime || new Date())}
+              mode="time"
+              is24Hour={true}
+              display="spinner"
+              onChange={handleTimeChange}
+              style={styles.timePicker}
+            />
+          </View>
+        )}
+
+        {/* Time picker for Android */}
+        {showTimePicker && Platform.OS === 'android' && (
+          <DateTimePicker
+            value={editingTime === 'start' 
+              ? (workoutStartTime || new Date()) 
+              : (workoutEndTime || new Date())}
+            mode="time"
+            is24Hour={true}
+            display="default"
+            onChange={handleTimeChange}
+          />
+        )}
       </SafeAreaView>
     </KeyboardAvoidingView>
   );
@@ -1260,11 +1362,29 @@ const styles = StyleSheet.create({
     color: '#000000',
     fontWeight: '600',
   },
+  timeTextContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  timeWithEditButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  timeEditButton: {
+    padding: 4,
+    backgroundColor: '#F2F2F7',
+    borderRadius: 12,
+    marginLeft: 8,
+  },
   workoutStateButton: {
     backgroundColor: '#34C759',
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 8,
+    marginTop: 8,
+    alignSelf: 'flex-start',
   },
   workoutStateButtonActive: {
     backgroundColor: '#FF3B30',
@@ -1274,20 +1394,26 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
-  infoGrid: {
+  workoutTimeRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  infoGrid: {
+    flexDirection: 'column',
     gap: 12,
+    marginTop: 4,
   },
   infoCard: {
-    flex: 1,
-    minWidth: '45%',
     backgroundColor: '#F8F8FA',
     borderRadius: 12,
     padding: 12,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+  },
+  fullWidthCard: {
+    width: '100%',
   },
   notesCard: {
     flex: 2,
@@ -1679,5 +1805,45 @@ const styles = StyleSheet.create({
     color: '#34C759',
     marginTop: 2,
     textAlign: 'right',
+  },
+  timePickerContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  timePickerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E5EA',
+  },
+  timePickerTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#000000',
+  },
+  timePickerCancel: {
+    fontSize: 16,
+    color: '#FF3B30',
+  },
+  timePickerDone: {
+    fontSize: 16,
+    color: '#007AFF',
+    fontWeight: '600',
+  },
+  timePicker: {
+    height: 200,
   },
 });

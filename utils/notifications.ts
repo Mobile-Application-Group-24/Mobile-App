@@ -2,6 +2,9 @@ import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import { NutritionSettings } from './supabase';
 
+// Flag to suppress notifications during app startup - default to true to suppress on startup
+let isStartupSuppression = true;
+
 // Configure notification behavior - better handling for both platforms
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -11,6 +14,29 @@ Notifications.setNotificationHandler({
     priority: Platform.OS === 'android' ? Notifications.AndroidNotificationPriority.HIGH : undefined,
   }),
 });
+
+// Set notification suppression during startup - call this during app initialization
+export function suppressNotificationsOnStartup() {
+  isStartupSuppression = true;
+  console.log('Notification suppression enabled during startup');
+}
+
+// Enable notifications after startup is complete - call this when app is fully loaded
+export function enableNotificationsAfterStartup() {
+  isStartupSuppression = false;
+  console.log('Startup complete, notifications now enabled');
+}
+
+// Automatically enable notifications after a delay (5 seconds)
+setTimeout(() => {
+  enableNotificationsAfterStartup();
+  console.log('Automatically enabled notifications after startup delay');
+}, 5000);
+
+// Check if notifications are currently suppressed
+export function areNotificationsSuppressed() {
+  return isStartupSuppression;
+}
 
 // Request notification permissions with more comprehensive handling
 export async function requestNotificationPermissions() {
@@ -70,6 +96,12 @@ export async function scheduleNotification(
   channelId?: string
 ) {
   try {
+    // Check if notifications are suppressed during startup
+    if (isStartupSuppression) {
+      console.log(`Notification "${title}" suppressed during app startup`);
+      return null;
+    }
+    
     console.log(`Scheduling notification: "${title}" with trigger:`, JSON.stringify(trigger));
     
     const notificationContent: Notifications.NotificationContentInput = {
@@ -120,6 +152,12 @@ export async function scheduleNotification(
 // Send an immediate notification to test if notifications work at all
 export async function sendImmediateTestNotification() {
   try {
+    // Check if notifications are suppressed during startup
+    if (isStartupSuppression) {
+      console.log(`Immediate test notification suppressed during app startup`);
+      return null;
+    }
+
     const hasPermission = await requestNotificationPermissions();
     if (!hasPermission) {
       console.log('No notification permissions');
@@ -264,6 +302,12 @@ export async function scheduleMealNotifications(settings: NutritionSettings): Pr
 // Function to schedule notification at an exact time
 async function scheduleNotificationWithExactTime(content: any, scheduledTime: Date): Promise<string> {
   try {
+    // Check if notifications are suppressed during startup
+    if (isStartupSuppression) {
+      console.log(`Notification "${content.title}" suppressed during app startup`);
+      return '';
+    }
+
     // Create a trigger for the exact date
     const trigger = {
       type: 'date',
@@ -282,6 +326,12 @@ async function scheduleNotificationWithExactTime(content: any, scheduledTime: Da
 // Generic function to schedule a notification with a specific trigger
 async function scheduleNotificationWithTrigger(content: any, trigger: any): Promise<string> {
   try {
+    // Check if notifications are suppressed during startup
+    if (isStartupSuppression) {
+      console.log(`Notification "${content.title}" suppressed during app startup`);
+      return '';
+    }
+
     // Request permissions
     const { status } = await Notifications.getPermissionsAsync();
     if (status !== 'granted') {
@@ -352,6 +402,12 @@ export async function scheduleWaterReminders(
   intervalHours: number
 ) {
   try {
+    // Check if notifications are suppressed during startup
+    if (isStartupSuppression) {
+      console.log(`Water reminders suppressed during app startup`);
+      return null;
+    }
+
     // Cancel any existing water reminders
     await cancelWaterReminders();
 
@@ -461,6 +517,12 @@ export async function cancelWaterReminders() {
 // Test notification function with exact time for debugging
 export async function testExactTimeNotification(hour: number, minute: number) {
   try {
+    // Check if notifications are suppressed during startup
+    if (isStartupSuppression) {
+      console.log(`Exact time test notification suppressed during app startup`);
+      return null;
+    }
+
     const hasPermission = await requestNotificationPermissions();
     if (!hasPermission) {
       console.log('No notification permissions');
