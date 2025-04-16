@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, ActivityIndicator, StatusBar, SafeAreaView } from 'react-native';
-import { ArrowLeft, Award, Calendar, ChartBar as BarChart, Clock, Flame } from 'lucide-react-native';
+import { ArrowLeft, Award, Calendar, ChartBar as BarChart, Clock, Flame, Users } from 'lucide-react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { getProfile, type Profile, getRecentWorkouts, type Workout } from '@/utils/supabase';
 
 export default function ViewProfileScreen() {
-  const { userId } = useLocalSearchParams();
+  const { userId, groupId } = useLocalSearchParams();
   const router = useRouter();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [recentWorkouts, setRecentWorkouts] = useState<Workout[]>([]);
@@ -54,6 +54,14 @@ export default function ViewProfileScreen() {
     });
   };
 
+  const handleBackNavigation = () => {
+    if (groupId) {
+      router.push(`/groups/${groupId}`);
+    } else {
+      router.back();
+    }
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -88,7 +96,7 @@ export default function ViewProfileScreen() {
       <View style={styles.navigationHeader}>
         <TouchableOpacity 
           style={styles.backButton}
-          onPress={() => router.back()}
+          onPress={handleBackNavigation}
         >
           <ArrowLeft size={24} color="#007AFF" />
         </TouchableOpacity>
