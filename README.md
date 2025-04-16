@@ -1,6 +1,9 @@
-# GymApp - Mobile Fitness Tracking Application
 
-GymApp is a comprehensive mobile fitness application built with React Native and Expo, designed to help users track their workouts, nutrition, and connect with other fitness enthusiasts through groups.
+<img src="assets/images/icon.png" alt="TrainRepublic Logo" width="200">
+
+# TrainRepublic - Mobile Fitness Tracking Application
+
+TrainRepublic is a comprehensive mobile fitness application built with React Native and Expo, designed to help users track their workouts, nutrition, and connect with other fitness enthusiasts through groups.
 
 
 ## 🚀 Features
