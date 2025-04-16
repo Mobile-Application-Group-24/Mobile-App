@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Platform, StatusBar, SafeAreaView, KeyboardAvoidingView, Keyboard, TouchableWithoutFeedback, Alert, ActivityIndicator } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, useNavigation } from 'expo-router';
 import { X, Clock, ChartBar as BarChart3, Plus, CalendarClock, Scale, File as FileEdit, Dumbbell, Trash, Save, Trash2, Pencil } from 'lucide-react-native';
 import { format } from 'date-fns';
 import { getWorkoutPlan, deleteWorkoutPlan, createWorkout, WorkoutPlan, Workout } from '@/utils/workout';
@@ -30,6 +30,7 @@ interface ExerciseProgress {
 }
 
 export default function WorkoutDetailScreen() {
+  const navigation = useNavigation();
   const params = useLocalSearchParams();
   const workoutId = params.id as string;
   const selectedExercise = params.selectedExercise;
@@ -61,6 +62,14 @@ export default function WorkoutDetailScreen() {
   const [exercisePreviousDataMap, setExercisePreviousDataMap] = useState<Map<string, any>>(new Map());
   const [editingTime, setEditingTime] = useState<'start' | 'end' | null>(null);
   const [showTimePicker, setShowTimePicker] = useState(false);
+
+  useEffect(() => {
+    if (workoutId && navigation.setOptions) {
+      navigation.setOptions({
+        headerShown: false // Ändere zu false um die Standard-Header-Zeile zu verstecken
+      });
+    }
+  }, [navigation, workoutId]);
 
   const startRestTimer = () => {
     setIsTimerRunning(true);
@@ -895,21 +904,33 @@ export default function WorkoutDetailScreen() {
   };
 
   const handleTimeChange = (event: any, selectedDate?: Date) => {
-    setShowTimePicker(Platform.OS === 'ios');
-    
-    if (selectedDate) {
-      if (editingTime === 'start') {
-        setWorkoutStartTime(selectedDate);
-        if (!isWorkoutActive) {
-          setIsWorkoutActive(true);
+    if (Platform.OS === 'ios') {
+      // Auf iOS nicht automatisch schließen
+      if (selectedDate) {
+        if (editingTime === 'start') {
+          setWorkoutStartTime(selectedDate);
+          if (!isWorkoutActive) {
+            setIsWorkoutActive(true);
+          }
+        } else if (editingTime === 'end') {
+          setWorkoutEndTime(selectedDate);
+          setIsWorkoutActive(false);
         }
-      } else if (editingTime === 'end') {
-        setWorkoutEndTime(selectedDate);
-        setIsWorkoutActive(false);
       }
-    }
-    
-    if (Platform.OS === 'android') {
+    } else {
+      // Für Android behalten wir das bisherige Verhalten
+      setShowTimePicker(false);
+      if (selectedDate) {
+        if (editingTime === 'start') {
+          setWorkoutStartTime(selectedDate);
+          if (!isWorkoutActive) {
+            setIsWorkoutActive(true);
+          }
+        } else if (editingTime === 'end') {
+          setWorkoutEndTime(selectedDate);
+          setIsWorkoutActive(false);
+        }
+      }
       setEditingTime(null);
     }
   };
@@ -1335,13 +1356,19 @@ export default function WorkoutDetailScreen() {
         {showTimePicker && Platform.OS === 'ios' && (
           <View style={styles.timePickerContainer}>
             <View style={styles.timePickerHeader}>
-              <TouchableOpacity onPress={() => setShowTimePicker(false)}>
+              <TouchableOpacity onPress={() => {
+                setShowTimePicker(false);
+                setEditingTime(null);
+              }}>
                 <Text style={styles.timePickerCancel}>Cancel</Text>
               </TouchableOpacity>
               <Text style={styles.timePickerTitle}>
                 {editingTime === 'start' ? 'Start Time' : 'End Time'}
               </Text>
-              <TouchableOpacity onPress={() => setShowTimePicker(false)}>
+              <TouchableOpacity onPress={() => {
+                setShowTimePicker(false);
+                setEditingTime(null);
+              }}>
                 <Text style={styles.timePickerDone}>Done</Text>
               </TouchableOpacity>
             </View>
@@ -1353,7 +1380,8 @@ export default function WorkoutDetailScreen() {
               is24Hour={true}
               display="spinner"
               onChange={handleTimeChange}
-              style={styles.timePicker}
+              textColor="black" // Füge textColor für iOS hinzu
+              style={[styles.timePicker, { height: 120 }]} // Anpassung der Höhe
             />
           </View>
         )}
@@ -1385,7 +1413,7 @@ const styles = StyleSheet.create({
   },
   fixedHeader: {
     position: 'absolute',
-    top: 0,
+    top: Platform.OS === 'ios' ? 47 : 0, // Anpassung für iOS
     left: 0,
     right: 0,
     zIndex: 10,
@@ -1935,9 +1963,11 @@ const styles = StyleSheet.create({
     borderBottomColor: '#E5E5EA',
   },
   timePickerTitle: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '600',
     color: '#000000',
+    backgroundColor: '#FFFFFF',
+    padding: 8,
   },
   timePickerCancel: {
     fontSize: 16,
@@ -1945,10 +1975,11 @@ const styles = StyleSheet.create({
   },
   timePickerDone: {
     fontSize: 16,
-    color: '#007AFF',
     fontWeight: '600',
+    color: '#007AFF',
   },
   timePicker: {
-    height: 200,
+    height: 120,
+    alignSelf: 'stretch',
   },
 });
