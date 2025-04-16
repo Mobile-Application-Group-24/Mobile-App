@@ -49,7 +49,10 @@ export default function GroupScreen() {
   const handleProfilePress = (userId: string) => {
     router.push({
       pathname: '/profile/Profileview',
-      params: { userId }
+      params: { 
+        userId,
+        groupId: id 
+      }
     });
   };
 
