@@ -94,10 +94,10 @@ Mobile-App/
 │   │   ├── groups/      # Group-related screens
 │   │   ├── nutrition/   # Nutrition tracking features
 │   │   ├── profile/     # User profile screens
+│   │   ├── stats/       # Statistics from workouts
 │   │   └── workouts/    # Workout tracking features
 │   ├── _layout.tsx      # Root layout component
 ├── assets/              # Static assets like images
-├── components/          # Reusable UI components
 ├── hooks/               # Custom React hooks
 ├── providers/           # Context providers (auth, etc.)
 ├── utils/               # Utility functions
