@@ -454,13 +454,9 @@ export default function ProfileScreen() {
             </View>
           ) : (
             recentWorkouts.map((workout) => (
-              <TouchableOpacity 
+              <View 
                 key={workout.id} 
                 style={styles.workoutCard}
-                onPress={() => router.push({
-                  pathname: '/workout/[id]',
-                  params: { id: workout.id }
-                })}
               >
                 <View style={styles.workoutHeader}>
                   <Text style={styles.workoutTitle} numberOfLines={1}>
@@ -483,7 +479,7 @@ export default function ProfileScreen() {
                     </Text>
                   )}
                 </View>
-              </TouchableOpacity>
+              </View>
             ))
           )}
         </View>

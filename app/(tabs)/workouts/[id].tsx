@@ -34,6 +34,7 @@ export default function WorkoutDetailScreen() {
   const workoutId = params.id as string;
   const selectedExercise = params.selectedExercise;
   const autoStart = params.autoStart === 'true';
+  const fromHistory = params.fromHistory === 'true';
   const router = useRouter();
   const [workoutPlan, setWorkoutPlan] = useState<WorkoutPlan | null>(null);
   const [previousWorkout, setPreviousWorkout] = useState<Workout | null>(null);
@@ -196,6 +197,75 @@ export default function WorkoutDetailScreen() {
       setLoading(true);
       setError(null);
       
+      // Zusätzlich prüfen, ob dies ein bereits durchgeführtes Workout ist
+      if (fromHistory) {
+        try {
+          const { data: workoutData, error: workoutError } = await supabase
+            .from('workouts')
+            .select('*')
+            .eq('id', workoutPlanId)
+            .single();
+            
+          if (workoutError) throw workoutError;
+          
+          if (workoutData) {
+            // Es handelt sich um ein gespeichertes Workout aus der History
+            setWorkoutPlan({
+              id: workoutData.id,
+              title: workoutData.title,
+              description: workoutData.notes || '',
+              workout_type: 'custom',
+              duration_minutes: 0,
+              exercises: workoutData.exercises?.map(ex => ({
+                id: ex.id,
+                name: ex.name,
+                sets: ex.sets,
+                type: ex.type
+              })) || [],
+              user_id: workoutData.user_id,
+              created_at: workoutData.created_at,
+              updated_at: workoutData.created_at
+            });
+            
+            setWorkoutName(workoutData.title || '');
+            setNotes(workoutData.notes || '');
+            setBodyWeight(workoutData.bodyweight ? String(workoutData.bodyweight) : '');
+            
+            if (workoutData.start_time) {
+              setWorkoutStartTime(new Date(workoutData.start_time));
+            }
+            
+            if (workoutData.end_time) {
+              setWorkoutEndTime(new Date(workoutData.end_time));
+            }
+            
+            // Exercises mit den Set-Details verarbeiten
+            const exercisesWithDetails = workoutData.exercises?.map(exercise => {
+              return {
+                id: exercise.id,
+                name: exercise.name,
+                type: exercise.type,
+                sets: exercise.setDetails?.map(set => ({
+                  id: set.id,
+                  weight: set.weight ? String(set.weight) : '',
+                  reps: set.reps ? String(set.reps) : '',
+                  type: set.type || 'normal',
+                  notes: set.notes || ''
+                })) || []
+              };
+            }) || [];
+            
+            setExercises(exercisesWithDetails);
+            setLoading(false);
+            return;
+          }
+        } catch (historyError) {
+          console.error('Error loading workout from history:', historyError);
+          // Fallback zum normalen Plan-Laden
+        }
+      }
+      
+      // Normales Laden des Workout-Plans, wenn es kein History-Workout ist oder wenn History-Laden fehlschlägt
       // Get the workout plan from workout_plans table
       const plan = await getWorkoutPlan(workoutPlanId);
       setWorkoutPlan(plan);
@@ -671,6 +741,41 @@ export default function WorkoutDetailScreen() {
     try {
       const originalPlan = workoutPlan;
       
+      // Wenn es ein History-Workout ist, aktualisieren wir das vorhandene Workout
+      if (fromHistory) {
+        const workoutExercises = exercises.map(exercise => {
+          return {
+            id: exercise.id,
+            name: exercise.name,
+            type: exercise.type,
+            sets: exercise.sets.length,
+            setDetails: exercise.sets.map(set => ({
+              id: set.id,
+              weight: set.weight ? parseFloat(set.weight) : undefined,
+              reps: set.reps ? parseInt(set.reps, 10) : undefined,
+              type: set.type,
+              notes: set.notes || ''
+            }))
+          };
+        });
+        
+        // Update the workout record
+        await supabase
+          .from('workouts')
+          .update({
+            title: workoutName,
+            notes: notes,
+            bodyweight: bodyWeight ? parseFloat(bodyWeight) : undefined,
+            exercises: workoutExercises
+          })
+          .eq('id', workoutId);
+        
+        console.log("Updated existing workout from history");
+        router.back();
+        return;
+      }
+      
+      // Normale Speicherlogik für Workout-Pläne
       const planExercises = exercises.map(exercise => ({
         id: exercise.id,
         name: exercise.name,
@@ -820,7 +925,7 @@ export default function WorkoutDetailScreen() {
           </TouchableOpacity>
           <View style={styles.headerCenter}>
             <Text style={styles.date}>
-              {(() => {
+              {fromHistory ? 'Edit Workout' : (() => {
                 try {
                   return format(new Date(), 'dd. MMMM');
                 } catch (error) {
