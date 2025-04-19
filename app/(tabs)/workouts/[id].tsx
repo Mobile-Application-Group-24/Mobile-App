@@ -4,7 +4,7 @@ import { useLocalSearchParams, useRouter, useNavigation } from 'expo-router';
 import { X, Clock, ChartBar as BarChart3, Plus, CalendarClock, Scale, File as FileEdit, Dumbbell, Trash, Save, Trash2, Pencil } from 'lucide-react-native';
 import { format } from 'date-fns';
 import { getWorkoutPlan, deleteWorkoutPlan, createWorkout, WorkoutPlan, Workout } from '@/utils/workout';
-import { updateWorkoutPlan, supabase } from '@/utils/supabase'; // Import supabase from the same file
+import { updateWorkoutPlan, supabase, getCurrentUser, deleteAllAISuggestions } from '@/utils/supabase'; // Import getCurrentUser and deleteAllAISuggestions
 import { Swipeable } from 'react-native-gesture-handler';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { findExerciseType, exercisesByWorkoutType } from '@/utils/exercises';

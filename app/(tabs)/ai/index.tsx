@@ -84,6 +84,9 @@ export default function AIScreen() {
   const fetchWorkoutData = async () => {
     setIsLoading(true);
     try {
+      // Reset responses state when fetching new data to ensure suggestions don't appear as declined
+      setResponses({});
+      
       const user = await getCurrentUser();
       const workoutData = await getWorkouts(user.id);
       
