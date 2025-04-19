@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, SafeAreaView, ActivityIndicator, Modal, FlatList, StatusBar, Platform } from 'react-native';
-import { ThumbsUp, ThumbsDown, MessageSquare, X } from 'lucide-react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, SafeAreaView, Modal, FlatList, StatusBar, Platform } from 'react-native';
+import { ThumbsUp, ThumbsDown, MessageSquare, X, Clock } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { checkDatabaseSchema, createWorkoutsTable } from '@/utils/database-checker';
 import { getWorkouts, getCurrentUser, Workout, WorkoutExercise, SetDetail, addExerciseToWorkout, getWorkoutPlans, WorkoutPlan, addExerciseToPlan } from '@/utils/supabase';
@@ -264,8 +264,10 @@ export default function AIScreen() {
           </View>
         </SafeAreaView>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#007AFF" />
-          <Text style={styles.loadingText}>Loading your workout data...</Text>
+          <Clock size={80} color="#007AFF" style={styles.loadingIcon} />
+          <View style={styles.loadingNoteContainer}>
+            <Text style={styles.loadingSubText}>AI suggestions may take a couple of minutes to generate</Text>
+          </View>
         </View>
       </View>
     );
@@ -676,13 +678,27 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   loadingContainer: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    padding: 20,
   },
-  loadingText: {
-    marginTop: 16,
+  loadingIcon: {
+    marginBottom: 24,
+  },
+  loadingNoteContainer: {
+    backgroundColor: '#F2F2F7',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderRadius: 16,
+    maxWidth: '90%',
+    alignItems: 'center',
+  },
+  loadingSubText: {
     fontSize: 16,
     color: '#8E8E93',
+    fontStyle: 'italic',
+    textAlign: 'center',
   },
   noDataCard: {
     backgroundColor: '#FFFFFF',
