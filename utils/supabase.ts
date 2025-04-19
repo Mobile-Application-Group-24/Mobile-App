@@ -159,6 +159,16 @@ export interface SetDetail {
   notes?: string;
 }
 
+export interface AISuggestion {
+  id: string;
+  user_id: string;
+  suggestion_type: 'weight' | 'exercise';
+  data: any;
+  created_at: string;
+  last_workout_id?: string; // ID of the last workout considered when generating this suggestion
+  is_used?: boolean; // Whether the suggestion has been used by the user
+}
+
 export interface ExerciseStats {
   id: string;
   exercise_id: string;
@@ -1232,6 +1242,111 @@ export async function getGroupInvitations(groupId: string): Promise<GroupInvitat
   } catch (error) {
     console.error('Error in getGroupInvitations:', error);
     return [];
+  }
+}
+
+// AI suggestion functions
+export async function getAISuggestions(userId: string, suggestionType: 'weight' | 'exercise'): Promise<AISuggestion[]> {
+  try {
+    const { data, error } = await supabase
+      .from('ai_suggestions')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('suggestion_type', suggestionType)
+      .eq('is_used', false)
+      .order('created_at', { ascending: false });
+    
+    if (error) {
+      console.error(`Error fetching ${suggestionType} suggestions:`, error);
+      // Return empty array on error rather than throwing
+      return [];
+    }
+    
+    return data || [];
+  } catch (error) {
+    console.error(`Error in getAISuggestions for ${suggestionType}:`, error);
+    return [];
+  }
+}
+
+export async function saveAISuggestions(
+  userId: string,
+  suggestionType: 'weight' | 'exercise',
+  data: any[],
+  lastWorkoutId?: string
+): Promise<void> {
+  try {
+    if (!data || data.length === 0) {
+      console.log(`No ${suggestionType} suggestions to save`);
+      return;
+    }
+
+    // Format suggestions for database storage
+    const formattedSuggestions = data.map(suggestion => ({
+      user_id: userId,
+      suggestion_type: suggestionType,
+      data: suggestion,
+      created_at: new Date().toISOString(),
+      last_workout_id: lastWorkoutId,
+      is_used: false
+    }));
+    
+    const { error } = await supabase
+      .from('ai_suggestions')
+      .insert(formattedSuggestions);
+    
+    if (error) {
+      console.error(`Error saving ${suggestionType} suggestions:`, error);
+      throw error;
+    }
+    
+    console.log(`Successfully saved ${formattedSuggestions.length} ${suggestionType} suggestions`);
+  } catch (error) {
+    console.error(`Error in saveAISuggestions for ${suggestionType}:`, error);
+    // Don't throw here - we want the app to continue even if saving fails
+  }
+}
+
+export async function markAISuggestionAsUsed(suggestionId: string): Promise<void> {
+  try {
+    const { error } = await supabase
+      .from('ai_suggestions')
+      .update({ is_used: true })
+      .eq('id', suggestionId);
+    
+    if (error) {
+      console.error('Error marking suggestion as used:', error);
+      throw error;
+    }
+  } catch (error) {
+    console.error('Error in markAISuggestionAsUsed:', error);
+  }
+}
+
+export async function getLastCompletedWorkout(userId: string): Promise<Workout | null> {
+  try {
+    const { data, error } = await supabase
+      .from('workouts')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('done', true)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+    
+    if (error) {
+      if (error.code === 'PGRST116') {
+        // No data found - user has no completed workouts
+        return null;
+      }
+      console.error('Error fetching last completed workout:', error);
+      throw error;
+    }
+    
+    return data;
+  } catch (error) {
+    console.error('Error in getLastCompletedWorkout:', error);
+    return null;
   }
 }
 

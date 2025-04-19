@@ -801,6 +801,9 @@ export default function WorkoutDetailScreen() {
       console.log("Updated workout plan with" + 
         (isWorkoutActive || workoutStartTime ? " preserved set counts" : " new set counts"));
       
+      let savedWorkoutId = null;
+      
+      // If workout was active or has start time, save it as a completed workout
       if (isWorkoutActive || workoutStartTime) {
         const workoutExercises = exercises.map(exercise => {
           return {
@@ -836,7 +839,21 @@ export default function WorkoutDetailScreen() {
         };
                 
         const savedWorkout = await createWorkout(workoutData);
+        savedWorkoutId = savedWorkout.id;
         console.log("Successfully created workout session:", savedWorkout.id, "Done status:", isDone);
+        
+        // If workout is completed (has both start and end times), trigger AI suggestions reload
+        if (isDone && workoutStartTime && endTimeToUse) {
+          // Set a flag in AsyncStorage to tell the AI screen to refresh suggestions
+          try {
+            const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
+            await AsyncStorage.setItem('refresh_ai_suggestions', 'true');
+            await AsyncStorage.setItem('last_completed_workout_id', savedWorkoutId);
+            console.log('Flagged AI suggestions for refresh after workout completion');
+          } catch (asyncError) {
+            console.error('Error setting AI refresh flag:', asyncError);
+          }
+        }
       } else {
         console.log("Workout wasn't started, only updating the workout plan");
       }

@@ -2,14 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, SafeAreaView, Modal, FlatList, StatusBar, Platform } from 'react-native';
 import { ThumbsUp, ThumbsDown, MessageSquare, X, Clock } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import { checkDatabaseSchema, createWorkoutsTable } from '@/utils/database-checker';
-import { getWorkouts, getCurrentUser, Workout, WorkoutExercise, SetDetail, addExerciseToWorkout, getWorkoutPlans, WorkoutPlan, addExerciseToPlan } from '@/utils/supabase';
+import { getWorkouts, getCurrentUser, Workout, WorkoutExercise, SetDetail, addExerciseToWorkout, getWorkoutPlans, WorkoutPlan, addExerciseToPlan, getAISuggestions, saveAISuggestions, markAISuggestionAsUsed, getLastCompletedWorkout } from '@/utils/supabase';
 import { generateWeightSuggestions, generateExerciseSuggestions } from '@/utils/deepseek';
 import { exercisesByWorkoutType, ExerciseReference, findExerciseType } from '@/utils/exercises';
 
 // Interface for weight modification suggestions
 interface WeightModification {
   id: number;
+  suggestion_id?: string; // Added to track database suggestion ID
   exercise: string;
   suggestion: string;
   currentWeight: string;
@@ -19,6 +21,7 @@ interface WeightModification {
 // Interface for exercise suggestions
 interface ExerciseSuggestion {
   id: number;
+  suggestion_id?: string; // Added to track database suggestion ID
   type: string;
   exercise: string;
   suggestion: string;
@@ -37,11 +40,46 @@ export default function AIScreen() {
   const [workouts, setWorkouts] = useState<Workout[]>([]);
   const [workoutPlans, setWorkoutPlans] = useState<WorkoutPlan[]>([]);
   const [selectedWorkoutId, setSelectedWorkoutId] = useState<string | null>(null);
+  const [lastWorkoutId, setLastWorkoutId] = useState<string | null>(null);
   const router = useRouter();
 
   useEffect(() => {
     fetchWorkoutData();
   }, []);
+
+  // Add useFocusEffect to check for refresh flag when screen gains focus
+  useFocusEffect(
+    React.useCallback(() => {
+      const checkForRefreshFlag = async () => {
+        try {
+          const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
+          const shouldRefresh = await AsyncStorage.getItem('refresh_ai_suggestions');
+          
+          if (shouldRefresh === 'true') {
+            console.log('Detected refresh flag, reloading AI suggestions');
+            // Clear the flag
+            await AsyncStorage.setItem('refresh_ai_suggestions', 'false');
+            
+            // Get the workout ID that triggered this refresh
+            const lastWorkoutId = await AsyncStorage.getItem('last_completed_workout_id');
+            if (lastWorkoutId) {
+              setLastWorkoutId(lastWorkoutId);
+            }
+            
+            // Fetch new data
+            fetchWorkoutData();
+          }
+        } catch (error) {
+          console.error('Error checking for refresh flag:', error);
+        }
+      };
+
+      checkForRefreshFlag();
+      
+      // Cleanup function
+      return () => {};
+    }, [])
+  );
 
   const fetchWorkoutData = async () => {
     setIsLoading(true);
@@ -56,106 +94,199 @@ export default function AIScreen() {
       // Keep existing workouts for weight suggestions
       setWorkouts(workoutData);
       
-      // Get weight suggestions from DeepSeek
-      if (workoutData && workoutData.length > 0) {
-        const completedWorkouts = workoutData.filter(w => w.done && w.exercises && w.exercises.length > 0);
-        
-        if (completedWorkouts.length > 0) {
-          // Get weight suggestions
-          const deepseekSuggestions = await generateWeightSuggestions(user.id, completedWorkouts);
-          
-          if (deepseekSuggestions && deepseekSuggestions.length > 0) {
-            const formattedSuggestions: WeightModification[] = deepseekSuggestions.map((suggestion, index) => ({
+      // Get last completed workout to check if we need new suggestions
+      const lastWorkout = await getLastCompletedWorkout(user.id);
+      const lastWorkoutId = lastWorkout?.id || null;
+      setLastWorkoutId(lastWorkoutId);
+      
+      // Try to get cached suggestions first
+      const cachedWeightSuggestions = await getAISuggestions(user.id, 'weight');
+      const cachedExerciseSuggestions = await getAISuggestions(user.id, 'exercise');
+      
+      console.log(`Found ${cachedWeightSuggestions.length} cached weight suggestions`);
+      console.log(`Found ${cachedExerciseSuggestions.length} cached exercise suggestions`);
+      
+      let shouldGenerateWeightSuggestions = true;
+      let shouldGenerateExerciseSuggestions = true;
+      
+      // If we have cached suggestions and no new workouts since then, use them
+      if (cachedWeightSuggestions.length > 0) {
+        const latestWeightSuggestion = cachedWeightSuggestions[0];
+        if (!lastWorkoutId || latestWeightSuggestion.last_workout_id === lastWorkoutId) {
+          // No new workouts since last suggestion, use cached
+          console.log('Using cached weight suggestions');
+          const formattedSuggestions: WeightModification[] = cachedWeightSuggestions.map((suggestion, index) => {
+            const suggestionData = suggestion.data;
+            return {
               id: 100 + index,
-              exercise: suggestion.exercise,
-              suggestion: suggestion.suggestion,
-              currentWeight: `${suggestion.currentWeight}kg`,
-              suggestedWeight: `${suggestion.suggestedWeight}kg`
-            }));
+              suggestion_id: suggestion.id,
+              exercise: suggestionData.exercise,
+              suggestion: suggestionData.suggestion,
+              currentWeight: `${suggestionData.currentWeight}kg`,
+              suggestedWeight: `${suggestionData.suggestedWeight}kg`
+            };
+          });
+          
+          setWeightModifications(formattedSuggestions);
+          setVisibleModifications(formattedSuggestions.map(s => s.id));
+          shouldGenerateWeightSuggestions = false;
+        }
+      }
+      
+      if (cachedExerciseSuggestions.length > 0) {
+        const latestExerciseSuggestion = cachedExerciseSuggestions[0];
+        if (!lastWorkoutId || latestExerciseSuggestion.last_workout_id === lastWorkoutId) {
+          // No new workouts since last suggestion, use cached
+          console.log('Using cached exercise suggestions');
+          const formattedSuggestions: ExerciseSuggestion[] = cachedExerciseSuggestions.map((suggestion, index) => {
+            const suggestionData = suggestion.data;
+            return {
+              id: 200 + index,
+              suggestion_id: suggestion.id,
+              type: suggestionData.type || 'New Exercise',
+              exercise: suggestionData.exercise,
+              suggestion: suggestionData.suggestion,
+              reasoning: suggestionData.reasoning,
+              target_workout: suggestionData.target_workout
+            };
+          });
+          
+          setExerciseSuggestions(formattedSuggestions);
+          shouldGenerateExerciseSuggestions = false;
+        }
+      }
+      
+      // Only generate new suggestions if needed
+      if (shouldGenerateWeightSuggestions || shouldGenerateExerciseSuggestions) {
+        console.log('New workout detected or no cached suggestions available - generating new suggestions');
+        
+        // Get weight suggestions from DeepSeek
+        if (shouldGenerateWeightSuggestions && workoutData.length > 0) {
+          const completedWorkouts = workoutData.filter(w => w.done && w.exercises && w.exercises.length > 0);
+          
+          if (completedWorkouts.length > 0) {
+            // Get weight suggestions
+            const deepseekSuggestions = await generateWeightSuggestions(user.id, completedWorkouts);
             
-            setWeightModifications(formattedSuggestions);
-            setVisibleModifications(formattedSuggestions.map(s => s.id));
+            if (deepseekSuggestions && deepseekSuggestions.length > 0) {
+              const formattedSuggestions: WeightModification[] = deepseekSuggestions.map((suggestion, index) => ({
+                id: 100 + index,
+                exercise: suggestion.exercise,
+                suggestion: suggestion.suggestion,
+                currentWeight: `${suggestion.currentWeight}kg`,
+                suggestedWeight: `${suggestion.suggestedWeight}kg`
+              }));
+              
+              setWeightModifications(formattedSuggestions);
+              setVisibleModifications(formattedSuggestions.map(s => s.id));
+              
+              // Save the suggestions to the database
+              await saveAISuggestions(user.id, 'weight', deepseekSuggestions, lastWorkoutId);
+            }
           }
         }
         
-        try {
-          // Get exercise suggestions from DeepSeek (will now only include exercises from exercises.ts)
-          if (typeof generateExerciseSuggestions === 'function') {
-            const exerciseSuggestions = await generateExerciseSuggestions(user.id);
-            
-            if (exerciseSuggestions && exerciseSuggestions.length > 0) {
-              const formattedExerciseSuggestions: ExerciseSuggestion[] = exerciseSuggestions.map((suggestion, index) => ({
-                id: 200 + index,
-                type: suggestion.type || 'New Exercise',
-                exercise: suggestion.exercise,
-                suggestion: suggestion.suggestion,
-                reasoning: suggestion.reasoning,
-                target_workout: suggestion.target_workout
-              }));
+        // Get exercise suggestions from DeepSeek
+        if (shouldGenerateExerciseSuggestions) {
+          try {
+            if (typeof generateExerciseSuggestions === 'function') {
+              const exerciseSuggestions = await generateExerciseSuggestions(user.id);
               
-              setExerciseSuggestions(formattedExerciseSuggestions);
+              if (exerciseSuggestions && exerciseSuggestions.length > 0) {
+                const formattedExerciseSuggestions: ExerciseSuggestion[] = exerciseSuggestions.map((suggestion, index) => ({
+                  id: 200 + index,
+                  type: suggestion.type || 'New Exercise',
+                  exercise: suggestion.exercise,
+                  suggestion: suggestion.suggestion,
+                  reasoning: suggestion.reasoning,
+                  target_workout: suggestion.target_workout
+                }));
+                
+                setExerciseSuggestions(formattedExerciseSuggestions);
+                
+                // Save the suggestions to the database
+                await saveAISuggestions(user.id, 'exercise', exerciseSuggestions, lastWorkoutId);
+              }
+            } else {
+              // Fallback: Use valid exercises from our database
+              console.log('Using fallback exercise suggestions from exercises.ts');
+              
+              // Sample exercises from our database instead of hardcoded ones
+              const { exercisesByWorkoutType } = await import('@/utils/exercises');
+              const allExercises = Object.values(exercisesByWorkoutType).flat();
+              
+              // Randomly select 2 exercises from our database to suggest
+              const randomExercises = allExercises
+                .sort(() => 0.5 - Math.random())
+                .slice(0, 2);
+              
+              const fallbackSuggestions: ExerciseSuggestion[] = [
+                {
+                  id: 201,
+                  type: 'New Exercise',
+                  exercise: randomExercises[0].name,
+                  suggestion: `Add 3 sets of 10-12 reps to your ${randomExercises[0].type} workout`,
+                  reasoning: `This exercise will help strengthen your ${randomExercises[0].type} muscles and provide more balanced development`,
+                  target_workout: `${randomExercises[0].type.charAt(0).toUpperCase() + randomExercises[0].type.slice(1)} Day`
+                },
+                {
+                  id: 202,
+                  type: 'Additional Set',
+                  exercise: randomExercises[1].name,
+                  suggestion: 'Add 2 more sets with slightly lower weight',
+                  reasoning: 'Increasing volume on this exercise can boost muscle growth and strength',
+                  target_workout: `${randomExercises[1].type.charAt(0).toUpperCase() + randomExercises[1].type.slice(1)} Day`
+                }
+              ];
+              
+              setExerciseSuggestions(fallbackSuggestions);
+              
+              // Save the fallback suggestions to the database too
+              await saveAISuggestions(user.id, 'exercise', fallbackSuggestions.map(s => ({
+                type: s.type,
+                exercise: s.exercise,
+                suggestion: s.suggestion,
+                reasoning: s.reasoning,
+                target_workout: s.target_workout
+              })), lastWorkoutId);
             }
-          } else {
-            // Fallback: Use valid exercises from our database
-            console.log('Using fallback exercise suggestions from exercises.ts');
-            
-            // Sample exercises from our database instead of hardcoded ones
+          } catch (suggestionError) {
+            console.error('Error with exercise suggestions:', suggestionError);
+            // Provide fallback suggestions using exercises from our database
             const { exercisesByWorkoutType } = await import('@/utils/exercises');
-            const allExercises = Object.values(exercisesByWorkoutType).flat();
-            
-            // Randomly select 2 exercises from our database to suggest
-            const randomExercises = allExercises
-              .sort(() => 0.5 - Math.random())
-              .slice(0, 2);
+            const legExercise = exercisesByWorkoutType['Legs'].find(ex => ex.name === 'Bulgarian Split Squat') || exercisesByWorkoutType['Legs'][0];
+            const chestExercise = exercisesByWorkoutType['Chest'].find(ex => ex.name === 'Barbell Bench Press') || exercisesByWorkoutType['Chest'][0];
             
             const fallbackSuggestions: ExerciseSuggestion[] = [
               {
                 id: 201,
                 type: 'New Exercise',
-                exercise: randomExercises[0].name,
-                suggestion: `Add 3 sets of 10-12 reps to your ${randomExercises[0].type} workout`,
-                reasoning: `This exercise will help strengthen your ${randomExercises[0].type} muscles and provide more balanced development`,
-                target_workout: `${randomExercises[0].type.charAt(0).toUpperCase() + randomExercises[0].type.slice(1)} Day`
+                exercise: legExercise.name,
+                suggestion: 'Add 3 sets of 10-12 reps per leg to your leg workout',
+                reasoning: 'This unilateral exercise will help address muscle imbalances and enhance your leg development',
+                target_workout: 'Leg Day'
               },
               {
                 id: 202,
                 type: 'Additional Set',
-                exercise: randomExercises[1].name,
+                exercise: chestExercise.name,
                 suggestion: 'Add 2 more sets with slightly lower weight',
-                reasoning: 'Increasing volume on this exercise can boost muscle growth and strength',
-                target_workout: `${randomExercises[1].type.charAt(0).toUpperCase() + randomExercises[1].type.slice(1)} Day`
+                reasoning: 'Increasing volume on compound exercises can boost muscle growth and strength',
+                target_workout: 'Chest Day'
               }
             ];
             
             setExerciseSuggestions(fallbackSuggestions);
+            
+            // Save the fallback suggestions to the database too
+            await saveAISuggestions(user.id, 'exercise', fallbackSuggestions.map(s => ({
+              type: s.type,
+              exercise: s.exercise,
+              suggestion: s.suggestion,
+              reasoning: s.reasoning,
+              target_workout: s.target_workout
+            })), lastWorkoutId);
           }
-        } catch (suggestionError) {
-          console.error('Error with exercise suggestions:', suggestionError);
-          // Provide fallback suggestions using exercises from our database
-          const { exercisesByWorkoutType } = await import('@/utils/exercises');
-          const legExercise = exercisesByWorkoutType['Legs'].find(ex => ex.name === 'Bulgarian Split Squat') || exercisesByWorkoutType['Legs'][0];
-          const chestExercise = exercisesByWorkoutType['Chest'].find(ex => ex.name === 'Barbell Bench Press') || exercisesByWorkoutType['Chest'][0];
-          
-          const fallbackSuggestions: ExerciseSuggestion[] = [
-            {
-              id: 201,
-              type: 'New Exercise',
-              exercise: legExercise.name,
-              suggestion: 'Add 3 sets of 10-12 reps per leg to your leg workout',
-              reasoning: 'This unilateral exercise will help address muscle imbalances and enhance your leg development',
-              target_workout: 'Leg Day'
-            },
-            {
-              id: 202,
-              type: 'Additional Set',
-              exercise: chestExercise.name,
-              suggestion: 'Add 2 more sets with slightly lower weight',
-              reasoning: 'Increasing volume on compound exercises can boost muscle growth and strength',
-              target_workout: 'Chest Day'
-            }
-          ];
-          
-          setExerciseSuggestions(fallbackSuggestions);
         }
       }
     } catch (error) {
@@ -232,6 +363,11 @@ export default function AIScreen() {
       
       // Update the responses state
       setResponses(prev => ({ ...prev, [selectedSuggestionId]: 'accept' }));
+      
+      // Mark the suggestion as used in the database
+      if (suggestion.suggestion_id) {
+        await markAISuggestionAsUsed(suggestion.suggestion_id);
+      }
       
       // Show success message
       const selectedPlan = workoutPlans.find(p => p.id === planId);
