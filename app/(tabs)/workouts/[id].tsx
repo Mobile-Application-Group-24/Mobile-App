@@ -844,8 +844,13 @@ export default function WorkoutDetailScreen() {
         
         // If workout is completed (has both start and end times), trigger AI suggestions reload
         if (isDone && workoutStartTime && endTimeToUse) {
-          // Set a flag in AsyncStorage to tell the AI screen to refresh suggestions
+          // Delete all existing AI suggestions first, since we'll be generating new ones
           try {
+            const user = await getCurrentUser();
+            await deleteAllAISuggestions(user.id);
+            console.log('Deleted all existing AI suggestions for user:', user.id);
+            
+            // Set a flag in AsyncStorage to tell the AI screen to refresh suggestions
             const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
             await AsyncStorage.setItem('refresh_ai_suggestions', 'true');
             await AsyncStorage.setItem('last_completed_workout_id', savedWorkoutId);

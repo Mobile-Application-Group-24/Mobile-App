@@ -1274,11 +1274,11 @@ export async function saveAISuggestions(
   suggestionType: 'weight' | 'exercise',
   data: any[],
   lastWorkoutId?: string
-): Promise<void> {
+): Promise<AISuggestion[]> {
   try {
     if (!data || data.length === 0) {
       console.log(`No ${suggestionType} suggestions to save`);
-      return;
+      return [];
     }
 
     // Format suggestions for database storage
@@ -1291,35 +1291,58 @@ export async function saveAISuggestions(
       is_used: false
     }));
     
-    const { error } = await supabase
+    const { data: savedSuggestions, error } = await supabase
       .from('ai_suggestions')
-      .insert(formattedSuggestions);
+      .insert(formattedSuggestions)
+      .select(); // Add select() to return the inserted records
     
     if (error) {
       console.error(`Error saving ${suggestionType} suggestions:`, error);
       throw error;
     }
     
-    console.log(`Successfully saved ${formattedSuggestions.length} ${suggestionType} suggestions`);
+    console.log(`Successfully saved ${savedSuggestions.length} ${suggestionType} suggestions`);
+    return savedSuggestions || [];
   } catch (error) {
     console.error(`Error in saveAISuggestions for ${suggestionType}:`, error);
-    // Don't throw here - we want the app to continue even if saving fails
+    // Return empty array instead of throwing
+    return [];
   }
 }
 
 export async function markAISuggestionAsUsed(suggestionId: string): Promise<void> {
   try {
+    // Delete the suggestion instead of just marking it as used
     const { error } = await supabase
       .from('ai_suggestions')
-      .update({ is_used: true })
+      .delete()
       .eq('id', suggestionId);
     
     if (error) {
-      console.error('Error marking suggestion as used:', error);
+      console.error('Error deleting suggestion:', error);
       throw error;
     }
+    console.log('Successfully deleted suggestion:', suggestionId);
   } catch (error) {
     console.error('Error in markAISuggestionAsUsed:', error);
+  }
+}
+
+// Adding a function to delete all suggestions for a user
+export async function deleteAllAISuggestions(userId: string): Promise<void> {
+  try {
+    const { error } = await supabase
+      .from('ai_suggestions')
+      .delete()
+      .eq('user_id', userId);
+    
+    if (error) {
+      console.error('Error deleting all suggestions for user:', error);
+      throw error;
+    }
+    console.log('Successfully deleted all AI suggestions for user:', userId);
+  } catch (error) {
+    console.error('Error in deleteAllAISuggestions:', error);
   }
 }
 

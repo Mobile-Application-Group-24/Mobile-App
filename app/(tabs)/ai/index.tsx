@@ -169,8 +169,13 @@ export default function AIScreen() {
             const deepseekSuggestions = await generateWeightSuggestions(user.id, completedWorkouts);
             
             if (deepseekSuggestions && deepseekSuggestions.length > 0) {
+              // Save the suggestions to the database first to get the suggestion IDs
+              const savedSuggestions = await saveAISuggestions(user.id, 'weight', deepseekSuggestions, lastWorkoutId);
+              
+              // Now map them with the database IDs included
               const formattedSuggestions: WeightModification[] = deepseekSuggestions.map((suggestion, index) => ({
                 id: 100 + index,
+                suggestion_id: savedSuggestions[index].id, // Include the database ID
                 exercise: suggestion.exercise,
                 suggestion: suggestion.suggestion,
                 currentWeight: `${suggestion.currentWeight}kg`,
@@ -179,9 +184,6 @@ export default function AIScreen() {
               
               setWeightModifications(formattedSuggestions);
               setVisibleModifications(formattedSuggestions.map(s => s.id));
-              
-              // Save the suggestions to the database
-              await saveAISuggestions(user.id, 'weight', deepseekSuggestions, lastWorkoutId);
             }
           }
         }
@@ -193,8 +195,13 @@ export default function AIScreen() {
               const exerciseSuggestions = await generateExerciseSuggestions(user.id);
               
               if (exerciseSuggestions && exerciseSuggestions.length > 0) {
+                // Save to database first to get the IDs
+                const savedSuggestions = await saveAISuggestions(user.id, 'exercise', exerciseSuggestions, lastWorkoutId);
+                
+                // Now create the UI objects with database IDs included
                 const formattedExerciseSuggestions: ExerciseSuggestion[] = exerciseSuggestions.map((suggestion, index) => ({
                   id: 200 + index,
+                  suggestion_id: savedSuggestions[index]?.id, // Include the database ID
                   type: suggestion.type || 'New Exercise',
                   exercise: suggestion.exercise,
                   suggestion: suggestion.suggestion,
@@ -203,9 +210,6 @@ export default function AIScreen() {
                 }));
                 
                 setExerciseSuggestions(formattedExerciseSuggestions);
-                
-                // Save the suggestions to the database
-                await saveAISuggestions(user.id, 'exercise', exerciseSuggestions, lastWorkoutId);
               }
             } else {
               // Fallback: Use valid exercises from our database
@@ -297,6 +301,24 @@ export default function AIScreen() {
     }
   };
 
+  const dismissModification = async (id: number) => {
+    // Find the actual suggestion being dismissed
+    const suggestion = weightModifications.find(mod => mod.id === id);
+    
+    // If it has a suggestion_id, delete it from the database
+    if (suggestion && suggestion.suggestion_id) {
+      try {
+        await markAISuggestionAsUsed(suggestion.suggestion_id);
+        console.log('Deleted weight suggestion from database:', suggestion.suggestion_id);
+      } catch (error) {
+        console.error('Error deleting weight suggestion:', error);
+      }
+    }
+
+    // Update the UI by removing the suggestion from the visible list
+    setVisibleModifications(prev => prev.filter(modId => modId !== id));
+  };
+
   const handleResponse = (id: number, response: 'accept' | 'decline') => {
     if (response === 'accept') {
       // Find the suggestion by ID
@@ -305,16 +327,37 @@ export default function AIScreen() {
         setSelectedSuggestionId(id);
         setIsWorkoutModalVisible(true);
       } else {
+        // For weight suggestions that are accepted
+        const weightSuggestion = weightModifications.find(s => s.id === id);
+        if (weightSuggestion && weightSuggestion.suggestion_id) {
+          // Delete the accepted weight suggestion from the database
+          markAISuggestionAsUsed(weightSuggestion.suggestion_id)
+            .then(() => console.log('Deleted accepted weight suggestion:', weightSuggestion.suggestion_id))
+            .catch(err => console.error('Error deleting accepted weight suggestion:', err));
+        }
+        
         setResponses(prev => ({ ...prev, [id]: response }));
       }
     } else {
-      // For decline, just update the response state
+      // For decline, delete the suggestion from the database if it's an exercise suggestion
+      const suggestion = exerciseSuggestions.find(s => s.id === id);
+      if (suggestion && suggestion.suggestion_id) {
+        markAISuggestionAsUsed(suggestion.suggestion_id)
+          .then(() => console.log('Deleted declined exercise suggestion:', suggestion.suggestion_id))
+          .catch(err => console.error('Error deleting declined exercise suggestion:', err));
+      }
+      
+      // For decline of weight suggestions
+      const weightSuggestion = weightModifications.find(s => s.id === id);
+      if (weightSuggestion && weightSuggestion.suggestion_id) {
+        markAISuggestionAsUsed(weightSuggestion.suggestion_id)
+          .then(() => console.log('Deleted declined weight suggestion:', weightSuggestion.suggestion_id))
+          .catch(err => console.error('Error deleting declined weight suggestion:', err));
+      }
+
+      // Update the response state
       setResponses(prev => ({ ...prev, [id]: response }));
     }
-  };
-
-  const dismissModification = (id: number) => {
-    setVisibleModifications(prev => prev.filter(modId => modId !== id));
   };
 
   const handleWorkoutSelect = async (planId: string) => {
