@@ -165,6 +165,8 @@ export default function WorkoutDetailScreen() {
           style: 'destructive',
           onPress: () => {
             setExercises(prev => prev.filter(e => e.id !== exerciseId));
+            // Reset any params after deletion to avoid re-processing
+            router.setParams({ id: workoutId });
           },
         },
       ],
@@ -473,12 +475,9 @@ export default function WorkoutDetailScreen() {
           [{ text: "OK" }]
         );
         
-        // Reset the selectedExercise param
-        const timeout = setTimeout(() => {
-          router.setParams({ id: workoutId });
-        }, 0);
-        
-        return () => clearTimeout(timeout);
+        // Reset the selectedExercise param immediately
+        router.setParams({ id: workoutId });
+        return;
       }
       
       // Continue with normal exercise adding process since it's not a duplicate
@@ -567,13 +566,10 @@ export default function WorkoutDetailScreen() {
 
       setExercises(prev => [...prev, exerciseToAdd]);
 
-      const timeout = setTimeout(() => {
-        router.setParams({ id: workoutId });
-      }, 0);
-
-      return () => clearTimeout(timeout);
+      // Reset params immediately after processing to prevent duplicate adds
+      router.setParams({ id: workoutId });
     }
-  }, [selectedExercise, workoutId, exercisePreviousDataMap, exercises]);
+  }, [selectedExercise, workoutId]);
 
   // Add a new effect to auto-start the workout if opened from the start workout button
   useEffect(() => {
@@ -867,7 +863,7 @@ export default function WorkoutDetailScreen() {
     router.push({
       pathname: "/(tabs)/workouts/create",
       params: {
-        showExerciseSearch: true,
+        showExerciseSearch: "true",
         callbackId: workoutId
       }
     });
