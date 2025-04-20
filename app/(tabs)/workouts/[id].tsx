@@ -4,7 +4,7 @@ import { useLocalSearchParams, useRouter, useNavigation } from 'expo-router';
 import { X, Clock, ChartBar as BarChart3, Plus, CalendarClock, Scale, File as FileEdit, Dumbbell, Trash, Save, Trash2, Pencil } from 'lucide-react-native';
 import { format } from 'date-fns';
 import { getWorkoutPlan, deleteWorkoutPlan, createWorkout, WorkoutPlan, Workout } from '@/utils/workout';
-import { updateWorkoutPlan, supabase } from '@/utils/supabase'; // Import supabase from the same file
+import { updateWorkoutPlan, supabase, getCurrentUser, deleteAllAISuggestions } from '@/utils/supabase'; // Import getCurrentUser and deleteAllAISuggestions
 import { Swipeable } from 'react-native-gesture-handler';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { findExerciseType, exercisesByWorkoutType } from '@/utils/exercises';
@@ -801,6 +801,9 @@ export default function WorkoutDetailScreen() {
       console.log("Updated workout plan with" + 
         (isWorkoutActive || workoutStartTime ? " preserved set counts" : " new set counts"));
       
+      let savedWorkoutId = null;
+      
+      // If workout was active or has start time, save it as a completed workout
       if (isWorkoutActive || workoutStartTime) {
         const workoutExercises = exercises.map(exercise => {
           return {
@@ -836,7 +839,26 @@ export default function WorkoutDetailScreen() {
         };
                 
         const savedWorkout = await createWorkout(workoutData);
+        savedWorkoutId = savedWorkout.id;
         console.log("Successfully created workout session:", savedWorkout.id, "Done status:", isDone);
+        
+        // If workout is completed (has both start and end times), trigger AI suggestions reload
+        if (isDone && workoutStartTime && endTimeToUse) {
+          // Delete all existing AI suggestions first, since we'll be generating new ones
+          try {
+            const user = await getCurrentUser();
+            await deleteAllAISuggestions(user.id);
+            console.log('Deleted all existing AI suggestions for user:', user.id);
+            
+            // Set a flag in AsyncStorage to tell the AI screen to refresh suggestions
+            const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
+            await AsyncStorage.setItem('refresh_ai_suggestions', 'true');
+            await AsyncStorage.setItem('last_completed_workout_id', savedWorkoutId);
+            console.log('Flagged AI suggestions for refresh after workout completion');
+          } catch (asyncError) {
+            console.error('Error setting AI refresh flag:', asyncError);
+          }
+        }
       } else {
         console.log("Workout wasn't started, only updating the workout plan");
       }
