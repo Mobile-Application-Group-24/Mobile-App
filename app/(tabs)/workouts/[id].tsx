@@ -666,13 +666,19 @@ export default function WorkoutDetailScreen() {
 
   const updateSet = (exerciseId: string, setId: string, field: keyof WorkoutSet, value: string) => {
     if (field === 'weight' || field === 'reps') {
-      const isValidNumericInput = field === 'weight' 
-        ? /^(\d*\.?\d*)$/.test(value) 
-        : /^\d*$/.test(value);
+      // Replace commas with periods for decimal numbers
+      const processedValue = value.replace(',', '.');
       
-      if (value !== '' && !isValidNumericInput) {
+      const isValidNumericInput = field === 'weight' 
+        ? /^(\d*\.?\d*)$/.test(processedValue) 
+        : /^\d*$/.test(processedValue);
+      
+      if (processedValue !== '' && !isValidNumericInput) {
         return;
       }
+      
+      // Use the processed value instead of original value
+      value = processedValue;
     }
     
     setExercises(prev => {
@@ -1146,7 +1152,7 @@ export default function WorkoutDetailScreen() {
                     <TextInput
                       style={styles.infoInput}
                       value={bodyWeight}
-                      onChangeText={setBodyWeight}
+                      onChangeText={(text) => setBodyWeight(text.replace(',', '.'))}
                       placeholder="Enter weight"
                       keyboardType="numeric"
                       placeholderTextColor="#8E8E93"
