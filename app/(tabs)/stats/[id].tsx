@@ -20,6 +20,88 @@ const calculateSetVolume = (set: any) => {
   return weight * reps;
 };
 
+const determineYAxisRange = (data: number[]) => {
+  if (data.length === 0) return { yMin: 0, yMax: 100 };
+  
+  const min = Math.min(...data);
+  const max = Math.max(...data);
+  
+  if (min === max) {
+    const value = min;
+    const range = Math.max(value * 0.6, 20); // Erhöht auf 60% für bessere Zentrierung
+    const paddingBottom = range / 3; // Ein Drittel des Bereichs als unteres Padding
+    const paddingTop = range / 1.5; // Größeres oberes Padding für bessere Verteilung
+    
+    return {
+      yMin: Math.max(0, value - paddingBottom),
+      yMax: value + paddingTop
+    };
+  }
+  
+  // Für unterschiedliche Werte
+  const range = max - min;
+  const padding = range * 0.3; // 30% Padding für bessere Verteilung
+  const bottomPadding = range * 0.2; // Zusätzliches Padding unten
+  
+  return {
+    yMin: Math.max(0, min - bottomPadding),
+    yMax: max + padding
+  };
+};
+
+const chartConfig = {
+  backgroundColor: '#FFFFFF',
+  backgroundGradientFrom: '#FFFFFF',
+  backgroundGradientTo: '#FFFFFF',
+  decimalPlaces: 0,
+  color: (opacity = 1) => `rgba(0, 122, 255, ${opacity})`,
+  style: {
+    borderRadius: 16,
+  },
+  propsForDots: {
+    r: '6',
+    strokeWidth: '2',
+    stroke: '#FFFFFF',
+  },
+  formatYLabel: (value) => Math.round(parseFloat(value)).toString(),
+  paddingRight: 32,
+  paddingLeft: 16,
+  propsForBackgroundLines: {
+    strokeWidth: 1,
+    stroke: 'rgba(0, 0, 0, 0.1)', // Durchgezogene Linien mit leichter Transparenz
+    strokeDasharray: [] // Leeres Array für durchgezogene Linien
+  }
+};
+
+const calculateProgress = (data: any[], isBodyweightExercise: boolean = false) => {
+  if (data.length < 2) return { weightProgress: 0, volumeProgress: 0, repsProgress: 0 };
+
+  const firstEntry = data[0];
+  const lastEntry = data[data.length - 1];
+
+  if (isBodyweightExercise) {
+    const repsProgress = firstEntry.bestSetReps ? 
+      ((lastEntry.bestSetReps - firstEntry.bestSetReps) / firstEntry.bestSetReps) * 100 : 0;
+    return {
+      weightProgress: 0,
+      volumeProgress: 0,
+      repsProgress: Math.round(repsProgress)
+    };
+  }
+
+  const weightProgress = firstEntry.maxWeight ? 
+    ((lastEntry.maxWeight - firstEntry.maxWeight) / firstEntry.maxWeight) * 100 : 0;
+  const volumeProgress = ((lastEntry.volume - firstEntry.volume) / firstEntry.volume) * 100;
+  const repsProgress = firstEntry.maxReps ? 
+    ((lastEntry.maxReps - firstEntry.maxReps) / firstEntry.maxReps) * 100 : 0;
+
+  return {
+    weightProgress: Math.round(weightProgress),
+    volumeProgress: Math.round(volumeProgress),
+    repsProgress: Math.round(repsProgress)
+  };
+};
+
 export default function ExerciseStatsScreen() {
   const { id, exerciseName, workoutId, returnPath } = useLocalSearchParams();
   const { session } = useSession();
@@ -44,51 +126,6 @@ export default function ExerciseStatsScreen() {
   const [weightProgress, setWeightProgress] = useState<number>(0);
   const [volumeProgress, setVolumeProgress] = useState<number>(0);
   const [repsProgress, setRepsProgress] = useState<number>(0);
-
-  const chartConfig = {
-    backgroundColor: '#FFFFFF',
-    backgroundGradientFrom: '#FFFFFF',
-    backgroundGradientTo: '#FFFFFF',
-    decimalPlaces: 0,
-    color: (opacity = 1) => `rgba(0, 122, 255, ${opacity})`,
-    style: {
-      borderRadius: 16,
-    },
-    propsForDots: {
-      r: '6',
-      strokeWidth: '2',
-      stroke: '#FFFFFF',
-    },
-  };
-
-  const calculateProgress = (data: any[], isBodyweightExercise: boolean = false) => {
-    if (data.length < 2) return { weightProgress: 0, volumeProgress: 0, repsProgress: 0 };
-
-    const firstEntry = data[0];
-    const lastEntry = data[data.length - 1];
-
-    if (isBodyweightExercise) {
-      const repsProgress = firstEntry.bestSetReps ? 
-        ((lastEntry.bestSetReps - firstEntry.bestSetReps) / firstEntry.bestSetReps) * 100 : 0;
-      return {
-        weightProgress: 0,
-        volumeProgress: 0,
-        repsProgress: Math.round(repsProgress)
-      };
-    }
-
-    const weightProgress = firstEntry.maxWeight ? 
-      ((lastEntry.maxWeight - firstEntry.maxWeight) / firstEntry.maxWeight) * 100 : 0;
-    const volumeProgress = ((lastEntry.volume - firstEntry.volume) / firstEntry.volume) * 100;
-    const repsProgress = firstEntry.maxReps ? 
-      ((lastEntry.maxReps - firstEntry.maxReps) / firstEntry.maxReps) * 100 : 0;
-
-    return {
-      weightProgress: Math.round(weightProgress),
-      volumeProgress: Math.round(volumeProgress),
-      repsProgress: Math.round(repsProgress)
-    };
-  };
 
   const filterDataByTime = (data: any[]) => {
     const now = new Date();
@@ -528,14 +565,30 @@ export default function ExerciseStatsScreen() {
                 labels: chartData.volume.labels,
                 datasets: [{ data: chartData.volume.data }],
               }}
-              width={340}
+              width={330}
               height={220}
-              chartConfig={chartConfig}
+              chartConfig={{
+                ...chartConfig,
+                propsForBackgroundLines: {
+                  strokeWidth: 1,
+                  stroke: 'rgba(0, 0, 0, 0.1)',
+                  strokeDasharray: []
+                },
+              }}
               bezier
-              style={styles.chart}
+              style={[styles.chart, { marginHorizontal: -8 }]}
               yAxisLabel=""
               yAxisSuffix=" kg"
-              fromZero={true}
+              fromZero={false}
+              segments={5}
+              withInnerLines={true}
+              getDotColor={(dataPoint, index) => '#007AFF'}
+              withVerticalLabels={true}
+              withHorizontalLabels={true}
+              yAxisInterval={1}
+              horizontalLabelRotation={0}
+              yMin={determineYAxisRange(chartData.volume.data).yMin}
+              yMax={determineYAxisRange(chartData.volume.data).yMax}
             />
           </View>
 
@@ -546,14 +599,30 @@ export default function ExerciseStatsScreen() {
                 labels: chartData.maxWeight.labels,
                 datasets: [{ data: chartData.maxWeight.data }],
               }}
-              width={340}
+              width={330}
               height={220}
-              chartConfig={chartConfig}
+              chartConfig={{
+                ...chartConfig,
+                propsForBackgroundLines: {
+                  strokeWidth: 1,
+                  stroke: 'rgba(0, 0, 0, 0.1)',
+                  strokeDasharray: []
+                },
+              }}
               bezier
-              style={styles.chart}
+              style={[styles.chart, { marginHorizontal: -8 }]}
               yAxisLabel=""
               yAxisSuffix=" kg"
-              fromZero={true}
+              fromZero={false}
+              segments={5}
+              withInnerLines={true}
+              getDotColor={(dataPoint, index) => '#007AFF'}
+              withVerticalLabels={true}
+              withHorizontalLabels={true}
+              yAxisInterval={1}
+              horizontalLabelRotation={0}
+              yMin={determineYAxisRange(chartData.maxWeight.data).yMin}
+              yMax={determineYAxisRange(chartData.maxWeight.data).yMax}
             />
           </View>
 
@@ -564,14 +633,30 @@ export default function ExerciseStatsScreen() {
                 labels: chartData.bestSetVolume.labels,
                 datasets: [{ data: chartData.bestSetVolume.data }],
               }}
-              width={340}
+              width={330}
               height={220}
-              chartConfig={chartConfig}
+              chartConfig={{
+                ...chartConfig,
+                propsForBackgroundLines: {
+                  strokeWidth: 1,
+                  stroke: 'rgba(0, 0, 0, 0.1)',
+                  strokeDasharray: []
+                },
+              }}
               bezier
-              style={styles.chart}
+              style={[styles.chart, { marginHorizontal: -8 }]}
               yAxisLabel=""
               yAxisSuffix=" kg"
-              fromZero={true}
+              fromZero={false}
+              segments={5}
+              withInnerLines={true}
+              getDotColor={(dataPoint, index) => '#007AFF'}
+              withVerticalLabels={true}
+              withHorizontalLabels={true}
+              yAxisInterval={1}
+              horizontalLabelRotation={0}
+              yMin={determineYAxisRange(chartData.bestSetVolume.data).yMin}
+              yMax={determineYAxisRange(chartData.bestSetVolume.data).yMax}
             />
           </View>
         </>
@@ -584,14 +669,30 @@ export default function ExerciseStatsScreen() {
                 labels: chartData.volume.labels,
                 datasets: [{ data: chartData.volume.data }],
               }}
-              width={340}
+              width={330}
               height={220}
-              chartConfig={chartConfig}
+              chartConfig={{
+                ...chartConfig,
+                propsForBackgroundLines: {
+                  strokeWidth: 1,
+                  stroke: 'rgba(0, 0, 0, 0.1)',
+                  strokeDasharray: []
+                },
+              }}
               bezier
-              style={styles.chart}
+              style={[styles.chart, { marginHorizontal: -8 }]}
               yAxisLabel=""
               yAxisSuffix=" reps"
-              fromZero={true}
+              fromZero={false}
+              segments={5}
+              withInnerLines={true}
+              getDotColor={(dataPoint, index) => '#007AFF'}
+              withVerticalLabels={true}
+              withHorizontalLabels={true}
+              yAxisInterval={1}
+              horizontalLabelRotation={0}
+              yMin={determineYAxisRange(chartData.volume.data).yMin}
+              yMax={determineYAxisRange(chartData.volume.data).yMax}
             />
           </View>
 
@@ -602,14 +703,30 @@ export default function ExerciseStatsScreen() {
                 labels: chartData.maxWeight.labels,
                 datasets: [{ data: chartData.maxWeight.data }],
               }}
-              width={340}
+              width={330}
               height={220}
-              chartConfig={chartConfig}
+              chartConfig={{
+                ...chartConfig,
+                propsForBackgroundLines: {
+                  strokeWidth: 1,
+                  stroke: 'rgba(0, 0, 0, 0.1)',
+                  strokeDasharray: []
+                },
+              }}
               bezier
-              style={styles.chart}
+              style={[styles.chart, { marginHorizontal: -8 }]}
               yAxisLabel=""
               yAxisSuffix=" reps"
-              fromZero={true}
+              fromZero={false}
+              segments={5}
+              withInnerLines={true}
+              getDotColor={(dataPoint, index) => '#007AFF'}
+              withVerticalLabels={true}
+              withHorizontalLabels={true}
+              yAxisInterval={1}
+              horizontalLabelRotation={0}
+              yMin={determineYAxisRange(chartData.maxWeight.data).yMin}
+              yMax={determineYAxisRange(chartData.maxWeight.data).yMax}
             />
           </View>
         </>
@@ -708,6 +825,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
+    alignItems: 'center',
   },
   cardTitle: {
     fontSize: 18,

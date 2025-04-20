@@ -899,22 +899,28 @@ export default function WorkoutDetailScreen() {
     });
   };
 
-  const handleTimeChange = (event: any, selectedDate?: Date) => {
+  const handleTimeChange = async (event: any, selectedDate?: Date) => {
     if (Platform.OS === 'ios') {
-      // Auf iOS nicht automatisch schließen
       if (selectedDate) {
         if (editingTime === 'start') {
           setWorkoutStartTime(selectedDate);
           if (!isWorkoutActive) {
             setIsWorkoutActive(true);
           }
+          // Save start time change to database
+          await updateWorkoutTime({
+            start_time: selectedDate.toISOString()
+          });
         } else if (editingTime === 'end') {
           setWorkoutEndTime(selectedDate);
           setIsWorkoutActive(false);
+          // Save end time change to database
+          await updateWorkoutTime({
+            end_time: selectedDate.toISOString()
+          });
         }
       }
     } else {
-      // Für Android behalten wir das bisherige Verhalten
       setShowTimePicker(false);
       if (selectedDate) {
         if (editingTime === 'start') {
@@ -922,12 +928,43 @@ export default function WorkoutDetailScreen() {
           if (!isWorkoutActive) {
             setIsWorkoutActive(true);
           }
+          // Save start time change to database
+          await updateWorkoutTime({
+            start_time: selectedDate.toISOString()
+          });
         } else if (editingTime === 'end') {
           setWorkoutEndTime(selectedDate);
           setIsWorkoutActive(false);
+          // Save end time change to database
+          await updateWorkoutTime({
+            end_time: selectedDate.toISOString()
+          });
         }
       }
       setEditingTime(null);
+    }
+  };
+
+  const updateWorkoutTime = async (updates: { start_time?: string; end_time?: string }) => {
+    try {
+      if (!workoutId) return;
+      
+      const { data, error } = await supabase
+        .from('workouts')
+        .update(updates)
+        .eq('id', workoutId)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error updating workout time:', error);
+        Alert.alert('Error', 'Failed to update workout time');
+      } else {
+        console.log('Successfully updated workout time:', updates);
+      }
+    } catch (error) {
+      console.error('Error in updateWorkoutTime:', error);
+      Alert.alert('Error', 'Failed to update workout time');
     }
   };
 
