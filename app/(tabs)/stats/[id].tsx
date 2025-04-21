@@ -61,6 +61,24 @@ export default function ExerciseStatsScreen() {
     },
   };
 
+  // Enhanced chart config for the Max Weight chart
+  const maxWeightChartConfig = {
+    ...chartConfig,
+    decimalPlaces: 1, 
+    formatYLabel: (value: string) => {
+      // Convert the value to a number with 1 decimal place
+      const formattedValue = parseFloat(value).toFixed(1);
+      // Replace period with comma for decimal separator
+      return formattedValue.replace('.', ',');
+    },
+    color: (opacity = 1) => `rgba(0, 122, 255, ${opacity})`,
+    propsForDots: {
+      r: '6',
+      strokeWidth: '2',
+      stroke: '#FFFFFF'
+    }
+  };
+
   const calculateProgress = (data: any[], isBodyweightExercise: boolean = false) => {
     if (data.length < 2) return { weightProgress: 0, volumeProgress: 0, repsProgress: 0 };
 
@@ -521,23 +539,23 @@ export default function ExerciseStatsScreen() {
 
       {hasVolume ? (
         <>
-          <View style={styles.card}>
+            <View style={styles.card}>
             <Text style={styles.cardTitle}>Volume Progress</Text>
             <LineChart
               data={{
-                labels: chartData.volume.labels,
-                datasets: [{ data: chartData.volume.data }],
+              labels: chartData.volume.labels,
+              datasets: [{ data: chartData.volume.data }],
               }}
-              width={340}
+              width={Platform.OS === 'android' ? 280 : 320}
               height={220}
               chartConfig={chartConfig}
               bezier
               style={styles.chart}
               yAxisLabel=""
               yAxisSuffix=" kg"
-              fromZero={true}
+              fromZero={false}
             />
-          </View>
+            </View>
 
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Max Weight Progress</Text>
@@ -546,14 +564,14 @@ export default function ExerciseStatsScreen() {
                 labels: chartData.maxWeight.labels,
                 datasets: [{ data: chartData.maxWeight.data }],
               }}
-              width={340}
+              width={Platform.OS === 'android' ? 280 : 320}
               height={220}
-              chartConfig={chartConfig}
+              chartConfig={maxWeightChartConfig} // Use the enhanced chart config here
               bezier
               style={styles.chart}
               yAxisLabel=""
               yAxisSuffix=" kg"
-              fromZero={true}
+              fromZero={false}
             />
           </View>
 
@@ -564,14 +582,14 @@ export default function ExerciseStatsScreen() {
                 labels: chartData.bestSetVolume.labels,
                 datasets: [{ data: chartData.bestSetVolume.data }],
               }}
-              width={340}
+              width={Platform.OS === 'android' ? 280 : 320}
               height={220}
               chartConfig={chartConfig}
               bezier
               style={styles.chart}
               yAxisLabel=""
               yAxisSuffix=" kg"
-              fromZero={true}
+              fromZero={false}
             />
           </View>
         </>
@@ -584,14 +602,14 @@ export default function ExerciseStatsScreen() {
                 labels: chartData.volume.labels,
                 datasets: [{ data: chartData.volume.data }],
               }}
-              width={340}
+              width={Platform.OS === 'android' ? 280 : 320}
               height={220}
               chartConfig={chartConfig}
               bezier
               style={styles.chart}
               yAxisLabel=""
               yAxisSuffix=" reps"
-              fromZero={true}
+              fromZero={false}
             />
           </View>
 
@@ -602,14 +620,14 @@ export default function ExerciseStatsScreen() {
                 labels: chartData.maxWeight.labels,
                 datasets: [{ data: chartData.maxWeight.data }],
               }}
-              width={340}
+              width={Platform.OS === 'android' ? 280 : 320}
               height={220}
               chartConfig={chartConfig}
               bezier
               style={styles.chart}
               yAxisLabel=""
               yAxisSuffix=" reps"
-              fromZero={true}
+              fromZero={false}
             />
           </View>
         </>
