@@ -102,10 +102,12 @@ export default function WorkoutsScreen() {
         // Prüfe ob das Workout heute bereits abgeschlossen wurde
         const today = new Date();
         const isTodaysWorkoutCompleted = completedWorkouts.some(w => {
-          const workoutDate = parseISO(w.date);
-          return isSameDay(workoutDate, today) && 
-                 w.done && 
-                 w.workout_plan_id === workoutPlanForToday.id;
+          // Make sure to check both start_time and done status
+          if (!w.start_time || !w.done) return false;
+          
+          const workoutStartTime = parseISO(w.start_time);
+          return isSameDay(workoutStartTime, today) && 
+                w.workout_plan_id === workoutPlanForToday.id;
         });
 
         setTodaysWorkout({
@@ -249,10 +251,14 @@ export default function WorkoutsScreen() {
 
           // Only count completed workouts for days that have already passed
           if (currentDay <= today) {
+            // Find workout that was completed (done) and has a start time on this day
             const workoutForThisDay = workouts.find(w => {
-              const workoutDate = parseISO(w.date);
-              return isSameDay(workoutDate, currentDay) && w.done && 
-                w.workout_plan_id === schedule[dayName]?.id;
+              // Check if the workout has a start time before checking same day
+              if (!w.start_time || !w.done) return false;
+              
+              const workoutStartTime = parseISO(w.start_time);
+              return isSameDay(workoutStartTime, currentDay) && 
+                     w.workout_plan_id === schedule[dayName]?.id;
             });
 
             if (workoutForThisDay) {
@@ -282,10 +288,13 @@ export default function WorkoutsScreen() {
         
         // Check if this is a scheduled workout day
         if (schedule[dayName]) {
-          // Check if we have a completed workout for this day
+          // Check if we have a completed workout for this day using start_time
           const workoutForThisDay = workouts.find(w => {
-            const workoutDate = parseISO(w.date);
-            return isSameDay(workoutDate, currentDate) && w.done &&
+            // Only consider workouts that are completed (done) and have a start time
+            if (!w.start_time || !w.done) return false;
+            
+            const workoutStartTime = parseISO(w.start_time);
+            return isSameDay(workoutStartTime, currentDate) &&
               w.workout_plan_id === schedule[dayName]?.id;
           });
 
