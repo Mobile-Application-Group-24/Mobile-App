@@ -1446,10 +1446,10 @@ export default function WorkoutDetailScreen() {
                 : (workoutEndTime || new Date())}
               mode="time"
               is24Hour={true}
-              display="spinner"
+              display="default" // Changed from "spinner" to "default"
               onChange={handleTimeChange}
-              textColor="black" // Füge textColor für iOS hinzu
-              style={[styles.timePicker, { height: 120 }]} // Anpassung der Höhe
+              // Remove the textColor prop as it might not be supported
+              style={styles.timePicker}
             />
           </View>
         )}
