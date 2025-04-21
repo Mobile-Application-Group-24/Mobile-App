@@ -8,6 +8,8 @@ import { ExerciseStats, getExerciseStatsFromWorkouts, getExerciseHistoryData } f
 import { format, subMonths, subYears } from 'date-fns';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
+let bool = false;
+
 interface ChartData {
   volume: { labels: string[], data: number[] },
   maxWeight: { labels: string[], data: number[] },
@@ -25,22 +27,26 @@ const determineYAxisRange = (data: number[]) => {
   
   const min = Math.min(...data);
   const max = Math.max(...data);
+  bool = false;
   
   if (min === max) {
+    bool = true;
     const value = min;
     const range = Math.max(value * 0.6, 20); // Erhöht auf 60% für bessere Zentrierung
     const paddingBottom = range / 3; // Ein Drittel des Bereichs als unteres Padding
     const paddingTop = range / 1.5; // Größeres oberes Padding für bessere Verteilung
     
+    
     return {
       yMin: Math.max(0, value - paddingBottom),
       yMax: value + paddingTop
+
     };
   }
   
   // Für unterschiedliche Werte
   const range = max - min;
-  const padding = range * 0.3; // 30% Padding für bessere Verteilung
+  const padding = range * 0.1; // 30% Padding für bessere Verteilung
   const bottomPadding = range * 0.2; // Zusätzliches Padding unten
   
   return {
@@ -73,11 +79,21 @@ const chartConfig = {
   }
 };
 
+const weightChartConfig = {
+  ...chartConfig,
+  decimalPlaces: 1, // Erlaube eine Dezimalstelle für Gewichte
+  formatYLabel: (value: string) => parseFloat(value).toFixed(1), // Y-Achse mit einer Dezimalstelle
+};
+
 const calculateProgress = (data: any[], isBodyweightExercise: boolean = false) => {
   if (data.length < 2) return { weightProgress: 0, volumeProgress: 0, repsProgress: 0 };
 
-  const firstEntry = data[0];
-  const lastEntry = data[data.length - 1];
+  // Sortiere die Daten nach Datum
+  const sortedData = data.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  
+  // Nimm den ersten und letzten Eintrag des gefilterten Zeitraums
+  const firstEntry = sortedData[0];
+  const lastEntry = sortedData[sortedData.length - 1];
 
   if (isBodyweightExercise) {
     const repsProgress = firstEntry.bestSetReps ? 
@@ -91,7 +107,8 @@ const calculateProgress = (data: any[], isBodyweightExercise: boolean = false) =
 
   const weightProgress = firstEntry.maxWeight ? 
     ((lastEntry.maxWeight - firstEntry.maxWeight) / firstEntry.maxWeight) * 100 : 0;
-  const volumeProgress = ((lastEntry.volume - firstEntry.volume) / firstEntry.volume) * 100;
+  const volumeProgress = firstEntry.volume ? 
+    ((lastEntry.volume - firstEntry.volume) / firstEntry.volume) * 100 : 0;
   const repsProgress = firstEntry.maxReps ? 
     ((lastEntry.maxReps - firstEntry.maxReps) / firstEntry.maxReps) * 100 : 0;
 
@@ -576,19 +593,18 @@ export default function ExerciseStatsScreen() {
                 },
               }}
               bezier
-              style={[styles.chart, { marginHorizontal: -8 }]}
+              style={styles.chart}
               yAxisLabel=""
               yAxisSuffix=" kg"
-              fromZero={false}
+              
               segments={5}
               withInnerLines={true}
-              getDotColor={(dataPoint, index) => '#007AFF'}
+              getDotColor={() => '#007AFF'}
               withVerticalLabels={true}
               withHorizontalLabels={true}
               yAxisInterval={1}
               horizontalLabelRotation={0}
-              yMin={determineYAxisRange(chartData.volume.data).yMin}
-              yMax={determineYAxisRange(chartData.volume.data).yMax}
+            
             />
           </View>
 
@@ -601,28 +617,20 @@ export default function ExerciseStatsScreen() {
               }}
               width={330}
               height={220}
-              chartConfig={{
-                ...chartConfig,
-                propsForBackgroundLines: {
-                  strokeWidth: 1,
-                  stroke: 'rgba(0, 0, 0, 0.1)',
-                  strokeDasharray: []
-                },
-              }}
+              chartConfig={weightChartConfig} 
               bezier
-              style={[styles.chart, { marginHorizontal: -8 }]}
+              style={styles.chart}
               yAxisLabel=""
               yAxisSuffix=" kg"
-              fromZero={false}
+              fromZero={bool}
               segments={5}
               withInnerLines={true}
-              getDotColor={(dataPoint, index) => '#007AFF'}
+              getDotColor={() => '#007AFF'}
               withVerticalLabels={true}
               withHorizontalLabels={true}
-              yAxisInterval={1}
+              yAxisInterval={10}
               horizontalLabelRotation={0}
-              yMin={determineYAxisRange(chartData.maxWeight.data).yMin}
-              yMax={determineYAxisRange(chartData.maxWeight.data).yMax}
+              
             />
           </View>
 
@@ -644,19 +652,18 @@ export default function ExerciseStatsScreen() {
                 },
               }}
               bezier
-              style={[styles.chart, { marginHorizontal: -8 }]}
+              style={styles.chart}
               yAxisLabel=""
               yAxisSuffix=" kg"
-              fromZero={false}
+              fromZero={bool}
               segments={5}
               withInnerLines={true}
-              getDotColor={(dataPoint, index) => '#007AFF'}
+              getDotColor={() => '#007AFF'}
               withVerticalLabels={true}
               withHorizontalLabels={true}
               yAxisInterval={1}
               horizontalLabelRotation={0}
-              yMin={determineYAxisRange(chartData.bestSetVolume.data).yMin}
-              yMax={determineYAxisRange(chartData.bestSetVolume.data).yMax}
+              
             />
           </View>
         </>
@@ -680,19 +687,18 @@ export default function ExerciseStatsScreen() {
                 },
               }}
               bezier
-              style={[styles.chart, { marginHorizontal: -8 }]}
+              style={styles.chart}
               yAxisLabel=""
               yAxisSuffix=" reps"
               fromZero={false}
               segments={5}
               withInnerLines={true}
-              getDotColor={(dataPoint, index) => '#007AFF'}
+              getDotColor={() => '#007AFF'}
               withVerticalLabels={true}
               withHorizontalLabels={true}
               yAxisInterval={1}
               horizontalLabelRotation={0}
-              yMin={determineYAxisRange(chartData.volume.data).yMin}
-              yMax={determineYAxisRange(chartData.volume.data).yMax}
+             
             />
           </View>
 
@@ -714,19 +720,18 @@ export default function ExerciseStatsScreen() {
                 },
               }}
               bezier
-              style={[styles.chart, { marginHorizontal: -8 }]}
+              style={styles.chart}
               yAxisLabel=""
               yAxisSuffix=" reps"
               fromZero={false}
               segments={5}
               withInnerLines={true}
-              getDotColor={(dataPoint, index) => '#007AFF'}
+              getDotColor={() => '#007AFF'}
               withVerticalLabels={true}
               withHorizontalLabels={true}
               yAxisInterval={1}
               horizontalLabelRotation={0}
-              yMin={determineYAxisRange(chartData.maxWeight.data).yMin}
-              yMax={determineYAxisRange(chartData.maxWeight.data).yMax}
+              
             />
           </View>
         </>
@@ -835,6 +840,7 @@ const styles = StyleSheet.create({
   chart: {
     marginVertical: 8,
     borderRadius: 16,
+    marginHorizontal: -8,
   },
   filterContainer: {
     paddingHorizontal: 12,
