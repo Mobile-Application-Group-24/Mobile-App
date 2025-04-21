@@ -754,7 +754,7 @@ export default function WorkoutDetailScreen() {
     try {
       const originalPlan = workoutPlan;
       
-      // Wenn es ein History-Workout ist, aktualisieren wir das vorhandene Workout
+      // If this is a history workout, update the existing workout
       if (fromHistory) {
         const workoutExercises = exercises.map(exercise => {
           return {
@@ -788,29 +788,36 @@ export default function WorkoutDetailScreen() {
         return;
       }
       
-      // Normale Speicherlogik für Workout-Pläne
-      const planExercises = exercises.map(exercise => ({
-        id: exercise.id,
-        name: exercise.name,
-        type: exercise.type,
-        sets: isWorkoutActive || workoutStartTime ? 
-          (originalPlan.exercises?.find(e => e.id === exercise.id)?.sets || exercise.sets.length) : 
-          exercise.sets.length
-      }));
-
-      await updateWorkoutPlan(workoutId, {
-        title: workoutName,
-        description: notes,
-        exercises: planExercises
-      });
+      // Determine if we're in workout session mode or plan editing mode
+      const isWorkoutSessionMode = isWorkoutActive || !!workoutStartTime;
       
-      console.log("Updated workout plan with" + 
-        (isWorkoutActive || workoutStartTime ? " preserved set counts" : " new set counts"));
+      console.log(`Mode: ${isWorkoutSessionMode ? 'Active workout session' : 'Workout plan editing'}`);
       
       let savedWorkoutId = null;
       
-      // If workout was active or has start time, save it as a completed workout
-      if (isWorkoutActive || workoutStartTime) {
+      // IMPORTANT: Only update the workout plan if we're NOT in a workout session
+      if (!isWorkoutSessionMode) {
+        // We're just editing the plan, not running a workout session
+        const planExercises = exercises.map(exercise => ({
+          id: exercise.id,
+          name: exercise.name,
+          type: exercise.type,
+          sets: exercise.sets.length
+        }));
+
+        await updateWorkoutPlan(workoutId, {
+          title: workoutName,
+          description: notes,
+          exercises: planExercises
+        });
+        
+        console.log("Updated workout plan with new exercise/set information");
+      } else {
+        console.log("Workout session active - original workout plan was NOT modified");
+      }
+      
+      // Always save a workout session if we started one
+      if (isWorkoutSessionMode) {
         const workoutExercises = exercises.map(exercise => {
           return {
             id: exercise.id,
@@ -866,7 +873,7 @@ export default function WorkoutDetailScreen() {
           }
         }
       } else {
-        console.log("Workout wasn't started, only updating the workout plan");
+        console.log("No workout session was recorded, only the plan was updated");
       }
             
       router.back();
