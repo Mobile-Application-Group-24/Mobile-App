@@ -32,9 +32,9 @@ const determineYAxisRange = (data: number[]) => {
   if (min === max) {
     bool = true;
     const value = min;
-    const range = Math.max(value * 0.6, 20); // Erhöht auf 60% für bessere Zentrierung
-    const paddingBottom = range / 3; // Ein Drittel des Bereichs als unteres Padding
-    const paddingTop = range / 1.5; // Größeres oberes Padding für bessere Verteilung
+    const range = Math.max(value * 0.6, 20); 
+    const paddingBottom = range / 3; 
+    const paddingTop = range / 1.5; 
     
     
     return {
@@ -44,10 +44,10 @@ const determineYAxisRange = (data: number[]) => {
     };
   }
   
-  // Für unterschiedliche Werte
+  
   const range = max - min;
-  const padding = range * 0.1; // 30% Padding für bessere Verteilung
-  const bottomPadding = range * 0.2; // Zusätzliches Padding unten
+  const padding = range * 0.1; 
+  const bottomPadding = range * 0.2; 
   
   return {
     yMin: Math.max(0, min - bottomPadding),
@@ -74,24 +74,24 @@ const chartConfig = {
   paddingLeft: 16,
   propsForBackgroundLines: {
     strokeWidth: 1,
-    stroke: 'rgba(0, 0, 0, 0.1)', // Durchgezogene Linien mit leichter Transparenz
-    strokeDasharray: [] // Leeres Array für durchgezogene Linien
+    stroke: 'rgba(0, 0, 0, 0.1)', 
+    strokeDasharray: [] 
   }
 };
 
 const weightChartConfig = {
   ...chartConfig,
-  decimalPlaces: 1, // Erlaube eine Dezimalstelle für Gewichte
-  formatYLabel: (value: string) => parseFloat(value).toFixed(1), // Y-Achse mit einer Dezimalstelle
+  decimalPlaces: 1, 
+  formatYLabel: (value: string) => parseFloat(value).toFixed(1), 
 };
 
 const calculateProgress = (data: any[], isBodyweightExercise: boolean = false) => {
   if (data.length < 2) return { weightProgress: 0, volumeProgress: 0, repsProgress: 0 };
 
-  // Sortiere die Daten nach Datum
+  
   const sortedData = data.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   
-  // Nimm den ersten und letzten Eintrag des gefilterten Zeitraums
+ 
   const firstEntry = sortedData[0];
   const lastEntry = sortedData[sortedData.length - 1];
 

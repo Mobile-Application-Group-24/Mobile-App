@@ -66,7 +66,7 @@ export default function WorkoutDetailScreen() {
   useEffect(() => {
     if (workoutId && navigation.setOptions) {
       navigation.setOptions({
-        headerShown: false // Ändere zu false um die Standard-Header-Zeile zu verstecken
+        headerShown: false 
       });
     }
   }, [navigation, workoutId]);
@@ -210,7 +210,7 @@ export default function WorkoutDetailScreen() {
       setLoading(true);
       setError(null);
       
-      // Zusätzlich prüfen, ob dies ein bereits durchgeführtes Workout ist
+      
       if (fromHistory) {
         try {
           const { data: workoutData, error: workoutError } = await supabase
@@ -222,7 +222,7 @@ export default function WorkoutDetailScreen() {
           if (workoutError) throw workoutError;
           
           if (workoutData) {
-            // Es handelt sich um ein gespeichertes Workout aus der History
+            
             setWorkoutPlan({
               id: workoutData.id,
               title: workoutData.title,
@@ -252,7 +252,7 @@ export default function WorkoutDetailScreen() {
               setWorkoutEndTime(new Date(workoutData.end_time));
             }
             
-            // Exercises mit den Set-Details verarbeiten
+            
             const exercisesWithDetails = workoutData.exercises?.map(exercise => {
               return {
                 id: exercise.id,
@@ -274,11 +274,11 @@ export default function WorkoutDetailScreen() {
           }
         } catch (historyError) {
           console.error('Error loading workout from history:', historyError);
-          // Fallback zum normalen Plan-Laden
+          
         }
       }
       
-      // Normales Laden des Workout-Plans, wenn es kein History-Workout ist oder wenn History-Laden fehlschlägt
+      
       // Get the workout plan from workout_plans table
       const plan = await getWorkoutPlan(workoutPlanId);
       setWorkoutPlan(plan);

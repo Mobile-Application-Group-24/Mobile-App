@@ -37,24 +37,24 @@ export default function StatsScreen() {
         const historyData = await getExerciseHistoryData(session.user.id, exercise.name);
         
         if (historyData && historyData.length >= 2) {
-          // Sortiere nach Datum (neueste zuerst)
+          
           const sortedData = historyData.sort((a, b) => 
             new Date(b.date).getTime() - new Date(a.date).getTime()
           );
           
-          // Nehme die letzten zwei Einträge für den Vergleich
+          
           const lastEntry = sortedData[0];
           const previousEntry = sortedData[1];
           
           if (exercise.totalVolume > 0) {
-            // Für Übungen mit Gewicht: Berechne Volume Progress zum vorherigen Workout
+            
             const volumeProgress = ((lastEntry.volume - previousEntry.volume) / previousEntry.volume) * 100;
             return {
               ...exercise,
               volumeProgress: Math.round(volumeProgress)
             };
           } else {
-            // Für Übungen ohne Gewicht: Berechne Reps Progress zum vorherigen Workout
+            
             const lastReps = lastEntry.totalReps || 0;
             const prevReps = previousEntry.totalReps || 0;
             const repsProgress = prevReps ? ((lastReps - prevReps) / prevReps) * 100 : 0;
