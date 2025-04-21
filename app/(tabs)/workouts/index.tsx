@@ -81,25 +81,25 @@ export default function WorkoutsScreen() {
       );
 
       if (workoutPlanForToday) {
-        // Berechne die durchschnittliche Dauer für diesen Workout-Typ
+        
         const similarWorkouts = completedWorkouts.filter(w => 
           w.workout_plan_id === workoutPlanForToday.id && 
           w.start_time && 
           w.end_time
         );
 
-        let averageDuration = 60; // Standardwert
+        let averageDuration = 60; 
         if (similarWorkouts.length > 0) {
           const totalDuration = similarWorkouts.reduce((acc, workout) => {
             const start = new Date(workout.start_time);
             const end = new Date(workout.end_time);
-            const duration = (end.getTime() - start.getTime()) / (1000 * 60); // Konvertiere zu Minuten
+            const duration = (end.getTime() - start.getTime()) / (1000 * 60); 
             return acc + duration;
           }, 0);
           averageDuration = Math.round(totalDuration / similarWorkouts.length);
         }
 
-        // Prüfe ob das Workout heute bereits abgeschlossen wurde
+        
         const today = new Date();
         const isTodaysWorkoutCompleted = completedWorkouts.some(w => {
           // Make sure to check both start_time and done status

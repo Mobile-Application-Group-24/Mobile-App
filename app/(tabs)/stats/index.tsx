@@ -37,31 +37,31 @@ export default function StatsScreen() {
         const historyData = await getExerciseHistoryData(session.user.id, exercise.name);
         
         if (historyData && historyData.length >= 2) {
+          
           const sortedData = historyData.sort((a, b) => 
-            new Date(a.date).getTime() - new Date(b.date).getTime()
+            new Date(b.date).getTime() - new Date(a.date).getTime()
           );
           
-          const firstEntry = sortedData[0];
-          const lastEntry = sortedData[sortedData.length - 1];
+          
+          const lastEntry = sortedData[0];
+          const previousEntry = sortedData[1];
           
           if (exercise.totalVolume > 0) {
-            // Für Übungen mit Gewicht: Berechne Volume Progress
-            const volumeProgress = ((lastEntry.volume - firstEntry.volume) / firstEntry.volume) * 100;
+            
+            const volumeProgress = ((lastEntry.volume - previousEntry.volume) / previousEntry.volume) * 100;
             return {
               ...exercise,
               volumeProgress: Math.round(volumeProgress)
             };
           } else {
-            // Für Übungen ohne Gewicht: Berechne Reps Progress
-            const firstReps = firstEntry.totalReps || 0;
-            const lastReps = lastEntry.totalReps || 0;
-            const totalReps = sortedData.reduce((sum, entry) => sum + (entry.totalReps || 0), 0);
             
-            const repsProgress = firstReps ? ((lastReps - firstReps) / firstReps) * 100 : 0;
+            const lastReps = lastEntry.totalReps || 0;
+            const prevReps = previousEntry.totalReps || 0;
+            const repsProgress = prevReps ? ((lastReps - prevReps) / prevReps) * 100 : 0;
             
             return {
               ...exercise,
-              totalReps: totalReps, // Gesamtsumme aller Wiederholungen
+              totalReps: lastEntry.totalReps,
               progress: Math.round(repsProgress)
             };
           }
