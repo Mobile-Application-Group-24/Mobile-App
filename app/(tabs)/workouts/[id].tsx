@@ -62,6 +62,11 @@ export default function WorkoutDetailScreen() {
   const [exercisePreviousDataMap, setExercisePreviousDataMap] = useState<Map<string, any>>(new Map());
   const [editingTime, setEditingTime] = useState<'start' | 'end' | null>(null);
   const [showTimePicker, setShowTimePicker] = useState(false);
+  const [hasModifications, setHasModifications] = useState(false);
+  const [savedWorkoutId, setSavedWorkoutId] = useState<string | null>(null);
+  const [hasExitSave, setHasExitSave] = useState(false);
+  // Use a ref to track if we've already saved to prevent duplicate saves
+  const saveOperationInProgressRef = useRef(false);
 
   useEffect(() => {
     if (workoutId && navigation.setOptions) {
@@ -69,7 +74,17 @@ export default function WorkoutDetailScreen() {
         headerShown: false 
       });
     }
-  }, [navigation, workoutId]);
+
+    return () => {
+      // Only trigger auto-save if we haven't explicitly saved yet and no save is in progress
+      if (isWorkoutActive && !workoutEndTime && exercises.length > 0 && !hasExitSave && !saveOperationInProgressRef.current) {
+        console.log("Component unmounting - auto-saving workout");
+        saveWorkoutAsNotDone();
+      } else {
+        console.log("Component unmounting - no need to save: hasExitSave=", hasExitSave, "saveInProgress=", saveOperationInProgressRef.current);
+      }
+    };
+  }, [navigation, workoutId, isWorkoutActive, exercises, workoutEndTime, hasExitSave]);
 
   const startRestTimer = () => {
     setIsTimerRunning(true);
@@ -551,6 +566,104 @@ export default function WorkoutDetailScreen() {
     }
   }, [autoStart, isWorkoutActive, workoutStartTime, loading]);
 
+  const handleWorkoutExit = async () => {
+    if (isWorkoutActive && !workoutEndTime && exercises.length > 0 && !hasExitSave) {
+      await saveWorkoutAsNotDone();
+      setHasExitSave(true);
+    }
+  };
+
+  const handleBackPress = async () => {
+    if (isWorkoutActive && !workoutEndTime) {
+      Alert.alert(
+        "Save Workout",
+        "Do you want to save your workout progress?",
+        [
+          {
+            text: "Discard",
+            style: "destructive",
+            onPress: () => {
+              setHasExitSave(true); // Prevent save on unmount
+              router.back();
+            }
+          },
+          {
+            text: "Save",
+            onPress: async () => {
+              const id = await saveWorkoutAsNotDone();
+              if (id) {
+                router.push({
+                  pathname: '/profile/recent-workouts',
+                  params: { highlightId: id }
+                });
+              } else {
+                router.back();
+              }
+            }
+          }
+        ]
+      );
+    } else {
+      router.back();
+    }
+  };
+
+  const saveWorkoutAsNotDone = async () => {
+    try {
+      if (!workoutPlan || !isWorkoutActive || hasExitSave || saveOperationInProgressRef.current) {
+        console.log("Skipping save: workoutPlan=", !!workoutPlan, "isWorkoutActive=", isWorkoutActive, "hasExitSave=", hasExitSave, "saveOperationInProgress=", saveOperationInProgressRef.current);
+        return null;
+      }
+      
+      // Set this flag immediately to prevent duplicate saves
+      saveOperationInProgressRef.current = true;
+      setHasExitSave(true);
+      
+      console.log("Saving workout as not done before exiting");
+      
+      const workoutExercises = exercises.map(exercise => {
+        return {
+          id: exercise.id,
+          name: exercise.name,
+          type: exercise.type,
+          sets: exercise.sets.length,
+          setDetails: exercise.sets.map(set => ({
+            id: set.id,
+            weight: set.weight ? parseFloat(set.weight) : undefined,
+            reps: set.reps ? parseInt(set.reps, 10) : undefined,
+            type: set.type,
+            notes: set.notes || ''
+          }))
+        };
+      });
+      
+      const workoutData = {
+        workout_plan_id: workoutId,
+        title: workoutName,
+        date: new Date().toISOString(),
+        start_time: workoutStartTime?.toISOString(),
+        end_time: new Date().toISOString(),
+        notes: notes,
+        exercises: workoutExercises,
+        bodyweight: bodyWeight ? parseFloat(bodyWeight) : undefined,
+        user_id: workoutPlan.user_id,
+        calories_burned: 0,
+        done: false
+      };
+            
+      const savedWorkout = await createWorkout(workoutData);
+      setSavedWorkoutId(savedWorkout.id);
+      console.log("Successfully saved workout as not done:", savedWorkout.id);
+      
+      return savedWorkout.id;
+    } catch (error) {
+      console.error('Error saving workout as not done:', error);
+      return null;
+    } finally {
+      saveOperationInProgressRef.current = false;
+    }
+  };
+
   const handleDelete = () => {
     Alert.alert(
       'Delete Workout',
@@ -737,7 +850,8 @@ export default function WorkoutDetailScreen() {
             title: workoutName,
             notes: notes,
             bodyweight: bodyWeight ? parseFloat(bodyWeight) : undefined,
-            exercises: workoutExercises
+            exercises: workoutExercises,
+            done: true
           })
           .eq('id', workoutId);
         
@@ -789,14 +903,15 @@ export default function WorkoutDetailScreen() {
           };
         });
         
-        const endTimeToUse = workoutEndTime || (isWorkoutActive ? new Date() : undefined);
-        const isDone = isWorkoutActive || !!workoutEndTime;
+        const endTimeToUse = workoutEndTime || new Date();
+        const isDone = true;
+        setHasExitSave(true);
         
         const workoutData = {
           workout_plan_id: workoutId,
           title: workoutName,
           date: new Date().toISOString(),
-          start_time: workoutStartTime?.toISOString(),
+          start_time: workoutStartTime?.toISOString() || new Date().toISOString(),
           end_time: endTimeToUse?.toISOString(),
           notes: notes,
           exercises: workoutExercises,
@@ -987,7 +1102,7 @@ export default function WorkoutDetailScreen() {
         <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
         
         <View style={styles.fixedHeader}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.closeButton} activeOpacity={0.7}>
+          <TouchableOpacity onPress={handleBackPress} style={styles.closeButton} activeOpacity={0.7}>
             <X size={24} color="#007AFF" />
           </TouchableOpacity>
           <View style={styles.headerCenter}>
