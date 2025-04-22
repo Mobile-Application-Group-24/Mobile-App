@@ -8,20 +8,20 @@ import { getWorkouts, getCurrentUser, Workout, WorkoutExercise, SetDetail, addEx
 import { generateWeightSuggestions, generateExerciseSuggestions } from '@/utils/deepseek';
 import { exercisesByWorkoutType, ExerciseReference, findExerciseType } from '@/utils/exercises';
 
-// Interface for weight modification suggestions
+
 interface WeightModification {
   id: number;
-  suggestion_id?: string; // Added to track database suggestion ID
+  suggestion_id?: string; 
   exercise: string;
   suggestion: string;
   currentWeight: string;
   suggestedWeight: string;
 }
 
-// Interface for exercise suggestions
+
 interface ExerciseSuggestion {
   id: number;
-  suggestion_id?: string; // Added to track database suggestion ID
+  suggestion_id?: string; 
   type: string;
   exercise: string;
   suggestion: string;
@@ -47,7 +47,7 @@ export default function AIScreen() {
     fetchWorkoutData();
   }, []);
 
-  // Add useFocusEffect to check for refresh flag when screen gains focus
+  
   useFocusEffect(
     React.useCallback(() => {
       const checkForRefreshFlag = async () => {
@@ -57,16 +57,16 @@ export default function AIScreen() {
           
           if (shouldRefresh === 'true') {
             console.log('Detected refresh flag, reloading AI suggestions');
-            // Clear the flag
+            
             await AsyncStorage.setItem('refresh_ai_suggestions', 'false');
             
-            // Get the workout ID that triggered this refresh
+            
             const lastWorkoutId = await AsyncStorage.getItem('last_completed_workout_id');
             if (lastWorkoutId) {
               setLastWorkoutId(lastWorkoutId);
             }
             
-            // Fetch new data
+            
             fetchWorkoutData();
           }
         } catch (error) {
@@ -76,7 +76,7 @@ export default function AIScreen() {
 
       checkForRefreshFlag();
       
-      // Cleanup function
+      
       return () => {};
     }, [])
   );
@@ -84,25 +84,25 @@ export default function AIScreen() {
   const fetchWorkoutData = async () => {
     setIsLoading(true);
     try {
-      // Reset responses state when fetching new data to ensure suggestions don't appear as declined
+      
       setResponses({});
       
       const user = await getCurrentUser();
       const workoutData = await getWorkouts(user.id);
       
-      // Fetch workout plans instead of workouts
+      
       const workoutPlanData = await getWorkoutPlans(user.id);
       setWorkoutPlans(workoutPlanData);
       
-      // Keep existing workouts for weight suggestions
+      
       setWorkouts(workoutData);
       
-      // Get last completed workout to check if we need new suggestions
+      
       const lastWorkout = await getLastCompletedWorkout(user.id);
       const lastWorkoutId = lastWorkout?.id || null;
       setLastWorkoutId(lastWorkoutId);
       
-      // Try to get cached suggestions first
+      
       const cachedWeightSuggestions = await getAISuggestions(user.id, 'weight');
       const cachedExerciseSuggestions = await getAISuggestions(user.id, 'exercise');
       
@@ -112,11 +112,11 @@ export default function AIScreen() {
       let shouldGenerateWeightSuggestions = true;
       let shouldGenerateExerciseSuggestions = true;
       
-      // If we have cached suggestions and no new workouts since then, use them
+      
       if (cachedWeightSuggestions.length > 0) {
         const latestWeightSuggestion = cachedWeightSuggestions[0];
         if (!lastWorkoutId || latestWeightSuggestion.last_workout_id === lastWorkoutId) {
-          // No new workouts since last suggestion, use cached
+         
           console.log('Using cached weight suggestions');
           const formattedSuggestions: WeightModification[] = cachedWeightSuggestions.map((suggestion, index) => {
             const suggestionData = suggestion.data;
@@ -139,7 +139,7 @@ export default function AIScreen() {
       if (cachedExerciseSuggestions.length > 0) {
         const latestExerciseSuggestion = cachedExerciseSuggestions[0];
         if (!lastWorkoutId || latestExerciseSuggestion.last_workout_id === lastWorkoutId) {
-          // No new workouts since last suggestion, use cached
+          
           console.log('Using cached exercise suggestions');
           const formattedSuggestions: ExerciseSuggestion[] = cachedExerciseSuggestions.map((suggestion, index) => {
             const suggestionData = suggestion.data;
@@ -159,26 +159,26 @@ export default function AIScreen() {
         }
       }
       
-      // Only generate new suggestions if needed
+      
       if (shouldGenerateWeightSuggestions || shouldGenerateExerciseSuggestions) {
         console.log('New workout detected or no cached suggestions available - generating new suggestions');
         
-        // Get weight suggestions from DeepSeek
+        
         if (shouldGenerateWeightSuggestions && workoutData.length > 0) {
           const completedWorkouts = workoutData.filter(w => w.done && w.exercises && w.exercises.length > 0);
           
           if (completedWorkouts.length > 0) {
-            // Get weight suggestions
+            
             const deepseekSuggestions = await generateWeightSuggestions(user.id, completedWorkouts);
             
             if (deepseekSuggestions && deepseekSuggestions.length > 0) {
-              // Save the suggestions to the database first to get the suggestion IDs
+              
               const savedSuggestions = await saveAISuggestions(user.id, 'weight', deepseekSuggestions, lastWorkoutId);
               
-              // Now map them with the database IDs included
+              
               const formattedSuggestions: WeightModification[] = deepseekSuggestions.map((suggestion, index) => ({
                 id: 100 + index,
-                suggestion_id: savedSuggestions[index].id, // Include the database ID
+                suggestion_id: savedSuggestions[index].id, 
                 exercise: suggestion.exercise,
                 suggestion: suggestion.suggestion,
                 currentWeight: `${suggestion.currentWeight}kg`,
@@ -191,20 +191,20 @@ export default function AIScreen() {
           }
         }
         
-        // Get exercise suggestions from DeepSeek
+        
         if (shouldGenerateExerciseSuggestions) {
           try {
             if (typeof generateExerciseSuggestions === 'function') {
               const exerciseSuggestions = await generateExerciseSuggestions(user.id);
               
               if (exerciseSuggestions && exerciseSuggestions.length > 0) {
-                // Save to database first to get the IDs
+                
                 const savedSuggestions = await saveAISuggestions(user.id, 'exercise', exerciseSuggestions, lastWorkoutId);
                 
-                // Now create the UI objects with database IDs included
+                
                 const formattedExerciseSuggestions: ExerciseSuggestion[] = exerciseSuggestions.map((suggestion, index) => ({
                   id: 200 + index,
-                  suggestion_id: savedSuggestions[index]?.id, // Include the database ID
+                  suggestion_id: savedSuggestions[index]?.id, 
                   type: suggestion.type || 'New Exercise',
                   exercise: suggestion.exercise,
                   suggestion: suggestion.suggestion,
@@ -215,14 +215,14 @@ export default function AIScreen() {
                 setExerciseSuggestions(formattedExerciseSuggestions);
               }
             } else {
-              // Fallback: Use valid exercises from our database
+              
               console.log('Using fallback exercise suggestions from exercises.ts');
               
-              // Sample exercises from our database instead of hardcoded ones
+              
               const { exercisesByWorkoutType } = await import('@/utils/exercises');
               const allExercises = Object.values(exercisesByWorkoutType).flat();
               
-              // Randomly select 2 exercises from our database to suggest
+              
               const randomExercises = allExercises
                 .sort(() => 0.5 - Math.random())
                 .slice(0, 2);
@@ -248,7 +248,7 @@ export default function AIScreen() {
               
               setExerciseSuggestions(fallbackSuggestions);
               
-              // Save the fallback suggestions to the database too
+              
               await saveAISuggestions(user.id, 'exercise', fallbackSuggestions.map(s => ({
                 type: s.type,
                 exercise: s.exercise,
@@ -259,7 +259,7 @@ export default function AIScreen() {
             }
           } catch (suggestionError) {
             console.error('Error with exercise suggestions:', suggestionError);
-            // Provide fallback suggestions using exercises from our database
+            
             const { exercisesByWorkoutType } = await import('@/utils/exercises');
             const legExercise = exercisesByWorkoutType['Legs'].find(ex => ex.name === 'Bulgarian Split Squat') || exercisesByWorkoutType['Legs'][0];
             const chestExercise = exercisesByWorkoutType['Chest'].find(ex => ex.name === 'Barbell Bench Press') || exercisesByWorkoutType['Chest'][0];
@@ -285,7 +285,7 @@ export default function AIScreen() {
             
             setExerciseSuggestions(fallbackSuggestions);
             
-            // Save the fallback suggestions to the database too
+            
             await saveAISuggestions(user.id, 'exercise', fallbackSuggestions.map(s => ({
               type: s.type,
               exercise: s.exercise,
@@ -305,10 +305,10 @@ export default function AIScreen() {
   };
 
   const dismissModification = async (id: number) => {
-    // Find the actual suggestion being dismissed
+    
     const suggestion = weightModifications.find(mod => mod.id === id);
     
-    // If it has a suggestion_id, delete it from the database
+    
     if (suggestion && suggestion.suggestion_id) {
       try {
         await markAISuggestionAsUsed(suggestion.suggestion_id);
@@ -318,22 +318,22 @@ export default function AIScreen() {
       }
     }
 
-    // Update the UI by removing the suggestion from the visible list
+    
     setVisibleModifications(prev => prev.filter(modId => modId !== id));
   };
 
   const handleResponse = (id: number, response: 'accept' | 'decline') => {
     if (response === 'accept') {
-      // Find the suggestion by ID
+      
       const suggestion = exerciseSuggestions.find(s => s.id === id);
       if (suggestion) {
         setSelectedSuggestionId(id);
         setIsWorkoutModalVisible(true);
       } else {
-        // For weight suggestions that are accepted
+        
         const weightSuggestion = weightModifications.find(s => s.id === id);
         if (weightSuggestion && weightSuggestion.suggestion_id) {
-          // Delete the accepted weight suggestion from the database
+          
           markAISuggestionAsUsed(weightSuggestion.suggestion_id)
             .then(() => console.log('Deleted accepted weight suggestion:', weightSuggestion.suggestion_id))
             .catch(err => console.error('Error deleting accepted weight suggestion:', err));
@@ -342,7 +342,7 @@ export default function AIScreen() {
         setResponses(prev => ({ ...prev, [id]: response }));
       }
     } else {
-      // For decline, delete the suggestion from the database if it's an exercise suggestion
+      
       const suggestion = exerciseSuggestions.find(s => s.id === id);
       if (suggestion && suggestion.suggestion_id) {
         markAISuggestionAsUsed(suggestion.suggestion_id)
@@ -350,7 +350,7 @@ export default function AIScreen() {
           .catch(err => console.error('Error deleting declined exercise suggestion:', err));
       }
       
-      // For decline of weight suggestions
+      
       const weightSuggestion = weightModifications.find(s => s.id === id);
       if (weightSuggestion && weightSuggestion.suggestion_id) {
         markAISuggestionAsUsed(weightSuggestion.suggestion_id)
@@ -358,7 +358,7 @@ export default function AIScreen() {
           .catch(err => console.error('Error deleting declined weight suggestion:', err));
       }
 
-      // Update the response state
+      
       setResponses(prev => ({ ...prev, [id]: response }));
     }
   };
@@ -372,16 +372,16 @@ export default function AIScreen() {
       const suggestion = exerciseSuggestions.find(s => s.id === selectedSuggestionId);
       if (!suggestion) return;
       
-      // Extract sets count from suggestion text or default to 3
+      
       const setsMatch = suggestion.suggestion.match(/(\d+)\s*sets/i);
       const sets = setsMatch ? parseInt(setsMatch[1]) : 3;
       
-      // Find the exercise in our exercise database
+      
       const exerciseName = suggestion.exercise;
       let exerciseId: string | undefined;
       let exerciseType: 'chest' | 'back' | 'arms' | 'legs' | 'shoulders' | 'core' | undefined;
       
-      // Search all categories for the exercise
+      
       Object.keys(exercisesByWorkoutType).forEach(category => {
         const foundExercise = exercisesByWorkoutType[category].find(
           ex => ex.name.toLowerCase() === exerciseName.toLowerCase()
@@ -392,14 +392,14 @@ export default function AIScreen() {
         }
       });
       
-      // If not found, determine type and generate a random ID
+      
       if (!exerciseId) {
         exerciseType = findExerciseType(exerciseName);
         exerciseId = `custom-${Date.now()}`;
         console.log(`Exercise not found in database, using type: ${exerciseType}`);
       }
       
-      // Add the exercise to the selected workout plan
+      
       await addExerciseToPlan(planId, {
         id: exerciseId,
         name: exerciseName,
@@ -407,15 +407,12 @@ export default function AIScreen() {
         type: exerciseType
       });
       
-      // Update the responses state
       setResponses(prev => ({ ...prev, [selectedSuggestionId]: 'accept' }));
       
-      // Mark the suggestion as used in the database
       if (suggestion.suggestion_id) {
         await markAISuggestionAsUsed(suggestion.suggestion_id);
       }
       
-      // Show success message
       const selectedPlan = workoutPlans.find(p => p.id === planId);
       const planName = selectedPlan?.title || 'your workout plan';
       Alert.alert('Success', `Added ${exerciseName} to ${planName}!`);

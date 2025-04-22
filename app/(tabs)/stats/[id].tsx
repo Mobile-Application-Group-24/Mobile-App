@@ -61,14 +61,13 @@ export default function ExerciseStatsScreen() {
     },
   };
 
-  // Enhanced chart config for the Max Weight chart
   const maxWeightChartConfig = {
     ...chartConfig,
     decimalPlaces: 1, 
     formatYLabel: (value: string) => {
-      // Convert the value to a number with 1 decimal place
+
       const formattedValue = parseFloat(value).toFixed(1);
-      // Replace period with comma for decimal separator
+
       return formattedValue.replace('.', ',');
     },
     color: (opacity = 1) => `rgba(0, 122, 255, ${opacity})`,
@@ -543,7 +542,7 @@ export default function ExerciseStatsScreen() {
               }}
               width={Platform.OS === 'android' ? 280 : 320}
               height={220}
-              chartConfig={maxWeightChartConfig} // Use the enhanced chart config here
+              chartConfig={maxWeightChartConfig} 
               bezier
               style={styles.chart}
               yAxisLabel=""

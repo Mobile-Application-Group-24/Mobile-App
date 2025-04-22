@@ -21,7 +21,6 @@ export default function JoinGroupScreen() {
 
     const fetchInvitation = async () => {
       try {
-        // Case 1: We have both code and groupId
         if (code && groupId) {
           try {
             const groupDetails = await getGroupDetails(groupId as string);
@@ -31,11 +30,9 @@ export default function JoinGroupScreen() {
             return;
           } catch (error) {
             console.error('Error fetching group details:', error);
-            // Continue to other cases if this fails
           }
         }
         
-        // Case 2: We have a groupId
         if (groupId) {
           try {
             const groupDetails = await getGroupDetails(groupId as string);
@@ -51,10 +48,7 @@ export default function JoinGroupScreen() {
           }
         }
         
-        // Case 3: We only have a code
         if (code) {
-          // For invitation codes without a group ID, we'll use a best-effort approach
-          // Try to find groups that match the code prefix
           try {
             const groups = await getGroups(false);
             const matchingGroup = groups.find(group => 
@@ -72,14 +66,12 @@ export default function JoinGroupScreen() {
             console.error('Error finding matching group:', error);
           }
           
-          // If we couldn't find a matching group, show a generic message
           setGroupName('Group');
           setMemberCount(0);
           setStatus('success');
           return;
         }
         
-        // If we got here, we couldn't determine the group
         setStatus('error');
         setMessage('Could not find group information');
       } catch (error) {
@@ -96,7 +88,6 @@ export default function JoinGroupScreen() {
     setStatus('loading');
     
     try {
-      // Case 1: Direct join with groupId
       if (groupId) {
         try {
           await joinGroup(groupId as string);
@@ -104,14 +95,11 @@ export default function JoinGroupScreen() {
           return;
         } catch (error) {
           console.error('Error joining with group ID:', error);
-          // Continue to try with code if this fails
         }
       }
       
-      // Case 2: Join with code
       if (code) {
         try {
-          // First try normal group ID format if code looks like UUID
           if ((code as string).includes('-') && (code as string).length >= 32) {
             try {
               await joinGroup(code as string);
@@ -119,11 +107,9 @@ export default function JoinGroupScreen() {
               return;
             } catch (codeIdError) {
               console.error('Error joining with code as ID:', codeIdError);
-              // Continue to try other methods
             }
           }
           
-          // Next try finding a group with matching ID prefix
           try {
             const groups = await getGroups(false);
             const matchingGroup = groups.find(group => 
@@ -139,7 +125,6 @@ export default function JoinGroupScreen() {
             console.error('Error finding matching group:', findError);
           }
           
-          // As a last resort, try via useGroupInvitation
           const group = await useGroupInvitation(code as string);
           router.replace(`/groups/${group.id}`);
           return;
@@ -271,8 +256,8 @@ const styles = StyleSheet.create({
     padding: 16,
     width: '100%',
     alignItems: 'center',
-    elevation: 2, // Android shadow
-    shadowColor: '#000', // iOS shadow
+    elevation: 2, 
+    shadowColor: '#000', 
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
@@ -302,8 +287,8 @@ const styles = StyleSheet.create({
     padding: 16,
     width: '100%',
     alignItems: 'center',
-    elevation: 2, // Android shadow
-    shadowColor: '#000', // iOS shadow
+    elevation: 2, 
+    shadowColor: '#000', 
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,

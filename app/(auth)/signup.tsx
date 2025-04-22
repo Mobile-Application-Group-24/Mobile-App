@@ -33,7 +33,7 @@ export default function SignupScreen() {
       
       if (data.user) {
         console.log('Creating profile for user:', data.user.id);
-        // Create a profile with is_onboarded set to false
+        
         const { error: profileError } = await supabase
           .from('profiles')
           .upsert({
@@ -48,7 +48,7 @@ export default function SignupScreen() {
         }
         
         Alert.alert("Success", "Account created successfully");
-        // The auth state change will trigger redirection
+        
       }
     } catch (error) {
       console.error('Error signing up:', error);

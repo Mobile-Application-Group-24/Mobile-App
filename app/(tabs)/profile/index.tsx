@@ -130,7 +130,7 @@ export default function ProfileScreen() {
         achievements.push({
           title,
           description,
-          date_earned: new Date().toISOString(), // Approximation
+          date_earned: new Date().toISOString(), 
           type: 'volume',
           icon_color: iconColor,
           icon: <Dumbbell size={20} color={iconColor} />
@@ -304,7 +304,7 @@ export default function ProfileScreen() {
               </Text>
             </View>
           ) : (
-            // Display only the top 3 achievements across all categories
+
             achievements.slice(0, 3).map((achievement, index) => (
               <View 
                 key={`achievement-${index}`} 

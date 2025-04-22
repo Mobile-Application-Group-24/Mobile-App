@@ -3,7 +3,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
 import { startOfDay, endOfDay } from 'date-fns';
 
-// Initialize Supabase client
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
@@ -20,7 +19,6 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   },
 });
 
-// Types
 export interface Profile {
   id: string;
   full_name: string | null;
@@ -66,7 +64,7 @@ export interface GroupMember {
     full_name: string | null;
     avatar_url: string | null;
   };
-  points?: number; // Add points to store user's score in the group
+  points?: number; 
 }
 
 export interface MealTime {
@@ -103,7 +101,7 @@ export interface GroupInvitation {
   created_at: string;
   expires_at: string;
   is_active: boolean;
-  uses_left: number | null; // null means unlimited uses
+  uses_left: number | null; 
   group?: Group;
 }
 
@@ -165,8 +163,8 @@ export interface AISuggestion {
   suggestion_type: 'weight' | 'exercise';
   data: any;
   created_at: string;
-  last_workout_id?: string; // ID of the last workout considered when generating this suggestion
-  is_used?: boolean; // Whether the suggestion has been used by the user
+  last_workout_id?: string; 
+  is_used?: boolean; 
 }
 
 export interface ExerciseStats {
@@ -192,13 +190,9 @@ export interface ExerciseHistory {
   volume: number;
 }
 
-// Store invitation codes in memory since database operations are failing
-// This is a temporary solution until database issues are resolved
 const invitationCodeMap = new Map<string, string>();
 
-// Helper function to generate a UUID since crypto.randomUUID() is not available
 function generateUUID() {
-  // Simple UUID v4 implementation
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
     const r = Math.random() * 16 | 0;
     const v = c === 'x' ? r : (r & 0x3 | 0x8);
@@ -206,7 +200,6 @@ function generateUUID() {
   });
 }
 
-// Profile functions
 export async function getProfile(userId: string): Promise<Profile> {
   const { data, error } = await supabase
     .from('profiles')
@@ -214,11 +207,9 @@ export async function getProfile(userId: string): Promise<Profile> {
     .eq('id', userId)
     .single();
   if (error) throw error;
-  
-  // Get workout stats
+
   const stats = await getUserWorkoutStats(userId);
-  
-  // Combine profile data with workout stats
+
   return {
     ...data,
     stats
@@ -239,7 +230,6 @@ export async function updateProfile(userId: string, updates: Partial<Profile>) {
   return data;
 }
 
-// Group functions
 export async function createGroup(groupData: Omit<Group, 'id' | 'created_at' | 'owner_id'>) {
   const { data: userData, error: userError } = await supabase.auth.getUser();
   if (userError || !userData.user) throw new Error('User not authenticated');
@@ -254,7 +244,6 @@ export async function createGroup(groupData: Omit<Group, 'id' | 'created_at' | '
     .single();
   if (error) throw error;
 
-  // Automatically add creator as owner in group_members
   const { error: memberError } = await supabase
     .from('group_members')
     .insert({
@@ -271,7 +260,6 @@ export async function getGroups(showOwned = false) {
   const { data: userData } = await supabase.auth.getUser();
   if (!userData.user) throw new Error('User not authenticated');
 
-  // First get groups where user is a member
   const { data: memberGroups } = await supabase
     .from('group_members')
     .select('group_id')
@@ -285,10 +273,10 @@ export async function getGroups(showOwned = false) {
       member_count:group_members(count)
     `);
   if (showOwned) {
-    // Show groups where user is owner OR member
+
     query = query.or(`owner_id.eq.${userData.user.id},id.in.(${memberGroupIds.join(',')})`);
   } else {
-    // Show public groups OR groups where user is member
+
     query = query.or(`is_private.eq.false,id.in.(${memberGroupIds.join(',')})`);
   }
   const { data, error } = await query;
@@ -321,7 +309,6 @@ export async function getGroupMembers(groupId: string): Promise<GroupMember[]> {
   const { data: userData } = await supabase.auth.getUser();
   if (!userData.user) throw new Error('User not authenticated');
 
-  // Using a join query approach instead of foreign key relationship
   const { data, error } = await supabase
     .from('group_members')
     .select(`
@@ -334,7 +321,6 @@ export async function getGroupMembers(groupId: string): Promise<GroupMember[]> {
     .eq('group_id', groupId);
   if (error) throw error;
 
-  // Get all profile data in a separate query
   const userIds = data.map(member => member.user_id);
   const { data: profilesData, error: profilesError } = await supabase
     .from('profiles')
@@ -342,7 +328,6 @@ export async function getGroupMembers(groupId: string): Promise<GroupMember[]> {
     .in('id', userIds);
   if (profilesError) throw profilesError;
 
-  // Map profiles to members and calculate points for each member
   const membersWithProfiles = data.map(member => {
     const profile = profilesData.find(p => p.id === member.user_id) || { full_name: null, avatar_url: null };
     return {
@@ -354,7 +339,6 @@ export async function getGroupMembers(groupId: string): Promise<GroupMember[]> {
     };
   });
 
-  // Calculate points for each member
   const membersWithPoints = await Promise.all(
     membersWithProfiles.map(async (member) => {
       const points = await calculateUserPoints(member.user_id);
@@ -365,7 +349,6 @@ export async function getGroupMembers(groupId: string): Promise<GroupMember[]> {
     })
   );
 
-  // Sort members by points in descending order
   return membersWithPoints.sort((a, b) => (b.points || 0) - (a.points || 0));
 }
 
@@ -425,13 +408,11 @@ export async function removeMember(groupId: string, userId: string) {
   if (error) throw error;
 }
 
-// Enhanced function to get current user with session refresh
 export async function getCurrentUser() {
   try {
-    // First try to get the user normally
+
     const { data: userData, error } = await supabase.auth.getUser();
-    
-    // If there's an error or no user, try to refresh the session
+
     if (error || !userData?.user) {
       console.log('Session may have expired, attempting to refresh...');
       const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
@@ -452,7 +433,6 @@ export async function getCurrentUser() {
   }
 }
 
-// Nutrition Settings functions with enhanced authentication
 export async function getNutritionSettings(): Promise<NutritionSettings> {
   try {
     const user = await getCurrentUser();
@@ -501,7 +481,6 @@ export async function updateNutritionSettings(updates: Partial<Omit<NutritionSet
   }
 }
 
-// Meal tracking functions
 export async function addMeal(meal: Omit<Meal, 'id' | 'user_id' | 'created_at'>) {
   const { data: userData, error: userError } = await supabase.auth.getUser();
   if (userError || !userData.user) throw new Error('User not authenticated');
@@ -557,13 +536,12 @@ export async function getWeeklyMeals(): Promise<{ date: string; calories: number
   const { data: userData, error: userError } = await supabase.auth.getUser();
   if (userError || !userData.user) throw new Error('User not authenticated');
 
-  // Get exactly 7 days including today
   const today = new Date();
-  today.setHours(23, 59, 59, 999); // End of today
+  today.setHours(23, 59, 59, 999);
   
   const sevenDaysAgo = new Date(today);
   sevenDaysAgo.setDate(today.getDate() - 6);
-  sevenDaysAgo.setHours(0, 0, 0, 0); // Start of day 7 days ago
+  sevenDaysAgo.setHours(0, 0, 0, 0); 
 
   const { data, error } = await supabase
       .from('meals')
@@ -575,13 +553,12 @@ export async function getWeeklyMeals(): Promise<{ date: string; calories: number
   
   if (error) throw error;
 
-  // Group meals by date and sum calories
   const dailyCalories = data.reduce((acc, meal) => {
-    // Skip water entries as they're not calories
+
     if (meal.meal_type === 'water') return acc;
     
     const date = new Date(meal.consumed_at).toISOString().split('T')[0];
-    // Ensure calories is a number
+
     const mealCalories = typeof meal.calories === 'number' ? meal.calories : parseInt(String(meal.calories)) || 0;
     acc[date] = (acc[date] || 0) + mealCalories;
     return acc;
@@ -593,7 +570,6 @@ export async function getWeeklyMeals(): Promise<{ date: string; calories: number
   }));
 }
 
-// Function to update a workout with body weight
 export async function updateWorkoutWithBodyWeight(workoutId: string, updates: Partial<Workout>) {
   const { data, error } = await supabase
     .from('workouts')
@@ -608,7 +584,6 @@ export async function updateWorkoutWithBodyWeight(workoutId: string, updates: Pa
   return data;
 }
 
-// Function to get workouts with body weight
 export async function getWorkoutWithBodyWeight(workoutId: string): Promise<Workout> {
   const { data, error } = await supabase
     .from('workouts')
@@ -622,7 +597,6 @@ export async function getWorkoutWithBodyWeight(workoutId: string): Promise<Worko
   return data;
 }
 
-// Function to update workout completion status
 export async function updateWorkoutCompletionStatus(workoutId: string, isDone: boolean) {
   const { data, error } = await supabase
     .from('workouts')
@@ -638,10 +612,8 @@ export async function updateWorkoutCompletionStatus(workoutId: string, isDone: b
   return data;
 }
 
-// Workout plan functions
 export async function createWorkoutPlan(planData: Omit<WorkoutPlan, 'id' | 'created_at' | 'updated_at'>): Promise<WorkoutPlan> {
   try {
-    // Ensure exercises only include name, sets, and type (no weight/reps)
     const sanitizedPlanData = {
       ...planData,
       exercises: planData.exercises?.map(ex => ({
@@ -693,10 +665,9 @@ export async function getWorkoutPlans(userId: string): Promise<WorkoutPlan[]> {
 
 export async function updateWorkoutPlan(planId: string, updates: Partial<WorkoutPlan>): Promise<WorkoutPlan> {
   try {
-    // Make a deep copy to avoid modifying the original object
+
     const updateData = { ...updates };
-    
-    // Ensure exercises only include name, sets, and type (no weight/reps)
+
     if (updateData.exercises) {
       updateData.exercises = updateData.exercises.map(ex => ({
         id: ex.id,
@@ -738,7 +709,6 @@ export async function deleteWorkoutPlan(planId: string): Promise<void> {
   }
 }
 
-// Function to add an exercise to a workout plan
 export async function addExerciseToPlan(
   planId: string,
   exerciseData: {
@@ -751,8 +721,7 @@ export async function addExerciseToPlan(
   try {
     console.log('Adding exercise to workout plan:', planId);
     console.log('Exercise data:', exerciseData);
-    
-    // Get current workout plan data
+  
     const { data: plan, error: planError } = await supabase
       .from('workout_plans')
       .select('exercises')
@@ -765,21 +734,18 @@ export async function addExerciseToPlan(
     }
     
     console.log('Current plan exercises:', plan.exercises);
-    
-    // Create a new exercise using the provided ID and type
+
     const newExercise: PlanExercise = {
       id: exerciseData.id,
       name: exerciseData.name,
       sets: exerciseData.sets,
       type: exerciseData.type
     };
-    
-    // Add new exercise to the plan's exercises array
+
     const updatedExercises = plan.exercises ? [...plan.exercises, newExercise] : [newExercise];
     
     console.log('Saving updated exercises to plan:', JSON.stringify(updatedExercises));
-    
-    // Update the workout plan
+
     const { data, error } = await supabase
       .from('workout_plans')
       .update({ 
@@ -802,10 +768,8 @@ export async function addExerciseToPlan(
   }
 }
 
-// Workout session functions
 export async function createWorkout(workoutData: Omit<Workout, 'id' | 'created_at'>, exercisesData?: any[]): Promise<Workout> {
   try {
-    // Include the exercises array in the workout data (with full details including type)
     const fullWorkoutData = {
       ...workoutData,
       exercises: exercisesData?.map(ex => ({
@@ -816,8 +780,7 @@ export async function createWorkout(workoutData: Omit<Workout, 'id' | 'created_a
         setDetails: ex.setDetails || []
       }))
     };
-    
-    // 1. Create the workout entry with exercises included (assuming the column exists)
+
     const { data, error } = await supabase
       .from('workouts')
       .insert(fullWorkoutData)
@@ -888,12 +851,10 @@ export async function deleteWorkout(workoutId: string): Promise<void> {
   }
 }
 
-// Calculate user workout statistics
 export async function getUserWorkoutStats(userId: string): Promise<UserStats> {
   try {
     console.log(`Calculating stats for user ID: ${userId}`);
-    
-    // Get all completed workouts for the user
+
     const { data: workouts, error } = await supabase
       .from('workouts')
       .select('*')
@@ -910,11 +871,9 @@ export async function getUserWorkoutStats(userId: string): Promise<UserStats> {
     if (!workouts || workouts.length === 0) {
       return { workouts: 0, hours: 0, volume: 0 };
     }
-    
-    // Calculate total workouts
+
     const totalWorkouts = workouts.length;
-    
-    // Calculate total hours
+
     let totalMinutes = 0;
     workouts.forEach(workout => {
       if (workout.start_time && workout.end_time) {
@@ -926,15 +885,13 @@ export async function getUserWorkoutStats(userId: string): Promise<UserStats> {
       }
     });
     const totalHours = Math.round(totalMinutes / 60);
-    
-    // Calculate total volume
+
     let totalVolume = 0;
     workouts.forEach(workout => {
       if (workout.exercises && Array.isArray(workout.exercises)) {
         workout.exercises.forEach(exercise => {
           if (exercise.setDetails && Array.isArray(exercise.setDetails)) {
             exercise.setDetails.forEach(set => {
-              // Calculate volume for this set (weight * reps)
               const weight = set.weight ? parseFloat(set.weight.toString()) : 0;
               const reps = set.reps ? parseInt(set.reps.toString(), 10) : 0;
               totalVolume += weight * reps;
@@ -976,16 +933,13 @@ export async function getRecentWorkouts(userId: string, limit: number = 3): Prom
   }
 }
 
-// Calculate points for a user based on their workout stats
 export async function calculateUserPoints(userId: string): Promise<number> {
   try {
     const stats = await getUserWorkoutStats(userId);
-    
-    // Calculate points based on workouts, hours, and volume
-    // This formula can be adjusted to weight different stats as desired
-    const workoutPoints = stats.workouts * 10; // 10 points per workout
-    const hourPoints = stats.hours * 5;       // 5 points per hour
-    const volumePoints = Math.floor(stats.volume / 100); // 1 point per 100 volume
+
+    const workoutPoints = stats.workouts * 10; 
+    const hourPoints = stats.hours * 5;      
+    const volumePoints = Math.floor(stats.volume / 100); 
     
     const totalPoints = workoutPoints + hourPoints + volumePoints;
     return totalPoints;
@@ -995,7 +949,6 @@ export async function calculateUserPoints(userId: string): Promise<number> {
   }
 }
 
-// Group invitation functions
 export async function createGroupInvitation(groupId: string, options?: { expiresIn?: number, maxUses?: number | null }): Promise<GroupInvitation> {
   try {
     console.log('Creating group invitation for group:', groupId);
@@ -1005,8 +958,7 @@ export async function createGroupInvitation(groupId: string, options?: { expires
       console.error('User not authenticated when creating invitation');
       throw new Error('User not authenticated');
     }
-    
-    // Generate a random 8-character invitation code
+
     const generateCode = () => {
       const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
       let code = '';
@@ -1018,26 +970,22 @@ export async function createGroupInvitation(groupId: string, options?: { expires
     
     const code = generateCode();
     console.log('Generated invitation code:', code);
-    
-    // Default expiration is 7 days from now
-    const expiresIn = options?.expiresIn || 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
+
+    const expiresIn = options?.expiresIn || 7 * 24 * 60 * 60 * 1000; 
     const expiresAt = new Date(Date.now() + expiresIn).toISOString();
-    
-    // Store the code in memory as a fallback
+
     invitationCodeMap.set(code, groupId);
     console.log('Stored invitation in memory map');
-    
-    // Prepare invitation data
+ 
     const invitationData = {
       group_id: groupId,
       code: code,
       created_by: userData.user.id,
       expires_at: expiresAt,
       is_active: true,
-      uses_left: options?.maxUses || null, // null means unlimited uses
+      uses_left: options?.maxUses || null, 
     };
-    
-    // Try to create the invitation in the database
+   
     try {
       console.log('Attempting to save invitation to database:', JSON.stringify(invitationData));
       
@@ -1050,17 +998,15 @@ export async function createGroupInvitation(groupId: string, options?: { expires
       if (error) {
         console.warn('Database error when creating invitation:', error.message);
         console.warn('Error details:', JSON.stringify(error));
-        // Continue with fallback
+
       } else if (data) {
         console.log('Invitation successfully saved to database');
         return data;
       }
     } catch (dbError) {
       console.warn('Exception when saving invitation to database:', dbError);
-      // Continue with fallback
     }
-    
-    // If we get here, database operation failed but we can still use the in-memory invitation
+
     console.log('Using fallback in-memory invitation');
     const fallbackInvitation: GroupInvitation = {
       id: 'temp-' + Date.now(),
@@ -1075,12 +1021,10 @@ export async function createGroupInvitation(groupId: string, options?: { expires
     
     return fallbackInvitation;
   } catch (error) {
-    // Instead of just logging and rethrowing, provide a fallback
     console.error('Error in createGroupInvitation:', error);
-    
-    // Generate a fallback invitation even if there was an error
+
     const fallbackCode = Math.random().toString(36).substring(2, 10).toUpperCase();
-    invitationCodeMap.set(fallbackCode, groupId); // Save to memory map
+    invitationCodeMap.set(fallbackCode, groupId);
     
     return {
       id: 'error-fallback-' + Date.now(),
@@ -1107,15 +1051,13 @@ export async function useGroupInvitation(code: string): Promise<{ success: boole
     }
     
     console.log('Found valid invitation:', JSON.stringify(invitation));
-    
-    // Get current user
+
     const { data: userData, error: userError } = await supabase.auth.getUser();
     if (userError || !userData?.user) {
       console.error('User authentication error when using invitation:', userError);
       return { success: false, error: 'User not authenticated' };
     }
     
-    // Check if user is already a member of the group
     try {
       const { data: existingMember, error: memberCheckError } = await supabase
         .from('group_members')
@@ -1130,10 +1072,8 @@ export async function useGroupInvitation(code: string): Promise<{ success: boole
       }
     } catch (checkError) {
       console.warn('Error checking existing membership:', checkError);
-      // Continue anyway, worst case we'll get a duplicate constraint error
     }
-    
-    // Add user to the group
+
     try {
       console.log('Adding user to group:', invitation.group_id);
       
@@ -1153,8 +1093,7 @@ export async function useGroupInvitation(code: string): Promise<{ success: boole
       console.error('Exception when joining group:', joinError);
       return { success: false, error: 'Exception when joining group' };
     }
-    
-    // Update invitation uses if tracking usage
+
     if (!invitation.id.startsWith('temp-') && !invitation.id.startsWith('error-fallback-') && invitation.uses_left !== null) {
       try {
         console.log('Updating invitation uses count');
@@ -1166,11 +1105,9 @@ export async function useGroupInvitation(code: string): Promise<{ success: boole
         
         if (updateError) {
           console.warn('Error updating invitation uses:', updateError);
-          // Non-critical error, we can continue
         }
       } catch (updateError) {
         console.warn('Exception updating invitation uses:', updateError);
-        // Non-critical error, we can continue
       }
     }
     
@@ -1184,17 +1121,15 @@ export async function useGroupInvitation(code: string): Promise<{ success: boole
 
 export async function getGroupInvitation(code: string): Promise<GroupInvitation | null> {
   try {
-    // First check memory map (our fallback solution)
     const groupId = invitationCodeMap.get(code);
     if (groupId) {
-      // If found in memory, construct a temporary invitation object
       return {
         id: 'temp-' + Date.now(),
         group_id: groupId,
         code: code,
         created_by: 'unknown',
         created_at: new Date().toISOString(),
-        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days from now
+        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
         is_active: true,
         uses_left: null,
       };
@@ -1245,7 +1180,6 @@ export async function getGroupInvitations(groupId: string): Promise<GroupInvitat
   }
 }
 
-// AI suggestion functions
 export async function getAISuggestions(userId: string, suggestionType: 'weight' | 'exercise'): Promise<AISuggestion[]> {
   try {
     const { data, error } = await supabase
@@ -1258,7 +1192,6 @@ export async function getAISuggestions(userId: string, suggestionType: 'weight' 
     
     if (error) {
       console.error(`Error fetching ${suggestionType} suggestions:`, error);
-      // Return empty array on error rather than throwing
       return [];
     }
     
@@ -1281,7 +1214,6 @@ export async function saveAISuggestions(
       return [];
     }
 
-    // Format suggestions for database storage
     const formattedSuggestions = data.map(suggestion => ({
       user_id: userId,
       suggestion_type: suggestionType,
@@ -1294,7 +1226,7 @@ export async function saveAISuggestions(
     const { data: savedSuggestions, error } = await supabase
       .from('ai_suggestions')
       .insert(formattedSuggestions)
-      .select(); // Add select() to return the inserted records
+      .select(); 
     
     if (error) {
       console.error(`Error saving ${suggestionType} suggestions:`, error);
@@ -1305,14 +1237,12 @@ export async function saveAISuggestions(
     return savedSuggestions || [];
   } catch (error) {
     console.error(`Error in saveAISuggestions for ${suggestionType}:`, error);
-    // Return empty array instead of throwing
     return [];
   }
 }
 
 export async function markAISuggestionAsUsed(suggestionId: string): Promise<void> {
   try {
-    // Delete the suggestion instead of just marking it as used
     const { error } = await supabase
       .from('ai_suggestions')
       .delete()
@@ -1328,7 +1258,6 @@ export async function markAISuggestionAsUsed(suggestionId: string): Promise<void
   }
 }
 
-// Adding a function to delete all suggestions for a user
 export async function deleteAllAISuggestions(userId: string): Promise<void> {
   try {
     const { error } = await supabase
@@ -1359,7 +1288,6 @@ export async function getLastCompletedWorkout(userId: string): Promise<Workout |
     
     if (error) {
       if (error.code === 'PGRST116') {
-        // No data found - user has no completed workouts
         return null;
       }
       console.error('Error fetching last completed workout:', error);
@@ -1373,7 +1301,6 @@ export async function getLastCompletedWorkout(userId: string): Promise<Workout |
   }
 }
 
-// Function to add a suggested exercise to an existing workout
 export async function addExerciseToWorkout(
   workoutId: string, 
   exerciseData: { 
@@ -1387,8 +1314,7 @@ export async function addExerciseToWorkout(
     console.log('Adding exercise to workout:', workoutId);
     console.log('Exercise data:', exerciseData);
     console.log('Is new exercise:', isNewExercise);
-    
-    // Get current workout data
+
     const { data: workout, error: workoutError } = await supabase
       .from('workouts')
       .select('exercises')
@@ -1406,9 +1332,8 @@ export async function addExerciseToWorkout(
     let returnExercise;
     
     if (isNewExercise) {
-      // Add a completely new exercise
       const newExercise: WorkoutExercise = {
-        id: `exercise-${Date.now()}`,  // Generate temporary ID
+        id: `exercise-${Date.now()}`, 
         name: exerciseData.name,
         sets: exerciseData.sets,
         setDetails: exerciseData.setDetails || Array(exerciseData.sets).fill({}).map(() => ({
@@ -1418,19 +1343,16 @@ export async function addExerciseToWorkout(
           type: 'normal'
         }))
       };
-      
-      // Add new exercise to the workout's exercises array
+
       updatedExercises = workout.exercises ? [...workout.exercises, newExercise] : [newExercise];
       returnExercise = newExercise;
       
       console.log('Added new exercise to workout');
     } else {
-      // Add additional sets to an existing exercise
       if (!workout.exercises || workout.exercises.length === 0) {
         throw new Error('No exercises found in workout');
       }
       
-      // Find the matching exercise by name
       const existingExerciseIndex = workout.exercises.findIndex(
         ex => ex.name.toLowerCase() === exerciseData.name.toLowerCase()
       );
@@ -1439,14 +1361,9 @@ export async function addExerciseToWorkout(
         console.log('Exercise not found, adding as new exercise instead');
         return addExerciseToWorkout(workoutId, exerciseData, true);
       }
-      
-      // Create a deep copy of the exercises array
+
       updatedExercises = [...workout.exercises];
-      
-      // Get the existing exercise
       const existingExercise = {...updatedExercises[existingExerciseIndex]};
-      
-      // Add new sets to the existing exercise
       const newSets = Array(exerciseData.sets).fill({}).map(() => ({
         id: `set-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
         reps: 10,
@@ -1455,15 +1372,13 @@ export async function addExerciseToWorkout(
           : 0,
         type: 'normal'
       }));
-      
-      // Update the exercise
+
       existingExercise.sets += exerciseData.sets;
       existingExercise.setDetails = [
         ...(existingExercise.setDetails || []),
         ...newSets
       ];
-      
-      // Replace the exercise in the array
+
       updatedExercises[existingExerciseIndex] = existingExercise;
       
       console.log('Added additional sets to existing exercise');
@@ -1471,10 +1386,9 @@ export async function addExerciseToWorkout(
     }
     
     console.log('Saving updated exercises to workout:', JSON.stringify(updatedExercises).substring(0, 200) + '...');
-    
-    // Make sure we're updating the workouts table, not workout_plans
+
     const { data, error } = await supabase
-      .from('workouts')  // Specifically target the workouts table
+      .from('workouts') 
       .update({ exercises: updatedExercises })
       .eq('id', workoutId)
       .select();

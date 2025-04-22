@@ -25,7 +25,7 @@ export default function GroupsScreen() {
       setLoading(true);
       setError(null);
       const data = await getGroups(showOwned);
-      setGroups(data || []); // Ensure we always have an array
+      setGroups(data || []); 
     } catch (err) {
       setError('Failed to load groups. Please try again.');
       console.error('Error loading groups:', err);
@@ -49,7 +49,7 @@ export default function GroupsScreen() {
         setInviteCode('');
         
         if (result.redirectToJoin) {
-          // If we should redirect to the join screen
+
           if (result.groupId) {
             router.push({
               pathname: '/groups/joingroup',
@@ -62,12 +62,12 @@ export default function GroupsScreen() {
             });
           }
         } else if (result.groupId) {
-          // Direct join (legacy behavior)
+          
           Alert.alert('Success', 'You have joined the group!', [
             { 
               text: 'OK', 
               onPress: () => {
-                loadGroups(); // Reload groups to show the newly joined one
+                loadGroups(); 
                 router.push(`/groups/${result.groupId}`);
               }
             }
@@ -175,8 +175,6 @@ export default function GroupsScreen() {
                     style={styles.groupImage}
                     onError={() => {
                       console.log("Fehler beim Laden des Gruppenbilds:", group.cover_image);
-                      // If image loading fails, we could update the state to use a default image,
-                      // but that would require adding a state management for each group
                     }}
                   />
                   <View style={styles.groupInfo}>

@@ -18,11 +18,9 @@ export default function NutritionScreen() {
       setLoading(true);
       setError(null);
       await getNutritionSettings();
-      // If we get here, settings exist, redirect to the main nutrition view
       router.replace('/nutrition/index-with-data');
     } catch (error: any) {
       if (error?.message?.includes('JSON object requested, multiple (or no) rows returned')) {
-        // No settings found, we'll show the setup screen
         setError(null);
       } else {
         setError('Failed to check nutrition settings');

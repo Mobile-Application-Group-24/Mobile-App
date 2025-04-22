@@ -8,7 +8,6 @@ import { ExerciseStats, getExerciseStatsFromWorkouts, getExerciseHistoryData } f
 
 const categories = ['All', 'Chest', 'Back', 'Legs', 'Shoulders', 'Arms', 'Core'];
 
-// Add volumeProgress to the interface
 interface ExtendedExerciseStats extends ExerciseStats {
   volumeProgress?: number;
   totalReps?: number;
@@ -31,8 +30,7 @@ export default function StatsScreen() {
       setLoading(true);
       console.log('Fetching exercise stats for user:', session.user.id);
       const stats = await getExerciseStatsFromWorkouts(session.user.id);
-      
-      // Calculate progress for each exercise
+
       const statsWithProgress = await Promise.all(stats.map(async (exercise) => {
         const historyData = await getExerciseHistoryData(session.user.id, exercise.name);
         
@@ -312,12 +310,10 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#E5E5EA',
     zIndex: 10,
-    // Shadow for iOS
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 3,
-    // Elevation for Android
     elevation: 3,
   },
   scrollableContent: {

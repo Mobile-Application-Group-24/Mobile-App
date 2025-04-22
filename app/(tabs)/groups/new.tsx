@@ -96,7 +96,7 @@ export default function CreateGroupScreen() {
       
       const { data: urlData, error: signUrlError } = await supabase.storage
         .from(STORAGE_BUCKET)
-        .createSignedUrl(fileName, 60 * 60 * 24 * 365); // 1 year
+        .createSignedUrl(fileName, 60 * 60 * 24 * 365); 
 
       if (signUrlError) {
         console.error('Error creating signed URL:', JSON.stringify(signUrlError));
@@ -105,7 +105,7 @@ export default function CreateGroupScreen() {
 
       if (urlData && urlData.signedUrl) {
         console.log('Successfully obtained signed URL:', urlData.signedUrl);
-        // Überprüfe die URL-Struktur, um sicherzustellen, dass sie korrekt ist
+        
         const url = new URL(urlData.signedUrl);
         console.log('URL structure:', {
           protocol: url.protocol,
@@ -171,7 +171,7 @@ export default function CreateGroupScreen() {
         max_members: parseInt(groupData.max_members),
       });
       
-      // Ersetzen des aktuellen Screens durch den Groups-Tab
+      
       router.replace('/groups');
     } catch (error) {
       console.error('Error creating group:', error);

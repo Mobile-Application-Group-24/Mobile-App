@@ -78,10 +78,10 @@ export default function NutritionSettingsScreen() {
         console.error('Error loading settings:', error);
         
         if (error?.message?.includes('JSON object requested, multiple (or no) rows returned')) {
-          // Handle new user case
+
           const { data: userData } = await supabase.auth.getUser();
           if (!userData.user) {
-            // If still no user after checking, try session refresh
+     
             const { data: refreshData } = await supabase.auth.refreshSession();
             if (!refreshData.user) {
               throw new Error('Authentication failed. Please log in again.');
@@ -101,7 +101,7 @@ export default function NutritionSettingsScreen() {
           }
           setIsNewUser(true);
         } else if (error?.message?.includes('Not authenticated')) {
-          // Handle authentication error
+     
           const { data: refreshData } = await supabase.auth.refreshSession();
           if (!refreshData.user) {
             Alert.alert(
@@ -111,7 +111,7 @@ export default function NutritionSettingsScreen() {
             );
             return;
           } else {
-            // Try again after refresh
+       
             const data = await getNutritionSettings();
             setSettings(data);
             setIsNewUser(false);
@@ -193,12 +193,10 @@ export default function NutritionSettingsScreen() {
 
     try {
       setSaving(true);
-      
-      // First check authentication
+
       try {
         await getCurrentUser();
       } catch (error) {
-        // Try to refresh the session
         const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
         if (refreshError || !refreshData.user) {
           Alert.alert(
@@ -210,7 +208,6 @@ export default function NutritionSettingsScreen() {
         }
       }
 
-      // Normalize settings first
       const normalizedSettings = {
         ...settings,
         calorie_goal:
@@ -233,7 +230,6 @@ export default function NutritionSettingsScreen() {
             : settings.water_interval,
       };
 
-      // First, save to database
       try {
         if (isNewUser) {
           const { error: insertError } = await supabase.from('nutrition_settings').insert({
@@ -263,12 +259,10 @@ export default function NutritionSettingsScreen() {
         throw new Error('Failed to save settings to database. Please try again.');
       }
 
-      // Then, handle notifications if permission is granted
       if (notificationsPermission) {
         try {
           console.log('Setting up notifications with saved settings:', JSON.stringify(normalizedSettings, null, 2));
           
-          // Verify meal_times structure before scheduling
           if (!normalizedSettings.meal_times || !Array.isArray(normalizedSettings.meal_times)) {
             console.error('Invalid meal_times structure:', normalizedSettings.meal_times);
             throw new Error('Invalid meal times settings. Please check your configuration.');
@@ -276,8 +270,7 @@ export default function NutritionSettingsScreen() {
           
           const enabledMealTimes = normalizedSettings.meal_times.filter(meal => meal.enabled);
           console.log(`Found ${enabledMealTimes.length} enabled meal times`);
-          
-          // Validate each meal time format before scheduling
+        
           enabledMealTimes.forEach(meal => {
             const [hours, minutes] = meal.time.split(':').map(Number);
             if (isNaN(hours) || isNaN(minutes)) {
@@ -287,11 +280,9 @@ export default function NutritionSettingsScreen() {
             console.log(`Validated meal time: ${meal.name} at ${hours}:${minutes}`);
           });
           
-          // Schedule meal notifications
           const mealNotificationIds = await scheduleMealNotifications(normalizedSettings);
           console.log('Meal notification IDs:', mealNotificationIds);
-          
-          // Schedule water reminders if enabled
+
           if (normalizedSettings.water_notifications) {
             const waterReminderId = await scheduleWaterReminders(
               normalizedSettings.water_notifications,
@@ -310,8 +301,7 @@ export default function NutritionSettingsScreen() {
       router.replace('/nutrition/index-with-data');
     } catch (error) {
       console.error('Error saving settings:', error);
-      
-      // Check if this is an auth error
+
       if (error instanceof Error && (error.message.includes('Not authenticated') || error.message.includes('JWT expired'))) {
         Alert.alert(
           "Authentication Error",

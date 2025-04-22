@@ -4,7 +4,7 @@ import { useLocalSearchParams, useRouter, useNavigation } from 'expo-router';
 import { X, Clock, ChartBar as BarChart3, Plus, CalendarClock, Scale, File as FileEdit, Dumbbell, Trash, Save, Trash2, Pencil } from 'lucide-react-native';
 import { format } from 'date-fns';
 import { getWorkoutPlan, deleteWorkoutPlan, createWorkout, WorkoutPlan, Workout } from '@/utils/workout';
-import { updateWorkoutPlan, supabase, getCurrentUser, deleteAllAISuggestions } from '@/utils/supabase'; // Import getCurrentUser and deleteAllAISuggestions
+import { updateWorkoutPlan, supabase, getCurrentUser, deleteAllAISuggestions } from '@/utils/supabase'; 
 import { Swipeable } from 'react-native-gesture-handler';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { findExerciseType, exercisesByWorkoutType } from '@/utils/exercises';
@@ -17,9 +17,9 @@ interface WorkoutSet {
   reps: string;
   type: SetType;
   notes?: string;
-  prevWeight?: string; // Add this for tracking previous workout values
-  prevReps?: string;   // Add this for tracking previous workout values
-  prevNotes?: string;  // Add this for tracking previous workout values
+  prevWeight?: string; 
+  prevReps?: string;   
+  prevNotes?: string;  
 }
 
 interface ExerciseProgress {
@@ -49,7 +49,7 @@ export default function WorkoutDetailScreen() {
   const [showTypeLabel, setShowTypeLabel] = useState<{ id: string, show: boolean }>({ id: '', show: false });
   const [draggingExercise, setDraggingExercise] = useState<string | null>(null);
   const [showRestTimer, setShowRestTimer] = useState(false);
-  const [restTime, setRestTime] = useState(90); // 90 Sekunden Standard
+  const [restTime, setRestTime] = useState(90); 
   const [isTimerRunning, setIsTimerRunning] = useState(false);
   const [currentTime, setCurrentTime] = useState(90);
   const timerRef = useRef<NodeJS.Timeout>();
@@ -165,7 +165,6 @@ export default function WorkoutDetailScreen() {
           style: 'destructive',
           onPress: () => {
             setExercises(prev => prev.filter(e => e.id !== exerciseId));
-            // Reset any params after deletion to avoid re-processing
             router.setParams({ id: workoutId });
           },
         },
@@ -278,18 +277,15 @@ export default function WorkoutDetailScreen() {
         }
       }
       
-      
-      // Get the workout plan from workout_plans table
       const plan = await getWorkoutPlan(workoutPlanId);
       setWorkoutPlan(plan);
       setWorkoutName(plan.title || '');
       setNotes(plan.description || '');
       
-      // Initialize a map to store the most recent exercise data
       const exercisePreviousData = new Map();
       
       try {
-        // First try to get the most recent workout from the same plan (for body weight and general data)
+
         const { data: previousPlanWorkouts, error: previousPlanError } = await supabase
           .from('workouts')
           .select('id, title, date, bodyweight, user_id, exercises')
@@ -298,7 +294,6 @@ export default function WorkoutDetailScreen() {
           .order('date', { ascending: false })
           .limit(1);
         
-        // Set the previous workout for the plan itself (useful for bodyweight, etc.)
         let previousWorkoutData = null;
         if (!previousPlanError && previousPlanWorkouts && previousPlanWorkouts.length > 0) {
           previousWorkoutData = previousPlanWorkouts[0];
@@ -307,40 +302,38 @@ export default function WorkoutDetailScreen() {
           console.log('Found previous workout data for this plan:', previousWorkoutData.id);
           
           if (previousWorkoutData.bodyweight) {
-            // Pre-fill bodyweight from previous workout of the same plan
+
             setBodyWeight(String(previousWorkoutData.bodyweight));
           }
         }
         
-        // Now get ALL completed workouts to find the most recent data for each exercise
         const { data: allCompletedWorkouts, error: allWorkoutsError } = await supabase
           .from('workouts')
           .select('id, date, exercises')
           .eq('done', true)
           .eq('user_id', plan.user_id)
           .order('date', { ascending: false })
-          .limit(50); // Get the 50 most recent workouts to search through
+          .limit(50); 
         
         if (!allWorkoutsError && allCompletedWorkouts && allCompletedWorkouts.length > 0) {
           console.log(`Found ${allCompletedWorkouts.length} completed workouts to search for exercise data`);
           
-          // For each exercise in the current plan
           if (plan.exercises) {
             for (const exercise of plan.exercises) {
-              // Look through all workouts to find the most recent data for this specific exercise
+
               for (const workout of allCompletedWorkouts) {
                 if (workout.exercises) {
-                  // Find this exercise in the workout
+
                   const matchingExercise = workout.exercises.find(
                     ex => ex.id === exercise.id || ex.name === exercise.name
                   );
                   
                   if (matchingExercise && matchingExercise.setDetails && matchingExercise.setDetails.length > 0) {
-                    // Found data for this exercise - check if it's the most recent
+                   
                     if (!exercisePreviousData.has(exercise.id) || 
                         new Date(workout.date) > new Date(exercisePreviousData.get(exercise.id).date)) {
                       
-                      // This is the most recent data for this exercise
+                     
                       exercisePreviousData.set(exercise.id, {
                         date: workout.date,
                         exerciseData: matchingExercise
@@ -349,7 +342,7 @@ export default function WorkoutDetailScreen() {
                       console.log(`Found most recent data for ${exercise.name} from workout on ${workout.date}`);
                     }
                     
-                    // No need to check more workouts if we found one with this exercise
+       
                     break;
                   }
                 }
@@ -357,13 +350,13 @@ export default function WorkoutDetailScreen() {
             }
           }
           
-          // Additionally, process all exercises in completed workouts to have this data available for newly added exercises
+  
           for (const workout of allCompletedWorkouts) {
             if (workout.exercises) {
               for (const exerciseData of workout.exercises) {
-                // Store by both ID and name to make lookups easier
+            
                 if (exerciseData.setDetails && exerciseData.setDetails.length > 0) {
-                  // Check if we already have more recent data for this exercise ID
+             
                   if (!exercisePreviousData.has(exerciseData.id) || 
                       new Date(workout.date) > new Date(exercisePreviousData.get(exerciseData.id).date)) {
                     exercisePreviousData.set(exerciseData.id, {
@@ -371,8 +364,7 @@ export default function WorkoutDetailScreen() {
                       exerciseData: exerciseData
                     });
                   }
-                  
-                  // Also store by exercise name for custom exercises
+         
                   const nameKey = `name:${exerciseData.name.toLowerCase()}`;
                   if (!exercisePreviousData.has(nameKey) || 
                       new Date(workout.date) > new Date(exercisePreviousData.get(nameKey).date)) {
@@ -387,17 +379,13 @@ export default function WorkoutDetailScreen() {
           }
         }
         
-        // Store the map for later use when adding new exercises
         setExercisePreviousDataMap(exercisePreviousData);
         
       } catch (prevError) {
         console.log('Error fetching previous workout data:', prevError);
-        // Continue without previous data, not a critical error
       }
-      
-      // Initialize exercises from the workout plan
+  
       const planExercises = plan.exercises?.map(exercise => {
-        // Get the most recent data for this specific exercise
         const mostRecentData = exercisePreviousData.get(exercise.id);
         const prevExerciseData = mostRecentData ? mostRecentData.exerciseData : null;
         
@@ -411,20 +399,17 @@ export default function WorkoutDetailScreen() {
           id: exercise.id,
           name: exercise.name,
           type: exercise.type,
-          // Create sets based on the number specified in the plan
           sets: Array(exercise.sets || 3).fill(null).map((_, index) => {
-            // Only use previous set data if index is within the available sets
+
             const prevSetData = prevExerciseData && 
                               prevExerciseData.setDetails && 
                               index < prevExerciseData.setDetails.length ? 
                               prevExerciseData.setDetails[index] : null;
             
-            // Debug the specific set data we're working with
             if (prevSetData) {
               console.log(`Set ${index+1} for ${exercise.name}: prev weight=${prevSetData.weight}, reps=${prevSetData.reps}`);
             }
-            
-            // Extract the values properly with fallbacks for each field
+
             const prevWeight = prevSetData && prevSetData.weight !== undefined && prevSetData.weight !== null ? 
               String(prevSetData.weight) : '';
             
@@ -435,11 +420,10 @@ export default function WorkoutDetailScreen() {
             
             return {
               id: `new-${exercise.id}-${index}`,
-              weight: '', // Start with empty values for the new workout
+              weight: '', 
               reps: '',
               type: prevSetData ? prevSetData.type || 'normal' : 'normal',
               notes: '',
-              // Include previous workout data with explicit checks for undefined/null
               prevWeight,
               prevReps,
               prevNotes
@@ -462,30 +446,24 @@ export default function WorkoutDetailScreen() {
     if (selectedExercise && typeof selectedExercise === 'string') {
       const timestamp = Date.now();
       
-      // Check if this exercise is already in the workout
       const exerciseAlreadyExists = exercises.some(ex => 
         ex.name.toLowerCase() === selectedExercise.toLowerCase()
       );
       
       if (exerciseAlreadyExists) {
-        // Alert the user and don't add the duplicate exercise
         Alert.alert(
           "Duplicate Exercise",
           `"${selectedExercise}" is already in this workout. Each exercise can only be added once.`,
           [{ text: "OK" }]
         );
         
-        // Reset the selectedExercise param immediately
         router.setParams({ id: workoutId });
         return;
       }
-      
-      // Continue with normal exercise adding process since it's not a duplicate
-      // Try to find the exercise ID in our predefined lists
+
       let exerciseId = '';
       let exerciseType: 'chest' | 'back' | 'arms' | 'legs' | 'shoulders' | 'core' | undefined;
       
-      // Search through all categories to find the exercise
       for (const category in exercisesByWorkoutType) {
         const matchedExercise = exercisesByWorkoutType[category].find(
           ex => ex.name === selectedExercise
@@ -498,21 +476,17 @@ export default function WorkoutDetailScreen() {
         }
       }
       
-      // If we couldn't find it, generate a custom ID
       if (!exerciseId) {
         exerciseId = `custom-${timestamp}-${Math.random().toString(36).substr(2, 9)}`;
         exerciseType = findExerciseType(selectedExercise);
       }
-      
-      // Check for previous data in our map
+
       let prevExerciseData = null;
-      
-      // Try to find by ID first
+
       if (exercisePreviousDataMap.has(exerciseId)) {
         prevExerciseData = exercisePreviousDataMap.get(exerciseId).exerciseData;
         console.log(`Found previous data for ${selectedExercise} by ID ${exerciseId}`);
       } 
-      // If not found by ID, try by name
       else {
         const nameKey = `name:${selectedExercise.toLowerCase()}`;
         if (exercisePreviousDataMap.has(nameKey)) {
@@ -520,16 +494,14 @@ export default function WorkoutDetailScreen() {
           console.log(`Found previous data for ${selectedExercise} by name`);
         }
       }
-      
-      // Create sets with previous data if available
+
       const sets = [];
-      const numSets = prevExerciseData?.setDetails?.length || 3; // Use previous count or default to 3
+      const numSets = prevExerciseData?.setDetails?.length || 3; 
       
       for (let i = 0; i < numSets; i++) {
         const prevSetData = prevExerciseData?.setDetails && i < prevExerciseData.setDetails.length ? 
                              prevExerciseData.setDetails[i] : null;
                              
-        // Extract values with fallbacks
         const prevWeight = prevSetData && prevSetData.weight !== undefined && prevSetData.weight !== null ? 
           String(prevSetData.weight) : '';
         
@@ -544,7 +516,6 @@ export default function WorkoutDetailScreen() {
           reps: '',
           type: prevSetData?.type || 'normal',
           notes: '',
-          // Include previous data
           prevWeight,
           prevReps,
           prevNotes
@@ -566,16 +537,13 @@ export default function WorkoutDetailScreen() {
 
       setExercises(prev => [...prev, exerciseToAdd]);
 
-      // Reset params immediately after processing to prevent duplicate adds
       router.setParams({ id: workoutId });
     }
   }, [selectedExercise, workoutId]);
 
-  // Add a new effect to auto-start the workout if opened from the start workout button
   useEffect(() => {
     if (autoStart && !isWorkoutActive && !workoutStartTime && !loading) {
       console.log('Auto-starting workout from "Start Workout" button');
-      // Small delay to ensure the UI is ready
       const timer = setTimeout(() => {
         startWorkout();
       }, 500);
@@ -615,19 +583,15 @@ export default function WorkoutDetailScreen() {
     setExercises(prev => prev.map(exercise => {
       if (exercise.id === exerciseId) {
         const currentSetCount = exercise.sets.length;
-        
-        // Instead of just copying from the last set, check if we have historical data for this specific set
         let prevSetData = null;
         const exerciseData = exercisePreviousDataMap.get(exercise.id)?.exerciseData;
-        
-        // If there's historical data for this exercise and it has enough sets
+
         if (exerciseData && exerciseData.setDetails && currentSetCount < exerciseData.setDetails.length) {
-          // Get data for the next set from historical data
+
           prevSetData = exerciseData.setDetails[currentSetCount];
           console.log(`Found historical data for new set ${currentSetCount+1} in exercise ${exercise.name}`);
         }
         
-        // Prepare previous values with proper fallbacks
         const prevWeight = prevSetData && prevSetData.weight !== undefined && prevSetData.weight !== null ? 
           String(prevSetData.weight) : '';
         
@@ -635,8 +599,7 @@ export default function WorkoutDetailScreen() {
           String(prevSetData.reps) : '';
         
         const prevNotes = prevSetData && prevSetData.notes ? prevSetData.notes : '';
-        
-        // Create the new set
+
         const newSet: WorkoutSet = {
           id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
           weight: '',
@@ -656,7 +619,6 @@ export default function WorkoutDetailScreen() {
       return exercise;
     }));
     
-    // Log status messages for clarity
     if (!isWorkoutActive && !workoutStartTime) {
       console.log("Set added - will update workout plan when saved");
     } else {
@@ -666,7 +628,6 @@ export default function WorkoutDetailScreen() {
 
   const updateSet = (exerciseId: string, setId: string, field: keyof WorkoutSet, value: string) => {
     if (field === 'weight' || field === 'reps') {
-      // Replace commas with periods for decimal numbers
       const processedValue = value.replace(',', '.');
       
       const isValidNumericInput = field === 'weight' 
@@ -677,7 +638,6 @@ export default function WorkoutDetailScreen() {
         return;
       }
       
-      // Use the processed value instead of original value
       value = processedValue;
     }
     
@@ -753,8 +713,7 @@ export default function WorkoutDetailScreen() {
 
     try {
       const originalPlan = workoutPlan;
-      
-      // If this is a history workout, update the existing workout
+
       if (fromHistory) {
         const workoutExercises = exercises.map(exercise => {
           return {
@@ -771,8 +730,7 @@ export default function WorkoutDetailScreen() {
             }))
           };
         });
-        
-        // Update the workout record
+
         await supabase
           .from('workouts')
           .update({
@@ -787,17 +745,15 @@ export default function WorkoutDetailScreen() {
         router.back();
         return;
       }
-      
-      // Determine if we're in workout session mode or plan editing mode
+
       const isWorkoutSessionMode = isWorkoutActive || !!workoutStartTime;
       
       console.log(`Mode: ${isWorkoutSessionMode ? 'Active workout session' : 'Workout plan editing'}`);
       
       let savedWorkoutId = null;
-      
-      // IMPORTANT: Only update the workout plan if we're NOT in a workout session
+
       if (!isWorkoutSessionMode) {
-        // We're just editing the plan, not running a workout session
+  
         const planExercises = exercises.map(exercise => ({
           id: exercise.id,
           name: exercise.name,
@@ -815,8 +771,7 @@ export default function WorkoutDetailScreen() {
       } else {
         console.log("Workout session active - original workout plan was NOT modified");
       }
-      
-      // Always save a workout session if we started one
+
       if (isWorkoutSessionMode) {
         const workoutExercises = exercises.map(exercise => {
           return {
@@ -854,16 +809,14 @@ export default function WorkoutDetailScreen() {
         const savedWorkout = await createWorkout(workoutData);
         savedWorkoutId = savedWorkout.id;
         console.log("Successfully created workout session:", savedWorkout.id, "Done status:", isDone);
-        
-        // If workout is completed (has both start and end times), trigger AI suggestions reload
+
         if (isDone && workoutStartTime && endTimeToUse) {
-          // Delete all existing AI suggestions first, since we'll be generating new ones
+  
           try {
             const user = await getCurrentUser();
             await deleteAllAISuggestions(user.id);
             console.log('Deleted all existing AI suggestions for user:', user.id);
-            
-            // Set a flag in AsyncStorage to tell the AI screen to refresh suggestions
+
             const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
             await AsyncStorage.setItem('refresh_ai_suggestions', 'true');
             await AsyncStorage.setItem('last_completed_workout_id', savedWorkoutId);
@@ -942,14 +895,13 @@ export default function WorkoutDetailScreen() {
           if (!isWorkoutActive) {
             setIsWorkoutActive(true);
           }
-          // Save start time change to database
           await updateWorkoutTime({
             start_time: selectedDate.toISOString()
           });
         } else if (editingTime === 'end') {
           setWorkoutEndTime(selectedDate);
           setIsWorkoutActive(false);
-          // Save end time change to database
+
           await updateWorkoutTime({
             end_time: selectedDate.toISOString()
           });
@@ -963,14 +915,13 @@ export default function WorkoutDetailScreen() {
           if (!isWorkoutActive) {
             setIsWorkoutActive(true);
           }
-          // Save start time change to database
+
           await updateWorkoutTime({
             start_time: selectedDate.toISOString()
           });
         } else if (editingTime === 'end') {
           setWorkoutEndTime(selectedDate);
           setIsWorkoutActive(false);
-          // Save end time change to database
           await updateWorkoutTime({
             end_time: selectedDate.toISOString()
           });
@@ -1446,9 +1397,8 @@ export default function WorkoutDetailScreen() {
                 : (workoutEndTime || new Date())}
               mode="time"
               is24Hour={true}
-              display="default" // Changed from "spinner" to "default"
+              display="default" 
               onChange={handleTimeChange}
-              // Remove the textColor prop as it might not be supported
               style={styles.timePicker}
             />
           </View>
@@ -1481,7 +1431,7 @@ const styles = StyleSheet.create({
   },
   fixedHeader: {
     position: 'absolute',
-    top: Platform.OS === 'ios' ? 47 : 0, // Anpassung für iOS
+    top: Platform.OS === 'ios' ? 47 : 0, 
     left: 0,
     right: 0,
     zIndex: 10,

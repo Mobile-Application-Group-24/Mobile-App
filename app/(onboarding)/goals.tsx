@@ -14,13 +14,13 @@ export default function GoalsScreen() {
   const [loading, setLoading] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
 
-  // Listen for keyboard events
+  
   useEffect(() => {
     const keyboardDidShowListener = Keyboard.addListener(
       'keyboardDidShow',
       () => {
         setKeyboardVisible(true);
-        // Scroll to ensure target weight is visible
+       
         setTimeout(() => {
           scrollViewRef.current?.scrollToEnd({ animated: true });
         }, 100);
@@ -41,7 +41,7 @@ export default function GoalsScreen() {
 
   const handleGoalSelect = (goal: FitnessGoal) => {
     setSelectedGoal(goal);
-    // Scroll to target weight section with animation
+    
     setTimeout(() => {
       scrollViewRef.current?.scrollToEnd({ animated: true });
     }, 100);
@@ -67,10 +67,10 @@ export default function GoalsScreen() {
       if (error) throw error;
       
       console.log("Successfully saved goals, navigating to schedule screen");
-      // Explicitly log the navigation path
+      
       console.log("Navigation path: /(onboarding)/schedule");
       
-      // Force a delay to ensure state update completes
+      
       setTimeout(() => {
         router.push({
           pathname: "/(onboarding)/schedule"

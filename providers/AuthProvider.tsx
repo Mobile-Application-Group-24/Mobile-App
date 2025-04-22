@@ -26,7 +26,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const segments = useSegments();
 
   useEffect(() => {
-    // Set up Supabase auth state listener
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setLoading(false);
@@ -39,17 +39,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Handle routing based on auth state
+
   useEffect(() => {
     if (loading) return;
 
     const inAuthGroup = segments[0] === '(auth)';
 
     if (!session && !inAuthGroup) {
-      // Redirect to sign in if not authenticated
+
       router.replace('/sign-in');
     } else if (session && inAuthGroup) {
-      // Redirect to home if authenticated
+
       router.replace('/');
     }
   }, [session, loading, segments]);

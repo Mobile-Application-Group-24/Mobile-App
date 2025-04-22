@@ -1,13 +1,11 @@
 import { Exercise } from './workout';
 
-// Define a simpler exercise type for the reference data
 export interface ExerciseReference {
   id: string;
   name: string;
   type: 'chest' | 'back' | 'arms' | 'legs' | 'shoulders' | 'core';
 }
 
-// Sample exercises for each workout type (without sets, reps, and weight)
 export const exercisesByWorkoutType: Record<string, ExerciseReference[]> = {
     'Chest': [
       { id: 'chest1', name: 'Barbell Bench Press', type: 'chest' },
@@ -218,11 +216,9 @@ export const exercisesByWorkoutType: Record<string, ExerciseReference[]> = {
     ]
   };
 
-// Helper function to determine exercise type based on exercise name
 export function findExerciseType(exerciseName: string): 'chest' | 'back' | 'arms' | 'legs' | 'shoulders' | 'core' {
   const name = exerciseName.toLowerCase();
-  
-  // First check in predefined exercises
+
   for (const category in exercisesByWorkoutType) {
     const match = exercisesByWorkoutType[category].find(ex => 
       ex.name.toLowerCase() === name
@@ -231,8 +227,7 @@ export function findExerciseType(exerciseName: string): 'chest' | 'back' | 'arms
       return match.type;
     }
   }
-  
-  // If not found, attempt to categorize based on name
+
   if (name.includes('bench') || name.includes('push') || name.includes('chest') || 
       name.includes('fly') || name.includes('press') && !name.includes('shoulder')) {
     return 'chest';
@@ -253,22 +248,18 @@ export function findExerciseType(exerciseName: string): 'chest' | 'back' | 'arms
             name.includes('core')) {
     return 'core';
   }
-  
-  // Default to chest if nothing else matches
+
   return 'chest';
 }
 
-// Function to get default sets for a new exercise
 export function getDefaultSetsForExercise(): number {
-  return 3; // Most exercises default to 3 sets
+  return 3;
 }
 
-// Function to check if an exercise already exists in a workout
 export function isExerciseDuplicate(exerciseName: string, existingExercises: any[]): boolean {
-  // Normalize the exercise name for comparison
+
   const normalizedName = exerciseName.toLowerCase().trim();
-  
-  // Check if any existing exercise matches by name (case insensitive)
+
   return existingExercises.some(exercise => 
     exercise.name.toLowerCase().trim() === normalizedName
   );
