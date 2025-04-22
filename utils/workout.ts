@@ -206,7 +206,7 @@ export async function updateWorkout(id: string, workout: Partial<Workout>): Prom
     const { data, error } = await supabase
       .from('workouts')
       .update({
-        title: workout.name, // Änderung von name zu title
+        title: workout.name, 
         notes: workout.notes,
         bodyweight: workout.bodyweight,
         exercises: workout.exercises,

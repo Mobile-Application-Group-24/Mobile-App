@@ -8,7 +8,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
 import { Buffer } from 'buffer';
 
-// Nutze den 'groups'-Bucket für alle Bilder
+
 const STORAGE_BUCKET = 'groups';
 
 export default function GroupSettingsScreen() {
@@ -21,7 +21,7 @@ export default function GroupSettingsScreen() {
     name: 'Morning Warriors',
     description: 'Early birds catching those gains! Join us for morning workouts and motivation.',
     cover_image: 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48',
-    is_private: false, // Änderung von privacy zu is_private
+    is_private: false, 
     notifications: true,
     owner_id: ''
   });
@@ -48,7 +48,7 @@ export default function GroupSettingsScreen() {
           name: data.name || '',
           description: data.description || '',
           cover_image: data.cover_image || 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48',
-          is_private: data.is_private || false, // Änderung von privacy zu is_private
+          is_private: data.is_private || false, 
           notifications: true,
           owner_id: data.owner_id || ''
         });
@@ -100,8 +100,7 @@ export default function GroupSettingsScreen() {
         if (!result.canceled && result.assets && result.assets.length > 0) {
           const { uri } = result.assets[0];
           
-          // Ändern Sie den Dateinamen, um der RLS-Policy zu entsprechen
-          // Der erste Teil des Pfads muss der user.id sein
+         
           const fileName = `${session.user.id}/${groupId}_${Date.now()}.jpg`;
 
           console.log("Preparing to upload:", fileName); // Debug log
@@ -114,7 +113,7 @@ export default function GroupSettingsScreen() {
           // Convert Base64 string to Uint8Array
           const arrayBuffer = _base64ToArrayBuffer(base64);
 
-          // Lade die Datei in den 'groups'-Bucket hoch statt 'avatars'
+         
           const { data: uploadData, error: uploadError } = await supabase.storage
             .from(STORAGE_BUCKET)
             .upload(fileName, arrayBuffer, {
@@ -129,7 +128,7 @@ export default function GroupSettingsScreen() {
             throw uploadError;
           }
 
-          // Verwende die richtige Bucket für die signierte URL
+          
           const { data: signedUrlData, error: signedUrlError } = await supabase.storage
             .from(STORAGE_BUCKET)
             .createSignedUrl(fileName, 60 * 60 * 24 * 365); // 1 year expiration
@@ -142,7 +141,7 @@ export default function GroupSettingsScreen() {
           const coverImageUrl = signedUrlData.signedUrl;
           console.log('Cover Image signed URL:', coverImageUrl); // Debug log
 
-          // Prüfe, ob die URL das erwartete Format hat
+          
           if (!coverImageUrl.includes('/sign/')) {
             console.warn('Warning: The URL does not include /sign/ path. Current URL:', coverImageUrl);
           }
@@ -164,7 +163,7 @@ export default function GroupSettingsScreen() {
             { 
               text: 'OK', 
               onPress: () => {
-                // Zurück zur Hauptgruppen-Seite und aktualisieren
+                
                 router.replace({
                   pathname: '/(tabs)/groups',
                   params: { refresh: Date.now().toString() }
@@ -273,7 +272,7 @@ export default function GroupSettingsScreen() {
 
               if (error) throw error;
               
-              // Mit Refresh-Parameter zur Hauptseite navigieren
+              
               router.replace({
                 pathname: '/(tabs)/groups',
                 params: { refresh: Date.now().toString() }
@@ -350,23 +349,23 @@ export default function GroupSettingsScreen() {
             <TouchableOpacity
               style={[
                 styles.optionButton,
-                !groupData.is_private && styles.optionButtonActive, // Änderung der Bedingung
+                !groupData.is_private && styles.optionButtonActive, 
               ]}
               onPress={() => setGroupData(prev => ({ ...prev, is_private: false }))}>
               <Text style={[
                 styles.optionText,
-                !groupData.is_private && styles.optionTextActive, // Änderung der Bedingung
+                !groupData.is_private && styles.optionTextActive,
               ]}>Public</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[
                 styles.optionButton,
-                groupData.is_private && styles.optionButtonActive, // Änderung der Bedingung
+                groupData.is_private && styles.optionButtonActive, 
               ]}
               onPress={() => setGroupData(prev => ({ ...prev, is_private: true }))}>
               <Text style={[
                 styles.optionText,
-                groupData.is_private && styles.optionTextActive, // Änderung der Bedingung
+                groupData.is_private && styles.optionTextActive, 
               ]}>Private</Text>
             </TouchableOpacity>
           </View>

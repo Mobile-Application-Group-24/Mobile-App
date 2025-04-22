@@ -61,7 +61,7 @@ export async function getExerciseStatsFromWorkouts(userId: string): Promise<Exer
           const weight = Number(set.weight) || 0;
           const reps = Number(set.reps) || 0;
 
-          // Aktualisiere maxReps nur wenn die Wiederholungen in diesem Satz höher sind
+          
           if (reps > exerciseStats[exercise.name].maxReps) {
             exerciseStats[exercise.name].maxReps = reps;
           }
@@ -131,23 +131,23 @@ export async function getExerciseHistoryData(userId: string, exerciseName: strin
       let sessionMaxWeight = 0;
       let totalReps = 0;
       let bestSetReps = 0;
-      let maxSetVolume = 0; // Für das beste Satz-Volumen
+      let maxSetVolume = 0; 
       
-      // Verarbeite alle Sätze der Übung
+      
       exercise.setDetails.forEach(set => {
         if (!set) return;
 
-        // Stelle sicher, dass wir die Werte korrekt parsen
+        
         const reps = typeof set.reps === 'number' ? set.reps : 
                     set.reps ? parseInt(set.reps.toString(), 10) : 0;
         const weight = typeof set.weight === 'number' ? set.weight :
                       set.weight ? parseFloat(set.weight.toString()) : 0;
         
-        // Aktualisiere bestSetReps für den besten einzelnen Satz
+        
         bestSetReps = Math.max(bestSetReps, reps);
         totalReps += reps;
         
-        // Berechne das Volumen für diesen Satz
+        
         const setVolume = weight * reps;
         maxSetVolume = Math.max(maxSetVolume, setVolume); // Update maxSetVolume
         sessionVolume += setVolume;
@@ -157,7 +157,7 @@ export async function getExerciseHistoryData(userId: string, exerciseName: strin
         }
       });
       
-      // Füge den Datenpunkt nur hinzu, wenn wir tatsächlich Daten haben
+      
       if (totalReps > 0 || sessionVolume > 0) {
         historyPoints.push({
           date: workout.date,
@@ -165,7 +165,7 @@ export async function getExerciseHistoryData(userId: string, exerciseName: strin
           maxWeight: sessionMaxWeight,
           totalReps,
           bestSetReps,
-          maxSetVolume, // Füge maxSetVolume zum Datenpunkt hinzu
+          maxSetVolume, 
           avgWeight: sessionVolume > 0 ? sessionVolume / totalReps : 0
         });
       }

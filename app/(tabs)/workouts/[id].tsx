@@ -49,7 +49,7 @@ export default function WorkoutDetailScreen() {
   const [showTypeLabel, setShowTypeLabel] = useState<{ id: string, show: boolean }>({ id: '', show: false });
   const [draggingExercise, setDraggingExercise] = useState<string | null>(null);
   const [showRestTimer, setShowRestTimer] = useState(false);
-  const [restTime, setRestTime] = useState(90); // 90 Sekunden Standard
+  const [restTime, setRestTime] = useState(90); 
   const [isTimerRunning, setIsTimerRunning] = useState(false);
   const [currentTime, setCurrentTime] = useState(90);
   const timerRef = useRef<NodeJS.Timeout>();
@@ -1481,7 +1481,7 @@ const styles = StyleSheet.create({
   },
   fixedHeader: {
     position: 'absolute',
-    top: Platform.OS === 'ios' ? 47 : 0, // Anpassung für iOS
+    top: Platform.OS === 'ios' ? 47 : 0, 
     left: 0,
     right: 0,
     zIndex: 10,
