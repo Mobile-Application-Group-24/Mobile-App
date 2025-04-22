@@ -215,7 +215,7 @@ const styles = StyleSheet.create({
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: Platform.OS === 'android' ? StatusBar.currentHeight || - : 16,
+    marginTop: Platform.OS === 'android' ? StatusBar.currentHeight || 0 : 16,
   },
   sectionTitle: {
     fontSize: 22,
