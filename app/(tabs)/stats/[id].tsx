@@ -283,21 +283,6 @@ export default function ExerciseStatsScreen() {
   }, [navigation, router, pathname, workoutId, returnPath]);
 
   useEffect(() => {
-    if (workoutId && navigation.setOptions) {
-      navigation.setOptions({
-        headerShown: true,
-        headerLeft: () => null,
-        headerTitle: '',
-        headerStyle: {
-          height: Platform.OS === 'android' ? 60 : 44,
-          backgroundColor: '#FFFFFF',
-        },
-        headerShadowVisible: false
-      });
-    }
-  }, [navigation, workoutId]);
-
-  useEffect(() => {
     if (timeFilter !== 'custom' || (customDateRange.startDate && customDateRange.endDate)) {
       loadExerciseData();
     }
@@ -323,15 +308,7 @@ export default function ExerciseStatsScreen() {
   };
 
   const handleBackNavigation = () => {
-    if (workoutId) {
-      const path = returnPath 
-        ? returnPath.toString() 
-        : `/workouts/${workoutId}`;
-      
-      router.push(path);
-    } else {
-      router.push('/(tabs)/stats/');
-    }
+    router.push('/(tabs)/stats/');
   };
 
   if (loading) {

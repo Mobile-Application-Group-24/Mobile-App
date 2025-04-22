@@ -12,11 +12,7 @@ export default function StatsLayout() {
       <Stack.Screen
         name="[id]"
         options={{
-          title: 'Exercise Statistics',
           headerShown: false,
-          headerTitleStyle: {
-            fontWeight: 'bold',
-          },
         }}
       />
     </Stack>
