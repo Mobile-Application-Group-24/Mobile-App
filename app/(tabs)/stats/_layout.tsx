@@ -13,9 +13,7 @@ export default function StatsLayout() {
         name="[id]"
         options={{
           title: 'Exercise Statistics',
-          headerStyle: {
-            backgroundColor: '#FFFFFF',
-          },
+          headerShown: false,
           headerTitleStyle: {
             fontWeight: 'bold',
           },

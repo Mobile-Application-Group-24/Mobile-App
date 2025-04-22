@@ -163,7 +163,7 @@ export default function RecentWorkoutsScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.safeAreaTop, { paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0 }]}>
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <ArrowLeft size={24} color="#007AFF" onPress={() => router.back()} />
@@ -207,7 +207,6 @@ const styles = StyleSheet.create({
   },
   section: {
     backgroundColor: '#FFFFFF',
-    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
     paddingHorizontal: 16,
     paddingBottom: 16,
     borderBottomWidth: 1,
@@ -216,6 +215,7 @@ const styles = StyleSheet.create({
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginTop: Platform.OS === 'android' ? StatusBar.currentHeight || - : 16,
   },
   sectionTitle: {
     fontSize: 22,
@@ -344,6 +344,10 @@ const styles = StyleSheet.create({
     color: '#FF3B30',
     fontWeight: '600',
     marginLeft: 4,
+  },
+  safeAreaTop: {
+    flex: 0,
+    backgroundColor: '#FFFFFF',
   },
   separator: {
     height: 12,

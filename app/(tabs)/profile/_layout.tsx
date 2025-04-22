@@ -23,6 +23,18 @@ export default function ProfileLayout() {
           presentation: 'modal'
         }}
       />
+      <Stack.Screen 
+        name="all-achievements"
+        options={{
+          headerShown: false
+        }}
+      />
+      <Stack.Screen 
+        name="recent-workouts"
+        options={{
+          headerShown: false
+        }}
+      />
     </Stack>
   );
 }

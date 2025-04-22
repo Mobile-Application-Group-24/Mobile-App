@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, Platform, StatusBar } from 'react-native';
 import { useLocalSearchParams, useRouter, useNavigation, usePathname } from 'expo-router';
 import { TrendingUp, ChartBar, Calendar, Dumbbell, ArrowLeft } from 'lucide-react-native';
 import { LineChart } from 'react-native-chart-kit';
@@ -673,6 +673,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#E5E5EA',
     flexDirection: 'row',
     alignItems: 'center',
+    marginTop: Platform.OS === 'android' ? StatusBar.currentHeight || 0 : 47,
   },
   exerciseName: {
     fontSize: 20,
