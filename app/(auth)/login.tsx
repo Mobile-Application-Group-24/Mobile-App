@@ -24,7 +24,7 @@ export default function LoginScreen() {
 
       if (error) throw error;
       console.log('Login successful');
-      // Don't redirect here - auth state change will handle it
+      
     } catch (error) {
       console.error('Error during login:', error);
       Alert.alert('Error', error.message || 'An error occurred during login');

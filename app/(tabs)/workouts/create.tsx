@@ -9,7 +9,6 @@ import type { Exercise } from '@/utils/storage';
 import { Picker } from '@react-native-picker/picker';
 import { exercisesByWorkoutType } from '@/utils/exercises';
 
-// Get all exercises from exercisesByWorkoutType
 const getAllExercises = () => {
   const exercises: string[] = [];
   
@@ -19,7 +18,6 @@ const getAllExercises = () => {
     });
   });
   
-  // Sort alphabetically
   return exercises.sort();
 };
 
@@ -61,7 +59,7 @@ export default function CreateWorkoutScreen() {
       if (!session?.user?.id) return;
       
       const { data: existingWorkouts, error } = await supabase
-        .from('workout_plans')  // Fixed table name
+        .from('workout_plans')
         .select('*')
         .eq('user_id', session.user.id)
         .eq('workout_type', 'split');
@@ -188,7 +186,7 @@ export default function CreateWorkoutScreen() {
       if (!session?.user?.id) return;
       
       const { data: existingWorkouts, error } = await supabase
-        .from('workout_plans')  // Fixed table name
+        .from('workout_plans') 
         .select('*')
         .eq('user_id', session.user.id);
 

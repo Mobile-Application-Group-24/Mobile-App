@@ -96,7 +96,7 @@ export default function CreateGroupScreen() {
       
       const { data: urlData, error: signUrlError } = await supabase.storage
         .from(STORAGE_BUCKET)
-        .createSignedUrl(fileName, 60 * 60 * 24 * 365); // 1 year
+        .createSignedUrl(fileName, 60 * 60 * 24 * 365); 
 
       if (signUrlError) {
         console.error('Error creating signed URL:', JSON.stringify(signUrlError));

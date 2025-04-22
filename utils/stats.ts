@@ -11,18 +11,17 @@ export interface ExerciseStats {
   lastUsed: string;
   type?: 'chest' | 'back' | 'arms' | 'legs' | 'shoulders' | 'core';
   progress?: number;
-  volumeProgress?: number; // Add this field to match what the UI is expecting
+  volumeProgress?: number; 
 }
 
-// Interface for exercise history data points
 export interface ExerciseHistoryPoint {
   date: string;
   volume: number;
   maxWeight: number;
   avgWeight: number;
-  maxSetVolume?: number; // Add this field to include the highest set volume
-  totalReps?: number; // Add this field to include total repetitions
-  bestSetReps?: number; // Add this field to include the best set repetitions
+  maxSetVolume?: number; 
+  totalReps?: number; 
+  bestSetReps?: number; 
 }
 
 export async function getExerciseStatsFromWorkouts(userId: string): Promise<ExerciseStats[]> {
@@ -66,7 +65,6 @@ export async function getExerciseStatsFromWorkouts(userId: string): Promise<Exer
             exerciseStats[exercise.name].maxReps = reps;
           }
 
-          // Update maxWeight nur wenn Gewicht vorhanden
           if (weight > 0 && weight > exerciseStats[exercise.name].maxWeight) {
             exerciseStats[exercise.name].maxWeight = weight;
           }
@@ -77,7 +75,6 @@ export async function getExerciseStatsFromWorkouts(userId: string): Promise<Exer
         exerciseStats[exercise.name].totalVolume += sessionVolume;
         exerciseStats[exercise.name].totalSessions++;
 
-        // Update lastUsed wenn das Workout neuer ist
         if (workout.date > exerciseStats[exercise.name].lastUsed) {
           exerciseStats[exercise.name].lastUsed = workout.date;
         }
@@ -99,7 +96,6 @@ export async function getExerciseHistoryData(userId: string, exerciseName: strin
   try {
     console.log(`Fetching exercise history data for ${exerciseName}`);
     
-    // Fetch all workouts that might contain this exercise
     const { data: workouts, error: workoutError } = await supabase
       .from('workouts')
       .select('id, date, exercises')
@@ -112,21 +108,18 @@ export async function getExerciseHistoryData(userId: string, exerciseName: strin
     }
 
     console.log(`Found ${workouts?.length || 0} workouts to check for exercise history`);
-    
-    // Process each workout to extract data points for this specific exercise
+
     const historyPoints: ExerciseHistoryPoint[] = [];
     
     workouts?.forEach(workout => {
       if (!workout.exercises || !Array.isArray(workout.exercises)) return;
-      
-      // Find the specific exercise in this workout
+
       const exercise = workout.exercises.find(ex => 
         ex.name.toLowerCase() === exerciseName.toLowerCase()
       );
       
       if (!exercise || !exercise.setDetails || !Array.isArray(exercise.setDetails)) return;
-      
-      // Calculate metrics for this workout session
+
       let sessionVolume = 0;
       let sessionMaxWeight = 0;
       let totalReps = 0;
@@ -149,7 +142,7 @@ export async function getExerciseHistoryData(userId: string, exerciseName: strin
         
         
         const setVolume = weight * reps;
-        maxSetVolume = Math.max(maxSetVolume, setVolume); // Update maxSetVolume
+        maxSetVolume = Math.max(maxSetVolume, setVolume); 
         sessionVolume += setVolume;
         
         if (weight > 0) {

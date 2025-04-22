@@ -7,7 +7,7 @@ export function useSession() {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Add debugging for session loading
+
     console.log('Session hook initializing');
     
     const loadSession = async () => {
@@ -42,7 +42,6 @@ export function useSession() {
   return { session, isLoading };
 }
 
-// Add a utility function to check authentication directly
 export async function checkAuthState() {
   try {
     const { data, error } = await supabase.auth.getSession();

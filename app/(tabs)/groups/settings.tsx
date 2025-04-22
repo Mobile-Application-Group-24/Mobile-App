@@ -64,38 +64,35 @@ export default function GroupSettingsScreen() {
   const handleChangeCoverPhoto = async () => {
     if (!session?.user?.id || !groupId) return;
 
-    console.log("Starting cover photo change process"); // Debug log
+    console.log("Starting cover photo change process"); 
     
     try {
-      // Ensure the user is the group owner
       if (groupData.owner_id !== session.user.id) {
         Alert.alert('Permission Denied', 'Only the group owner can change the cover photo.');
         return;
       }
 
-      console.log("Requesting photo library permission"); // Debug log
+      console.log("Requesting photo library permission"); 
       
-      // Request permission explicitly
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      console.log("Permission status:", status); // Debug log
+      console.log("Permission status:", status); 
       
       if (status !== 'granted') {
         Alert.alert('Permission Denied', 'We need access to your photo library to update the cover photo.');
         return;
       }
 
-      console.log("Opening image picker"); // Debug log
+      console.log("Opening image picker"); 
 
-      // Make sure we're using the most direct approach to launch the image picker
       try {
         const result = await ImagePicker.launchImageLibraryAsync({
           mediaTypes: ImagePicker.MediaTypeOptions.Images,
           allowsEditing: true,
-          aspect: [16, 9], // Landscape aspect ratio for cover photos
+          aspect: [16, 9],
           quality: 0.8,
         });
 
-        console.log("Image picker completed, result:", result.canceled ? "Canceled" : "Image selected"); // Debug log
+        console.log("Image picker completed, result:", result.canceled ? "Canceled" : "Image selected"); 
 
         if (!result.canceled && result.assets && result.assets.length > 0) {
           const { uri } = result.assets[0];
@@ -103,14 +100,12 @@ export default function GroupSettingsScreen() {
          
           const fileName = `${session.user.id}/${groupId}_${Date.now()}.jpg`;
 
-          console.log("Preparing to upload:", fileName); // Debug log
+          console.log("Preparing to upload:", fileName); 
 
-          // Read file as Base64
           const base64 = await FileSystem.readAsStringAsync(uri, {
             encoding: FileSystem.EncodingType.Base64,
           });
 
-          // Convert Base64 string to Uint8Array
           const arrayBuffer = _base64ToArrayBuffer(base64);
 
          
@@ -121,7 +116,7 @@ export default function GroupSettingsScreen() {
               upsert: true,
             });
 
-          console.log("Upload result:", uploadData, uploadError); // Debug log
+          console.log("Upload result:", uploadData, uploadError);
 
           if (uploadError) {
             console.error('Upload error:', JSON.stringify(uploadError));
@@ -131,7 +126,7 @@ export default function GroupSettingsScreen() {
           
           const { data: signedUrlData, error: signedUrlError } = await supabase.storage
             .from(STORAGE_BUCKET)
-            .createSignedUrl(fileName, 60 * 60 * 24 * 365); // 1 year expiration
+            .createSignedUrl(fileName, 60 * 60 * 24 * 365);
 
           if (signedUrlError) {
             console.error('Error creating signed URL:', signedUrlError);
@@ -139,14 +134,13 @@ export default function GroupSettingsScreen() {
           }
 
           const coverImageUrl = signedUrlData.signedUrl;
-          console.log('Cover Image signed URL:', coverImageUrl); // Debug log
+          console.log('Cover Image signed URL:', coverImageUrl); 
 
           
           if (!coverImageUrl.includes('/sign/')) {
             console.warn('Warning: The URL does not include /sign/ path. Current URL:', coverImageUrl);
           }
 
-          // Update the group's cover image URL in the database
           const { error: updateError } = await supabase
             .from('groups')
             .update({ cover_image: coverImageUrl })
@@ -157,7 +151,6 @@ export default function GroupSettingsScreen() {
             throw updateError;
           }
 
-          // Update local state
           setGroupData(prev => ({ ...prev, cover_image: coverImageUrl }));
           Alert.alert('Success', 'Cover photo updated successfully', [
             { 
@@ -180,7 +173,6 @@ export default function GroupSettingsScreen() {
     } catch (error) {
       console.error('Error updating cover photo:', error);
       
-      // Display detailed error message
       if (typeof error === 'object' && error !== null && 'message' in error) {
         Alert.alert('Error', `Failed to update cover photo: ${(error as any).message}`);
       } else {
@@ -189,7 +181,6 @@ export default function GroupSettingsScreen() {
     }
   };
 
-  // Helper function to convert Base64 to ArrayBuffer
   function _base64ToArrayBuffer(base64: string) {
     const binary_string = atob(base64);
     const len = binary_string.length;
@@ -200,7 +191,6 @@ export default function GroupSettingsScreen() {
     return bytes;
   }
 
-  // Helper function for Base64 decoding
   function atob(data: string) {
     return Buffer.from(data, 'base64').toString('binary');
   }
@@ -208,7 +198,6 @@ export default function GroupSettingsScreen() {
   const handleSave = async () => {
     if (!groupId || !session?.user?.id) return;
     
-    // Ensure the user is the group owner
     if (groupData.owner_id !== session.user.id) {
       Alert.alert('Permission Denied', 'Only the group owner can modify group settings.');
       return;
@@ -249,7 +238,6 @@ export default function GroupSettingsScreen() {
   const handleDeleteGroup = () => {
     if (!groupId || !session?.user?.id) return;
     
-    // Ensure the user is the group owner
     if (groupData.owner_id !== session.user.id) {
       Alert.alert('Permission Denied', 'Only the group owner can delete the group.');
       return;

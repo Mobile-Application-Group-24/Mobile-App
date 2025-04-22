@@ -2,7 +2,6 @@ import { supabase } from './supabase';
 import Constants from 'expo-constants';
 import { NutritionSettings, MealTime } from './supabase';
 
-// Types for Deepseek API
 type Message = {
   role: 'user' | 'assistant' | 'system';
   content: string;
@@ -27,10 +26,8 @@ type DeepseekResponse = {
 
 export const DEEPSEEK_API_URL = 'https://api.deepseek.com/v1/chat/completions';
 
-// Get the API key from public environment variables
 const DEEPSEEK_API_KEY = process.env.EXPO_PUBLIC_DEEPSEEK_API_KEY;
 
-// Define workout-related types
 interface Exercise {
   name: string;
   sets: number;
@@ -43,13 +40,12 @@ interface Exercise {
 interface Workout {
   title: string;
   date: string;
-  duration: number; // in minutes
+  duration: number; 
   exercises: Exercise[];
   notes?: string;
   calories_burned?: number;
 }
 
-// Interface for workout plan
 interface WorkoutPlan {
   title: string;
   description?: string;
@@ -65,9 +61,8 @@ interface WorkoutPlan {
   user_id: string;
 }
 
-// System prompt that gives context about the app and user data access permissions
 const getSystemPrompt = async (userId: string) => {
-  // Fetch user's nutrition settings and workout data to provide context
+
   const { data: nutritionSettings, error: nutritionError } = await supabase
     .from('nutrition_settings')
     .select('*')
@@ -80,8 +75,7 @@ const getSystemPrompt = async (userId: string) => {
     .eq('user_id', userId)
     .order('created_at', { ascending: false })
     .limit(5);
-    
-  // Get user's workout plans to provide context
+
   const { data: workoutPlans, error: workoutPlansError } = await supabase
     .from('workout_plans')
     .select('*')
@@ -93,17 +87,14 @@ const getSystemPrompt = async (userId: string) => {
   console.log('Workout data fetched for prompt:', workoutData);
   console.log('Workout plans fetched for prompt:', workoutPlans);
 
-  // Load available exercises for reference
   const { exercisesByWorkoutType } = await import('./exercises');
-  
-  // Format the exercises into a single array for the prompt
+
   const allExercises = Object.values(exercisesByWorkoutType).flat().map(ex => ({
     id: ex.id,
     name: ex.name,
     type: ex.type
   }));
 
-  // Get just a sample of exercises to avoid making the prompt too large
   const exerciseSample = allExercises.slice(0, 20);
 
   return `You are an AI fitness coach assistant for a GymApp. 
@@ -192,7 +183,6 @@ export const sendMessageToDeepseek = async (
   userId: string
 ): Promise<string> => {
   try {
-    // Add system message with context about the user
     const systemPrompt = await getSystemPrompt(userId);
     const fullMessages = [
       { role: 'system', content: systemPrompt },
@@ -235,24 +225,20 @@ export const sendMessageToDeepseek = async (
   }
 };
 
-// Function to update user nutrition data
 export const updateNutritionData = async (
   userId: string,
   nutritionData: Partial<NutritionSettings>
 ) => {
   try {
-    // Log input data
     console.log('updateNutritionData called with userId:', userId);
     console.log('nutritionData received:', JSON.stringify(nutritionData, null, 2));
 
-    // Validate the input data structure
     if (!nutritionData) {
       const error = new Error('No nutrition data provided');
       console.error(error);
       throw error;
     }
 
-    // Check if a record already exists for this user
     const { data: existingData, error: checkError } = await supabase
       .from('nutrition_settings')
       .select('*')
@@ -266,10 +252,8 @@ export const updateNutritionData = async (
 
     console.log('Existing nutrition settings:', existingData);
 
-    // Format meal times properly if provided
     let formattedData: any = { ...nutritionData };
-    
-    // If meal_times is provided, ensure it's properly formatted as an array
+
     if (nutritionData.meal_times && Array.isArray(nutritionData.meal_times)) {
       formattedData.meal_times = nutritionData.meal_times.map((meal: any) => {
         console.log('Processing meal time:', meal);
@@ -281,12 +265,10 @@ export const updateNutritionData = async (
       });
     }
 
-    // Add updated_at timestamp
     formattedData.updated_at = new Date().toISOString();
     
     console.log('Formatted data for upsert:', JSON.stringify(formattedData, null, 2));
 
-    // If record exists, update it; otherwise insert a new record
     console.log('Upserting nutrition settings in Supabase...');
     const { data, error } = await supabase
       .from('nutrition_settings')
@@ -300,8 +282,7 @@ export const updateNutritionData = async (
       console.error('Error updating nutrition settings:', error);
       throw error;
     }
-    
-    // Log success for debugging
+
     console.log('Successfully updated nutrition settings:', data);
     
     return data;
@@ -311,17 +292,14 @@ export const updateNutritionData = async (
   }
 };
 
-// Function to add a new workout entry
 export const addWorkoutEntry = async (
   userId: string,
   workoutData: Workout
 ) => {
   try {
-    // Log input data
     console.log('addWorkoutEntry called with userId:', userId);
     console.log('workoutData received:', JSON.stringify(workoutData, null, 2));
 
-    // Validate workout data
     if (!workoutData.title || !workoutData.date || !workoutData.exercises || workoutData.exercises.length === 0) {
       const error = new Error('Invalid workout data. Title, date, and exercises are required.');
       console.error(error);
@@ -333,7 +311,6 @@ export const addWorkoutEntry = async (
       throw error;
     }
 
-    // Format the workout data for the database
     const formattedWorkout = {
       user_id: userId,
       title: workoutData.title,
@@ -347,7 +324,6 @@ export const addWorkoutEntry = async (
     
     console.log('Formatted workout for insert:', JSON.stringify(formattedWorkout, null, 2));
 
-    // Insert the workout
     console.log('Inserting workout into Supabase...');
     const { data, error } = await supabase
       .from('workouts')
@@ -358,8 +334,7 @@ export const addWorkoutEntry = async (
       console.error('Error adding workout:', error);
       throw error;
     }
-    
-    // Log success for debugging
+
     console.log('Successfully added workout:', data);
     
     return data;
@@ -379,7 +354,6 @@ export async function generateWeightSuggestions(userId: string, workoutData: any
   try {
     console.log('Generating weight suggestions from DeepSeek AI');
 
-    // Format the workout data for the AI prompt
     const workoutHistory = JSON.stringify(workoutData);
     
     const messages = [
@@ -411,9 +385,8 @@ export async function generateWeightSuggestions(userId: string, workoutData: any
 
     const apiResponse = await sendMessageToDeepseek(messages, userId);
     
-    // Extract the JSON array from the response
     try {
-      // Find JSON content in the response
+
       const jsonMatch = apiResponse.match(/\[[\s\S]*\]/);
       if (jsonMatch) {
         const jsonString = jsonMatch[0];
@@ -441,7 +414,6 @@ export async function generateExerciseSuggestions(userId: string) {
   try {
     console.log('Generating exercise suggestions from DeepSeek AI');
 
-    // Get user's workout data to understand their current routine
     const { data: workouts, error } = await supabase
       .from('workouts')
       .select('*')
@@ -454,11 +426,8 @@ export async function generateExerciseSuggestions(userId: string) {
       return [];
     }
 
-    // Import the exercises list to provide to DeepSeek
-    // We'll import this dynamically to avoid circular dependencies
     const { exercisesByWorkoutType } = await import('./exercises');
-    
-    // Format the exercises into a single array for DeepSeek
+
     const allExercises = Object.values(exercisesByWorkoutType).flat().map(ex => ({
       id: ex.id,
       name: ex.name,
@@ -504,18 +473,16 @@ export async function generateExerciseSuggestions(userId: string) {
     ];
 
     const apiResponse = await sendMessageToDeepseek(messages, userId);
-    
-    // Extract the JSON array from the response
+
     try {
-      // Find JSON content in the response
+
       const jsonMatch = apiResponse.match(/\[[\s\S]*\]/);
       if (jsonMatch) {
         const jsonString = jsonMatch[0];
         const suggestions = JSON.parse(jsonString);
-        
-        // Validate that each suggested exercise exists in our database
+
         return suggestions.filter(suggestion => {
-          // Check if the suggested exercise exists in our database
+
           const exerciseExists = Object.values(exercisesByWorkoutType).flat().some(
             ex => ex.name.toLowerCase() === suggestion.exercise.toLowerCase()
           );
@@ -540,24 +507,21 @@ export async function generateExerciseSuggestions(userId: string) {
   }
 }
 
-// Function to create a new workout plan
 export const createWorkoutPlan = async (
   userId: string,
   planData: Omit<WorkoutPlan, 'user_id'>
 ) => {
   try {
-    // Log input data
+
     console.log('createWorkoutPlan called with userId:', userId);
     console.log('planData received:', JSON.stringify(planData, null, 2));
 
-    // Validate plan data
     if (!planData.title || !planData.exercises || planData.exercises.length === 0) {
       const error = new Error('Invalid workout plan data. Title and exercises are required.');
       console.error(error);
       throw error;
     }
 
-    // Format the workout plan data for the database
     const formattedPlan = {
       user_id: userId,
       title: planData.title,
@@ -575,7 +539,6 @@ export const createWorkoutPlan = async (
     
     console.log('Formatted workout plan for insert:', JSON.stringify(formattedPlan, null, 2));
 
-    // Insert directly into the workout_plans table
     const { data, error } = await supabase
       .from('workout_plans')
       .insert(formattedPlan)
@@ -585,8 +548,7 @@ export const createWorkoutPlan = async (
       console.error('Error adding workout plan:', error);
       throw error;
     }
-    
-    // Log success for debugging
+
     console.log('Successfully added workout plan:', data);
     
     return data;

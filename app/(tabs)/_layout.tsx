@@ -3,7 +3,6 @@ import { Dumbbell, Users, Brain, Apple, User, ChartBar } from 'lucide-react-nati
 import React, { useEffect, useState } from 'react';
 import { Platform, Keyboard, View, StyleSheet } from 'react-native';
 
-// Export the tab bar height as a constant for reuse in other components
 export const TAB_BAR_HEIGHT = 60;
 
 export default function TabLayout() {
@@ -108,6 +107,6 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    zIndex: -1, // Ensure it stays behind other content
+    zIndex: -1, 
   }
 });

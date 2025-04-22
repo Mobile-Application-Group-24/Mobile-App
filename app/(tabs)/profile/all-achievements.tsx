@@ -64,7 +64,6 @@ export default function AllAchievementsScreen() {
       const hourAchievements = generateHourAchievements(hours);
       enhancedAchievements.push(...hourAchievements);
       
-      // Get the exercise achievements
       if (profileData.exercise_stats) {
         const exerciseAchievements = generateExerciseAchievements(profileData.exercise_stats);
         enhancedAchievements.push(...exerciseAchievements);

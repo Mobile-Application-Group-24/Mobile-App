@@ -13,9 +13,9 @@ export default function WorkoutsScreen() {
   const { session } = useSession();
   const [showOwnWorkouts, setShowOwnWorkouts] = useState(true);
   const [currentStreak, setCurrentStreak] = useState(0);
-  const [weeklyCompletion, setWeeklyCompletion] = useState(0); // Percentage
-  const [totalTrainingDays, setTotalTrainingDays] = useState(0); // Training days this week
-  const [completedTrainingDays, setCompletedTrainingDays] = useState(0); // Completed training days this week
+  const [weeklyCompletion, setWeeklyCompletion] = useState(0);
+  const [totalTrainingDays, setTotalTrainingDays] = useState(0); 
+  const [completedTrainingDays, setCompletedTrainingDays] = useState(0); 
   const [workoutPlans, setWorkoutPlans] = useState<WorkoutPlan[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingPlans, setIsLoadingPlans] = useState(true);
@@ -39,7 +39,6 @@ export default function WorkoutsScreen() {
     return new Date().toLocaleDateString('en-US', { weekday: 'long' });
   };
 
-  // Load saved filter type when component mounts
   useEffect(() => {
     const loadFilter = async () => {
       try {
@@ -54,7 +53,6 @@ export default function WorkoutsScreen() {
     loadFilter();
   }, []);
 
-  // Store filter type in AsyncStorage to persist it across app restarts
   useEffect(() => {
     const saveFilter = async () => {
       try {
@@ -66,7 +64,6 @@ export default function WorkoutsScreen() {
     saveFilter();
   }, [filterType]);
 
-  // Separate function to load only today's workout
   const loadTodaysWorkout = async () => {
     try {
       setIsLoadingToday(true);
@@ -102,7 +99,7 @@ export default function WorkoutsScreen() {
         
         const today = new Date();
         const isTodaysWorkoutCompleted = completedWorkouts.some(w => {
-          // Make sure to check both start_time and done status
+
           if (!w.start_time || !w.done) return false;
           
           const workoutStartTime = parseISO(w.start_time);
@@ -132,7 +129,6 @@ export default function WorkoutsScreen() {
     }
   };
 
-  // Separate function to load only workout plans with filtering
   const loadWorkoutPlans = async () => {
     try {
       setIsLoadingPlans(true);
@@ -144,38 +140,33 @@ export default function WorkoutsScreen() {
         return;
       }
 
-      // Fetch all workout plans first
       const data = await getWorkoutPlans(session.user.id);
-      
-      // Store the current filter type to use for filtering
+
       const currentFilter = filterType;
       console.log(`Applying filter: ${currentFilter}`);
-      
-      // Apply filter consistently every time workouts are loaded
+
       let filteredData = data;
       if (currentFilter !== 'all') {
         filteredData = data.filter(plan => plan.workout_type === currentFilter);
       }
 
-      // Sort the plans by weekday (only matters for split plans)
       const weekdayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
       filteredData.sort((a, b) => {
-        // Sort split plans by weekday
+
         if (a.workout_type === 'split' && b.workout_type === 'split') {
           return weekdayOrder.indexOf(a.day_of_week || '') - weekdayOrder.indexOf(b.day_of_week || '');
         }
-        // Always show split plans before custom plans
+
         else if (a.workout_type === 'split' && b.workout_type === 'custom') {
           return -1;
         }
         else if (a.workout_type === 'custom' && b.workout_type === 'split') {
           return 1;
         }
-        // Default sort by title for plans of the same type
+
         return a.title.localeCompare(b.title);
       });
 
-      // Only set the filtered and sorted workout plans
       setWorkoutPlans(filteredData);
       console.log(`Loaded ${filteredData.length} ${currentFilter} workout plans out of ${data.length} total plans`);
       
@@ -187,7 +178,6 @@ export default function WorkoutsScreen() {
     }
   };
 
-  // Original loadWorkouts function is now split
   const loadWorkouts = async () => {
     try {
       setIsLoading(true);
@@ -201,7 +191,6 @@ export default function WorkoutsScreen() {
         return;
       }
 
-      // Load today's workout and workout plans concurrently
       await Promise.all([
         loadTodaysWorkout(),
         loadWorkoutPlans()
@@ -241,7 +230,6 @@ export default function WorkoutsScreen() {
       let completedDaysThisWeek = 0;
       let plannedDaysThisWeek = 0;
 
-      // Count all training days for the full week, not just up to today
       for (let i = 0; i < 7; i++) {
         const currentDay = addDays(startOfCurrentWeek, i);
         const dayName = format(currentDay, 'EEEE');
@@ -249,11 +237,10 @@ export default function WorkoutsScreen() {
         if (schedule[dayName]) {
           plannedDaysThisWeek++;
 
-          // Only count completed workouts for days that have already passed
           if (currentDay <= today) {
-            // Find workout that was completed (done) and has a start time on this day
+            
             const workoutForThisDay = workouts.find(w => {
-              // Check if the workout has a start time before checking same day
+              
               if (!w.start_time || !w.done) return false;
               
               const workoutStartTime = parseISO(w.start_time);
@@ -270,27 +257,23 @@ export default function WorkoutsScreen() {
 
       setCompletedTrainingDays(completedDaysThisWeek);
 
-      // Calculate percentage based on total planned workouts for the whole week
       const weeklyPercentage = plannedDaysThisWeek > 0 
         ? Math.round((completedDaysThisWeek / plannedDaysThisWeek) * 100)
         : 0;
 
       setWeeklyCompletion(weeklyPercentage);
 
-      // Start streak calculation - include today in the streak
       let streak = 0;
-      let currentDate = today; // Start with today instead of yesterday
+      let currentDate = today;
       let consecutiveDays = true;
 
-      // Look back up to 100 days to find the streak
       for (let i = 0; i <= 100; i++) {
         const dayName = format(currentDate, 'EEEE');
-        
-        // Check if this is a scheduled workout day
+
         if (schedule[dayName]) {
-          // Check if we have a completed workout for this day using start_time
+   
           const workoutForThisDay = workouts.find(w => {
-            // Only consider workouts that are completed (done) and have a start time
+            
             if (!w.start_time || !w.done) return false;
             
             const workoutStartTime = parseISO(w.start_time);
@@ -299,16 +282,15 @@ export default function WorkoutsScreen() {
           });
 
           if (workoutForThisDay) {
-            // Workout was completed, continue the streak
+ 
             streak++;
-          } else if (i > 0) { // Skip current day if no workout yet
-            // Missed a workout, streak is broken
+          } else if (i > 0) { 
+
             consecutiveDays = false;
             break;
           }
         }
         
-        // Move to the previous day
         currentDate = subDays(currentDate, 1);
       }
 
@@ -393,7 +375,6 @@ export default function WorkoutsScreen() {
       newFilter = 'all';
     }
     
-    // Set the new filter state
     setFilterType(newFilter);
     
     console.log(`Filter changed to: ${newFilter}`);
@@ -404,19 +385,15 @@ export default function WorkoutsScreen() {
       if (session?.user?.id) {
         console.log("Screen focused, current filter:", filterType);
         
-        // Load today's workout
         loadTodaysWorkout();
-        
-        // Load workout plans with current filter
+
         loadWorkoutPlans();
-        
-        // Calculate streak
+
         calculateStreak();
       }
-    }, [session?.user?.id, filterType]) // Add filterType as a dependency
+    }, [session?.user?.id, filterType]) 
   );
 
-  // Initial load effect
   useEffect(() => {
     if (session?.user?.id) {
       loadWorkouts();

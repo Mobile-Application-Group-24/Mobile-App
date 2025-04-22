@@ -7,7 +7,7 @@ import { useAuth } from '@/providers/AuthProvider';
 import { DEFAULT_AVATAR } from '@/utils/avatar';
 
 export default function GroupScreen() {
-  const { id, viaLink } = useLocalSearchParams(); // viaLink is either "true" or undefined
+  const { id, viaLink } = useLocalSearchParams(); 
   const router = useRouter();
   const { session } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -24,11 +24,11 @@ export default function GroupScreen() {
       setLoading(true);
       setError(null);
 
-      // Fetch group details
+      
       const groupData = await getGroupDetails(id as string);
       setGroup(groupData);
 
-      // Fetch group members
+      
       const membersData = await getGroupMembers(id as string);
       setMembers(membersData.sort((a, b) => b.points - a.points));
     } catch (err) {
@@ -189,7 +189,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   placeholder: {
-    width: 40, // Same width as backButton for symmetry
+    width: 40, 
   },
   scrollContent: {
     flex: 1,

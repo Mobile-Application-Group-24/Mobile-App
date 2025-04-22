@@ -24,7 +24,7 @@ export default function ScheduleScreen() {
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
 
-  // Calculate training days per week based on non-rest days in the schedule
+  
   const calculateTrainingDaysPerWeek = (schedule: TrainingSchedule[]): number => {
     const activeTrainingDays = schedule.filter(day => day.workout !== 'Rest').length;
     console.log(`Calculated training days: ${activeTrainingDays}`);
@@ -32,7 +32,7 @@ export default function ScheduleScreen() {
   };
 
   useEffect(() => {
-    // Show initial loading screen for a short time to ensure component mounts properly
+    
     const timer = setTimeout(() => {
       setInitialLoading(false);
       console.log("SCHEDULE SCREEN: Initial loading completed");
@@ -41,7 +41,7 @@ export default function ScheduleScreen() {
     return () => clearTimeout(timer);
   }, []);
 
-  // Log training days count whenever schedule changes
+  
   useEffect(() => {
     if (!initialLoading) {
       const daysCount = calculateTrainingDaysPerWeek(schedule);
@@ -56,11 +56,11 @@ export default function ScheduleScreen() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
-      // Calculate training days based on non-rest days in schedule
+      
       const trainingDaysPerWeek = calculateTrainingDaysPerWeek(schedule);
       console.log(`Saving ${trainingDaysPerWeek} training days per week to the database`);
 
-      // First, update the profile with the schedule and onboarding status
+      
       console.log("Saving schedule, training days, and marking user as onboarded...");
       const { error } = await supabase
         .from('profiles')
@@ -73,18 +73,18 @@ export default function ScheduleScreen() {
 
       if (error) throw error;
       
-      // Next, generate and save the workouts based on the schedule
+      
       console.log("Generating workouts based on training split...");
       const workoutsCreated = await generateWorkoutsFromSchedule(schedule, user.id);
       console.log(`Created ${workoutsCreated} workout templates from schedule`);
       
       console.log("Successfully completed onboarding, redirecting to tabs...");
       
-      // Force a delay before navigation to ensure database updates are processed
+      
       setTimeout(() => {
         console.log("Executing navigation to tabs with timestamp...");
         try {
-          // Add a timestamp to force a fresh navigation
+          
           router.replace(`/(tabs)/workouts?t=${Date.now()}`);
           console.log("Navigation command issued successfully");
         } catch (navError) {
@@ -106,7 +106,7 @@ export default function ScheduleScreen() {
     });
   };
   
-  // Display a loading indicator while the component is mounting
+ 
   if (initialLoading) {
     return (
       <View style={[styles.container, styles.loadingContainer]}>
@@ -243,7 +243,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   completeButton: {
-    backgroundColor: '#007AFF', // Changed from #34C759 (green) to #007AFF (blue)
+    backgroundColor: '#007AFF', 
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',

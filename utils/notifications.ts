@@ -2,10 +2,8 @@ import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import { NutritionSettings } from './supabase';
 
-// Flag to suppress notifications during app startup - default to true to suppress on startup
 let isStartupSuppression = true;
 
-// Configure notification behavior - better handling for both platforms
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
@@ -15,36 +13,30 @@ Notifications.setNotificationHandler({
   }),
 });
 
-// Set notification suppression during startup - call this during app initialization
 export function suppressNotificationsOnStartup() {
   isStartupSuppression = true;
   console.log('Notification suppression enabled during startup');
 }
 
-// Enable notifications after startup is complete - call this when app is fully loaded
 export function enableNotificationsAfterStartup() {
   isStartupSuppression = false;
   console.log('Startup complete, notifications now enabled');
 }
 
-// Automatically enable notifications after a delay (5 seconds)
 setTimeout(() => {
   enableNotificationsAfterStartup();
   console.log('Automatically enabled notifications after startup delay');
 }, 5000);
 
-// Check if notifications are currently suppressed
 export function areNotificationsSuppressed() {
   return isStartupSuppression;
 }
 
-// Request notification permissions with more comprehensive handling
 export async function requestNotificationPermissions() {
-  // Check if device has notification capabilities
+
   const devicePushTokenData = await Notifications.getDevicePushTokenAsync();
   console.log('Device push token:', devicePushTokenData);
 
-  // Request permissions
   const { status: existingStatus } = await Notifications.getPermissionsAsync();
   console.log('Existing notification permissions status:', existingStatus);
   
@@ -57,7 +49,6 @@ export async function requestNotificationPermissions() {
     console.log('New notification permissions status:', status);
   }
 
-  // For Android, check if we need additional channel setup
   if (Platform.OS === 'android') {
     await setupNotificationChannels();
   }
@@ -65,7 +56,6 @@ export async function requestNotificationPermissions() {
   return finalStatus === 'granted';
 }
 
-// Export setup channels function so it can be called from _layout.tsx
 export async function setupNotificationChannels() {
   if (Platform.OS === 'android') {
     await Notifications.setNotificationChannelAsync('meal-reminders', {
@@ -87,8 +77,6 @@ export async function setupNotificationChannels() {
     console.log('Android notification channels set up successfully');
   }
 }
-
-// Schedule a notification with improved trigger format
 export async function scheduleNotification(
   title: string,
   body: string,
@@ -96,7 +84,6 @@ export async function scheduleNotification(
   channelId?: string
 ) {
   try {
-    // Check if notifications are suppressed during startup
     if (isStartupSuppression) {
       console.log(`Notification "${title}" suppressed during app startup`);
       return null;
@@ -109,28 +96,24 @@ export async function scheduleNotification(
       body,
       sound: true,
     };
-    
-    // Add Android specific properties
+
     if (Platform.OS === 'android' && channelId) {
       notificationContent.channelId = channelId;
       notificationContent.priority = Notifications.AndroidNotificationPriority.HIGH;
     }
 
-    // Fix for Android's potential issue with exact time triggers
     let finalTrigger = trigger;
     if (Platform.OS === 'android' && trigger && 'hour' in trigger && 'minute' in trigger) {
       const date = new Date();
       date.setHours(trigger.hour as number, trigger.minute as number, 0, 0);
-      
-      // If the time has already passed today, set it for tomorrow
+
       if (date.getTime() < Date.now()) {
         date.setDate(date.getDate() + 1);
       }
-      
-      // On Android, we use a date-based trigger instead of hour/minute
+
       finalTrigger = {
         date: date,
-        repeats: false, // We'll handle repetition manually
+        repeats: false, 
       };
       
       console.log(`Android: converted time trigger to date: ${date.toISOString()}`);
@@ -149,10 +132,8 @@ export async function scheduleNotification(
   }
 }
 
-// Send an immediate notification to test if notifications work at all
 export async function sendImmediateTestNotification() {
   try {
-    // Check if notifications are suppressed during startup
     if (isStartupSuppression) {
       console.log(`Immediate test notification suppressed during app startup`);
       return null;
@@ -163,8 +144,7 @@ export async function sendImmediateTestNotification() {
       console.log('No notification permissions');
       return null;
     }
-    
-    // Create a notification that triggers immediately
+
     const notificationId = await Notifications.scheduleNotificationAsync({
       content: {
         title: 'Immediate Test Notification',
@@ -172,7 +152,7 @@ export async function sendImmediateTestNotification() {
         sound: true,
         priority: Notifications.AndroidNotificationPriority.MAX,
       },
-      trigger: null, // null trigger means send immediately
+      trigger: null, 
     });
     
     console.log(`Immediate test notification sent with ID: ${notificationId}`);
@@ -183,7 +163,6 @@ export async function sendImmediateTestNotification() {
   }
 }
 
-// Test notification function to verify notification system is working
 export async function sendTestNotification() {
   try {
     const hasPermission = await requestNotificationPermissions();
@@ -191,12 +170,11 @@ export async function sendTestNotification() {
       console.log('No notification permissions');
       return null;
     }
-    
-    // Schedule a notification for 5 seconds in the future
+
     const notificationId = await scheduleNotification(
       'Test Notification',
       'This is a test notification to verify the system is working.',
-      { seconds: 5 }, // Will trigger 5 seconds after scheduling
+      { seconds: 5 }, 
       Platform.OS === 'android' ? 'meal-reminders' : undefined
     );
     
@@ -208,7 +186,6 @@ export async function sendTestNotification() {
   }
 }
 
-// List all scheduled notifications for debugging
 export async function listScheduledNotifications() {
   const scheduledNotifications = await Notifications.getAllScheduledNotificationsAsync();
   console.log('Currently scheduled notifications:', 
@@ -221,23 +198,19 @@ export async function listScheduledNotifications() {
   return scheduledNotifications;
 }
 
-// Cancel all scheduled notifications
 export async function cancelAllNotifications() {
   await Notifications.cancelAllScheduledNotificationsAsync();
   console.log('All notifications canceled');
 }
 
-// Schedule meal notifications based on settings with improved platform handling and error reporting
 export async function scheduleMealNotifications(settings: NutritionSettings): Promise<string[]> {
   try {
     console.log('Scheduling meal notifications with settings:', JSON.stringify(settings, null, 2));
-    
-    // Clear any existing meal notifications first
+
     await cancelExistingMealNotifications();
     
     const notificationIds: string[] = [];
     
-    // Filter to only enabled meal times
     const enabledMealTimes = settings.meal_times.filter(meal => meal.enabled);
     
     if (enabledMealTimes.length === 0) {
@@ -245,9 +218,7 @@ export async function scheduleMealNotifications(settings: NutritionSettings): Pr
       return [];
     }
     
-    // Create notifications for each enabled meal time
     for (const meal of enabledMealTimes) {
-      // Parse the time string (format: "HH:MM")
       const [hoursStr, minutesStr] = meal.time.split(':');
       const hours = parseInt(hoursStr, 10);
       const minutes = parseInt(minutesStr, 10);
@@ -256,31 +227,26 @@ export async function scheduleMealNotifications(settings: NutritionSettings): Pr
         console.error(`Invalid time format for ${meal.name}: ${meal.time}`);
         continue;
       }
-      
-      // Create a Date object for today at the specified time
+
       const scheduledTime = new Date();
       scheduledTime.setHours(hours, minutes, 0, 0);
-      
-      // If the time has already passed today, schedule for tomorrow
+
       if (scheduledTime <= new Date()) {
         scheduledTime.setDate(scheduledTime.getDate() + 1);
         console.log(`Time already passed for ${meal.name}, scheduling for tomorrow at ${hours}:${minutes}`);
       }
-      
-      // Calculate trigger in seconds from now (precise timing)
+
       const now = new Date();
       const triggerSeconds = Math.floor((scheduledTime.getTime() - now.getTime()) / 1000);
       
       console.log(`Scheduling ${meal.name} notification for ${scheduledTime.toLocaleString()} (${triggerSeconds} seconds from now)`);
-      
-      // Schedule the meal notification with precise trigger
+
       const notificationContent = {
         title: `Time for ${meal.name}!`,
         body: `Don't forget to log your ${meal.name.toLowerCase()} in the app.`,
         data: { type: 'meal', mealName: meal.name },
       };
-      
-      // Use exact timing for the notification
+
       const notificationId = await scheduleNotificationWithExactTime(
         notificationContent,
         scheduledTime
@@ -299,22 +265,18 @@ export async function scheduleMealNotifications(settings: NutritionSettings): Pr
   }
 }
 
-// Function to schedule notification at an exact time
 async function scheduleNotificationWithExactTime(content: any, scheduledTime: Date): Promise<string> {
   try {
-    // Check if notifications are suppressed during startup
     if (isStartupSuppression) {
       console.log(`Notification "${content.title}" suppressed during app startup`);
       return '';
     }
 
-    // Create a trigger for the exact date
     const trigger = {
       type: 'date',
       date: scheduledTime,
     };
-    
-    // Schedule the notification with the trigger
+
     const notificationId = await scheduleNotificationWithTrigger(content, trigger);
     return notificationId;
   } catch (error) {
@@ -323,23 +285,19 @@ async function scheduleNotificationWithExactTime(content: any, scheduledTime: Da
   }
 }
 
-// Generic function to schedule a notification with a specific trigger
 async function scheduleNotificationWithTrigger(content: any, trigger: any): Promise<string> {
   try {
-    // Check if notifications are suppressed during startup
     if (isStartupSuppression) {
       console.log(`Notification "${content.title}" suppressed during app startup`);
       return '';
     }
 
-    // Request permissions
     const { status } = await Notifications.getPermissionsAsync();
     if (status !== 'granted') {
       console.log('Notification permission not granted');
       return '';
     }
-    
-    // Schedule the notification
+
     const notificationId = await Notifications.scheduleNotificationAsync({
       content: {
         title: content.title,
@@ -357,17 +315,14 @@ async function scheduleNotificationWithTrigger(content: any, trigger: any): Prom
   }
 }
 
-// Helper function to cancel existing meal notifications
 async function cancelExistingMealNotifications(): Promise<void> {
   try {
     const scheduledNotifications = await Notifications.getAllScheduledNotificationsAsync();
-    
-    // Filter for meal notifications
+
     const mealNotifications = scheduledNotifications.filter(
       notification => notification.content.data?.type === 'meal'
     );
-    
-    // Cancel each meal notification
+
     for (const notification of mealNotifications) {
       await Notifications.cancelScheduledNotificationAsync(notification.identifier);
       console.log(`Cancelled existing meal notification: ${notification.identifier}`);
@@ -379,7 +334,6 @@ async function cancelExistingMealNotifications(): Promise<void> {
   }
 }
 
-// Cancel meal notifications with improved logging
 export async function cancelMealNotifications() {
   console.log('Canceling all existing meal notifications...');
   const scheduledNotifications = await Notifications.getAllScheduledNotificationsAsync();
@@ -396,19 +350,16 @@ export async function cancelMealNotifications() {
   console.log(`Canceled ${cancelCount} meal notifications in total`);
 }
 
-// Schedule water intake reminders with more reliable implementation
 export async function scheduleWaterReminders(
   waterNotifications: boolean, 
   intervalHours: number
 ) {
   try {
-    // Check if notifications are suppressed during startup
     if (isStartupSuppression) {
       console.log(`Water reminders suppressed during app startup`);
       return null;
     }
 
-    // Cancel any existing water reminders
     await cancelWaterReminders();
 
     if (!waterNotifications || intervalHours <= 0) {
@@ -417,18 +368,15 @@ export async function scheduleWaterReminders(
     }
 
     console.log(`Scheduling water reminder with interval of ${intervalHours} hours`);
-    
-    // Schedule the first water reminder in 30 minutes (not seconds) to avoid immediate notification
+
     const initialDelayMinutes = 30;
     const secondsInterval = intervalHours * 60 * 60;
-    
-    // Calculate the time for the first notification
+
     const firstReminderTime = new Date(Date.now() + initialDelayMinutes * 60 * 1000);
     console.log(`First water reminder scheduled for: ${firstReminderTime.toLocaleString()}`);
-    
-    // Different implementation for iOS and Android
+ 
     if (Platform.OS === 'ios') {
-      // For iOS, better to use date-based trigger for the first notification to prevent immediate firing
+ 
       const id = await Notifications.scheduleNotificationAsync({
         content: {
           title: 'Water Reminder',
@@ -440,7 +388,7 @@ export async function scheduleWaterReminders(
         },
       });
       
-      // Then schedule the recurring notification with interval
+ 
       const recurringId = await Notifications.scheduleNotificationAsync({
         content: {
           title: 'Water Reminder',
@@ -456,7 +404,7 @@ export async function scheduleWaterReminders(
       console.log(`iOS water reminders scheduled with IDs: ${id} (first at ${firstReminderTime.toLocaleTimeString()}), ${recurringId} (recurring every ${intervalHours} hours)`);
       return { firstId: id, recurringId: recurringId };
     } else {
-      // For Android, use explicit date-based triggers
+      
       const initialId = await Notifications.scheduleNotificationAsync({
         content: {
           title: 'Water Reminder',
@@ -470,7 +418,7 @@ export async function scheduleWaterReminders(
         },
       });
       
-      // Schedule additional reminders at specific times throughout the day
+  
       const reminderIds = [];
       for (let i = 1; i <= 4; i++) {
         const reminderTime = new Date(Date.now() + ((initialDelayMinutes + (intervalHours * 60 * i)) * 60 * 1000));
@@ -501,7 +449,6 @@ export async function scheduleWaterReminders(
   }
 }
 
-// Cancel water reminders
 export async function cancelWaterReminders() {
   console.log('Canceling water reminders...');
   const scheduledNotifications = await Notifications.getAllScheduledNotificationsAsync();
@@ -514,10 +461,9 @@ export async function cancelWaterReminders() {
   }
 }
 
-// Test notification function with exact time for debugging
 export async function testExactTimeNotification(hour: number, minute: number) {
   try {
-    // Check if notifications are suppressed during startup
+    
     if (isStartupSuppression) {
       console.log(`Exact time test notification suppressed during app startup`);
       return null;
@@ -528,13 +474,11 @@ export async function testExactTimeNotification(hour: number, minute: number) {
       console.log('No notification permissions');
       return null;
     }
-    
-    // Create a date object for the specified time
+   
     const now = new Date();
     const scheduledTime = new Date();
     scheduledTime.setHours(hour, minute, 0, 0);
-    
-    // If this time already passed today, set it for tomorrow
+
     if (scheduledTime <= now) {
       scheduledTime.setDate(scheduledTime.getDate() + 1);
       console.log(`Time ${hour}:${minute} already passed, scheduling for tomorrow: ${scheduledTime.toLocaleString()}`);
@@ -542,10 +486,8 @@ export async function testExactTimeNotification(hour: number, minute: number) {
       console.log(`Scheduling for today at ${hour}:${minute}: ${scheduledTime.toLocaleString()}`);
     }
     
-    // Calculate time until notification in minutes
     const minutesUntilNotification = Math.round((scheduledTime.getTime() - now.getTime()) / 60000);
-    
-    // Create appropriate trigger based on platform
+
     let trigger: any;
     if (Platform.OS === 'ios') {
       trigger = {

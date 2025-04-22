@@ -39,7 +39,6 @@ export default function MembersScreen() {
       const data = await getGroupMembers(groupId as string);
       setMembers(data);
       
-      // Check if current user is owner
       const currentUserId = session?.user?.id;
       const currentUserMember = data.find(member => member.user_id === currentUserId);
       setIsOwner(currentUserMember?.role === 'owner');
@@ -62,7 +61,6 @@ export default function MembersScreen() {
       
       await removeMember(groupId as string, userId);
       
-      // Update members list
       setMembers(prevMembers => prevMembers.filter(member => member.user_id !== userId));
       
       Alert.alert('Success', 'Member removed from the group');
@@ -138,7 +136,6 @@ export default function MembersScreen() {
           'There was an issue creating the invitation in the database, but we\'ve created a temporary link that should still work.'
         );
         
-        // Generate a fallback code if we hit an error
         const fallbackCode = Math.random().toString(36).substring(2, 10).toUpperCase();
         const deepLink = Linking.createURL(`groups/joingroup`, {
           queryParams: { code: fallbackCode, groupId: groupId as string }
@@ -271,7 +268,7 @@ export default function MembersScreen() {
                 <TouchableOpacity
                   style={styles.removeButton}
                   onPress={(e) => {
-                    e.stopPropagation(); // Prevent triggering the parent onPress
+                    e.stopPropagation(); 
                     handleRemoveMember(member.user_id);
                   }}
                 >

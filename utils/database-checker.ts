@@ -4,7 +4,7 @@ export async function checkDatabaseSchema() {
   console.log('Checking database schema...');
   
   try {
-    // Basic connection test
+
     console.log('Testing basic connection to Supabase...');
     try {
       const { data: connectionTest, error: connectionError } = await supabase
@@ -20,8 +20,7 @@ export async function checkDatabaseSchema() {
     } catch (connErr) {
       console.error('Connection test failed with exception:', connErr);
     }
-    
-    // List all tables in the public schema
+
     console.log('Listing all tables...');
     try {
       const { data: tablesData, error: tablesError } = await supabase.rpc('list_tables');
@@ -34,7 +33,6 @@ export async function checkDatabaseSchema() {
       console.log('Could not list tables:', listError);
     }
 
-    // Check if nutrition_settings table exists and its columns
     const { data: nutritionColumns, error: nutritionError } = await supabase
       .from('nutrition_settings')
       .select('*')
@@ -50,8 +48,7 @@ export async function checkDatabaseSchema() {
         console.log('nutrition_settings table is empty');
       }
     }
-    
-    // Check if workouts table exists and its columns
+
     const { data: workoutColumns, error: workoutError } = await supabase
       .from('workouts')
       .select('*')
@@ -59,12 +56,10 @@ export async function checkDatabaseSchema() {
     
     if (workoutError) {
       console.error('Error accessing workouts table:', workoutError);
-      
-      // If the error indicates the table doesn't exist, suggest creating it
-      if (workoutError.code === '42P01') { // Relation does not exist
+
+      if (workoutError.code === '42P01') { 
         console.log('Workouts table does not exist. Attempting to create it...');
-        
-        // Create the table using SQL
+
         const createTableSQL = `
           CREATE TABLE IF NOT EXISTS public.workouts (
             id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -127,8 +122,7 @@ export async function checkDatabaseSchema() {
         console.log('workouts table is empty');
       }
     }
-    
-    // Check user authentication
+
     const { data: authData, error: authError } = await supabase.auth.getUser();
     if (authError) {
       console.error('Error getting authenticated user:', authError);
@@ -157,12 +151,10 @@ export async function checkDatabaseSchema() {
   }
 }
 
-// Function to create a workouts table if it doesn't exist
 export async function createWorkoutsTable(): Promise<boolean> {
   try {
     console.log('Creating workouts table...');
-    
-    // Create the table using SQL
+
     const createTableSQL = `
       CREATE TABLE IF NOT EXISTS public.workouts (
         id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
