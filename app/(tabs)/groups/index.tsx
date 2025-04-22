@@ -5,6 +5,29 @@ import { useRouter } from 'expo-router';
 import { getGroups, type Group, joinGroupWithCode } from '@/utils/supabase';
 import { TAB_BAR_HEIGHT } from '../_layout';
 
+// Skeleton component for group cards
+const GroupCardSkeleton = () => (
+  <View style={[styles.groupCard, { backgroundColor: '#F8F8F8' }]}>
+    <View style={[styles.skeletonBase, { height: 120 }]} />
+    <View style={styles.groupInfo}>
+      <View style={[styles.skeletonBase, { width: '70%', height: 20, marginBottom: 8 }]} />
+      <View style={styles.groupStats}>
+        <View style={[styles.skeletonBase, { width: 16, height: 16, borderRadius: 8 }]} />
+        <View style={[styles.skeletonBase, { width: 80, height: 16, marginLeft: 6 }]} />
+      </View>
+    </View>
+  </View>
+);
+
+// Component to show multiple skeleton cards
+const GroupsSkeletonList = () => (
+  <>
+    <GroupCardSkeleton />
+    <GroupCardSkeleton />
+    <GroupCardSkeleton />
+  </>
+);
+
 export default function GroupsScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showOwned, setShowOwned] = useState(false);
@@ -150,9 +173,7 @@ export default function GroupsScreen() {
             <Text style={styles.sectionTitle}>Your Groups</Text>
             
             {loading ? (
-              <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color="#007AFF" />
-              </View>
+              <GroupsSkeletonList />
             ) : filteredGroups.length === 0 ? (
               <View style={styles.emptyState}>
                 <Users size={48} color="#8E8E93" />
@@ -509,5 +530,10 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '600',
     fontSize: 16,
+  },
+  // Skeleton styles
+  skeletonBase: {
+    backgroundColor: '#E5E5E5',
+    borderRadius: 4,
   },
 });

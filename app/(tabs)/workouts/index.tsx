@@ -8,6 +8,55 @@ import { format, parseISO, startOfWeek, addDays, isWithinInterval, isSameDay, su
 import { Swipeable } from 'react-native-gesture-handler';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+// Skeleton loading component for today's workout
+const TodayWorkoutSkeleton = () => (
+  <View style={styles.todaySection}>
+    <View style={styles.todayHeader}>
+      <View style={[styles.skeletonBase, { width: 150, height: 24, marginBottom: 4 }]} />
+      <View style={[styles.skeletonBase, { width: 200, height: 18 }]} />
+    </View>
+    <View style={styles.workoutInfo}>
+      <View style={[styles.skeletonBase, { width: 180, height: 22, marginBottom: 8 }]} />
+      <View style={[styles.skeletonBase, { width: 100, height: 18 }]} />
+    </View>
+    <View style={[styles.skeletonBase, { 
+      width: '100%', 
+      height: 56, 
+      borderRadius: 12, 
+      backgroundColor: 'rgba(0, 122, 255, 0.15)' 
+    }]} />
+  </View>
+);
+
+// Skeleton loading component for streak section
+const StreakSectionSkeleton = () => (
+  <View style={styles.streakSection}>
+    <View style={styles.streakHeader}>
+      <View style={[styles.skeletonBase, { width: 120, height: 20 }]} />
+      <View style={[styles.skeletonBase, { width: 60, height: 20 }]} />
+    </View>
+    <View style={styles.streakBar}>
+      <View style={[styles.skeletonBase, { width: '30%', height: 8, borderRadius: 4 }]} />
+    </View>
+    <View style={[styles.skeletonBase, { width: 200, height: 16, alignSelf: 'center', marginTop: 12 }]} />
+  </View>
+);
+
+// Skeleton loading component for workout plans
+const WorkoutPlansSkeleton = () => (
+  <>
+    {[1, 2, 3].map((item) => (
+      <View key={item} style={[styles.planCard, styles.skeletonPlanCard]}>
+        <View style={styles.planNameRow}>
+          <View style={[styles.skeletonBase, { width: 150, height: 22 }]} />
+          <View style={[styles.skeletonBase, { width: 60, height: 18, borderRadius: 10 }]} />
+        </View>
+        <View style={[styles.skeletonBase, { width: 120, height: 16, marginTop: 12 }]} />
+      </View>
+    ))}
+  </>
+);
+
 export default function WorkoutsScreen() {
   const router = useRouter();
   const { session } = useSession();
@@ -411,70 +460,74 @@ export default function WorkoutsScreen() {
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
       {Platform.OS === 'android' && <View style={styles.safeArea} />}
       <ScrollView style={styles.container}>
-        <View style={styles.todaySection}>
-          <View style={styles.todayHeader}>
-            <Text style={styles.todayTitle}>Today's Workout</Text>
-            <Text style={styles.todayDate}>
-              {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+        {/* Today's Workout Section */}
+        {isLoadingToday ? (
+          <TodayWorkoutSkeleton />
+        ) : (
+          <View style={styles.todaySection}>
+            <View style={styles.todayHeader}>
+              <Text style={styles.todayTitle}>Today's Workout</Text>
+              <Text style={styles.todayDate}>
+                {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+              </Text>
+            </View>
+
+            <View style={styles.workoutInfo}>
+              <Text style={styles.workoutName}>
+                {todaysWorkout.isRestDay ? 'Rest Day' : todaysWorkout.name}
+              </Text>
+              {!todaysWorkout.isRestDay && (
+                <View style={styles.durationContainer}>
+                  <Clock size={16} color="#8E8E93" />
+                  <Text style={styles.workoutDuration}>{todaysWorkout.duration}</Text>
+                </View>
+              )}
+              {todaysWorkout.isRestDay && (
+                <Text style={styles.workoutDuration}>Recovery and muscle growth</Text>
+              )}
+            </View>
+
+            <TouchableOpacity 
+              style={[
+                styles.startButton,
+                todaysWorkout.isRestDay ? styles.startButtonRest : 
+                todaysWorkout.isCompleted ? styles.startButtonCompleted : styles.startButtonWorkout
+              ]}
+              onPress={handleStartWorkout}
+              activeOpacity={0.7}
+              disabled={todaysWorkout.isCompleted}
+            >
+              <Play size={24} color="#FFFFFF" />
+              <Text style={styles.startButtonText}>
+                {todaysWorkout.isRestDay ? 'View Recovery Tips' : 
+                 todaysWorkout.isCompleted ? 'Workout Completed' : 'Start Workout'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Streak Section */}
+        {isLoading ? (
+          <StreakSectionSkeleton />
+        ) : (
+          <View style={styles.streakSection}>
+            <View style={styles.streakHeader}>
+              <Text style={styles.streakTitle}>Current Streak</Text>
+              <Text style={styles.streakCount}>{currentStreak} {currentStreak === 1 ? 'day' : 'days'}</Text>
+            </View>
+            <View style={styles.streakBar}>
+              <View style={[styles.streakProgress, { width: `${weeklyCompletion}%` }]} />
+            </View>
+            <Text style={styles.streakMotivation}>
+              {completedTrainingDays}/{totalTrainingDays} workouts completed this week
+              {weeklyCompletion === 100 
+                ? " - Amazing job! 🔥" 
+                : completedTrainingDays > 0
+                  ? ` - Keep going! 💪`
+                  : " - Let's start training!"}
             </Text>
           </View>
-
-          {isLoadingToday ? (
-            <ActivityIndicator size="small" color="#007AFF" style={{ marginVertical: 16 }} />
-          ) : (
-            <>
-              <View style={styles.workoutInfo}>
-                <Text style={styles.workoutName}>
-                  {todaysWorkout.isRestDay ? 'Rest Day' : todaysWorkout.name}
-                </Text>
-                {!todaysWorkout.isRestDay && (
-                  <View style={styles.durationContainer}>
-                    <Clock size={16} color="#8E8E93" />
-                    <Text style={styles.workoutDuration}>{todaysWorkout.duration}</Text>
-                  </View>
-                )}
-                {todaysWorkout.isRestDay && (
-                  <Text style={styles.workoutDuration}>Recovery and muscle growth</Text>
-                )}
-              </View>
-
-              <TouchableOpacity 
-                style={[
-                  styles.startButton,
-                  todaysWorkout.isRestDay ? styles.startButtonRest : 
-                  todaysWorkout.isCompleted ? styles.startButtonCompleted : styles.startButtonWorkout
-                ]}
-                onPress={handleStartWorkout}
-                activeOpacity={0.7}
-                disabled={todaysWorkout.isCompleted}
-              >
-                <Play size={24} color="#FFFFFF" />
-                <Text style={styles.startButtonText}>
-                  {todaysWorkout.isRestDay ? 'View Recovery Tips' : 
-                   todaysWorkout.isCompleted ? 'Workout Completed' : 'Start Workout'}
-                </Text>
-              </TouchableOpacity>
-            </>
-          )}
-        </View>
-
-        <View style={styles.streakSection}>
-          <View style={styles.streakHeader}>
-            <Text style={styles.streakTitle}>Current Streak</Text>
-            <Text style={styles.streakCount}>{currentStreak} {currentStreak === 1 ? 'day' : 'days'}</Text>
-          </View>
-          <View style={styles.streakBar}>
-            <View style={[styles.streakProgress, { width: `${weeklyCompletion}%` }]} />
-          </View>
-          <Text style={styles.streakMotivation}>
-            {completedTrainingDays}/{totalTrainingDays} workouts completed this week
-            {weeklyCompletion === 100 
-              ? " - Amazing job! 🔥" 
-              : completedTrainingDays > 0
-                ? ` - Keep going! 💪`
-                : " - Let's start training!"}
-          </Text>
-        </View>
+        )}
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Your Workout Plans</Text>
@@ -502,9 +555,7 @@ export default function WorkoutsScreen() {
           </View>
 
           {isLoadingPlans ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color="#007AFF" />
-            </View>
+            <WorkoutPlansSkeleton />
           ) : workoutPlans.length === 0 ? (
             <View style={styles.emptyState}>
               <Text style={styles.emptyStateText}>No workout plans yet</Text>
@@ -830,5 +881,14 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '600',
+  },
+  skeletonBase: {
+    backgroundColor: '#E5E5E5',
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  skeletonPlanCard: {
+    backgroundColor: '#F8F8F8',
+    marginBottom: 12,
   },
 });

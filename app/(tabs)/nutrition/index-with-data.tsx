@@ -17,6 +17,122 @@ import {
 } from '../../../utils/supabase';
 import { requestNotificationPermissions } from '@/utils/notifications';
 
+// Skeleton loader components
+const CalorieCardSkeleton = () => (
+  <View style={[styles.calorieCard, { backgroundColor: '#F8F8F8' }]}>
+    <View style={styles.calorieHeader}>
+      <View style={[styles.skeletonBase, { width: 120, height: 22, marginBottom: 12 }]} />
+      <View style={[styles.calorieProgress, { backgroundColor: '#E5E5E5' }]} />
+    </View>
+
+    <View style={styles.calorieStats}>
+      <View style={styles.calorieStat}>
+        <View style={[styles.skeletonBase, { width: 70, height: 14, marginBottom: 4 }]} />
+        <View style={[styles.skeletonBase, { width: 60, height: 20 }]} />
+      </View>
+      <View style={styles.calorieDivider} />
+      <View style={styles.calorieStat}>
+        <View style={[styles.skeletonBase, { width: 70, height: 14, marginBottom: 4 }]} />
+        <View style={[styles.skeletonBase, { width: 60, height: 20 }]} />
+      </View>
+      <View style={styles.calorieDivider} />
+      <View style={styles.calorieStat}>
+        <View style={[styles.skeletonBase, { width: 70, height: 14, marginBottom: 4 }]} />
+        <View style={[styles.skeletonBase, { width: 60, height: 20 }]} />
+      </View>
+    </View>
+  </View>
+);
+
+const WeeklyChartSkeleton = () => {
+  const CHART_WIDTH = Dimensions.get('window').width - 64;
+  
+  return (
+    <View style={styles.section}>
+      <View style={[styles.skeletonBase, { width: 120, height: 22, marginBottom: 16 }]} />
+      <View style={styles.chartWrapper}>
+        <View style={[styles.skeletonBase, { 
+          width: CHART_WIDTH, 
+          height: 180, 
+          borderRadius: 16
+        }]} />
+      </View>
+    </View>
+  );
+};
+
+const MealCardSkeleton = () => (
+  <View style={[styles.mealCard, { backgroundColor: '#F0F0F0' }]}>
+    <View style={[styles.mealIcon, { backgroundColor: '#E5E5E5' }]} />
+    <View style={styles.mealInfo}>
+      <View style={[styles.skeletonBase, { width: 90, height: 16, marginBottom: 4 }]} />
+      <View style={[styles.skeletonBase, { width: 60, height: 14 }]} />
+    </View>
+    <View style={styles.mealCalories}>
+      <View style={[styles.skeletonBase, { width: 40, height: 18, marginBottom: 2 }]} />
+      <View style={[styles.skeletonBase, { width: 20, height: 12 }]} />
+    </View>
+    <View style={[styles.skeletonBase, { width: 20, height: 20, borderRadius: 10 }]} />
+  </View>
+);
+
+const MealsSectionSkeleton = () => (
+  <View style={styles.section}>
+    <View style={[styles.skeletonBase, { width: 120, height: 22, marginBottom: 16 }]} />
+    <MealCardSkeleton />
+    <MealCardSkeleton />
+    <MealCardSkeleton />
+    <MealCardSkeleton />
+  </View>
+);
+
+const WaterSectionSkeleton = () => (
+  <View style={[styles.section, styles.waterSection]}>
+    <View style={styles.sectionHeader}>
+      <View style={[styles.skeletonBase, { width: 120, height: 22 }]} />
+      <View style={[styles.skeletonBase, { width: 80, height: 16 }]} />
+    </View>
+    
+    <View style={styles.waterDropsContainer}>
+      {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+        <View 
+          key={`water-skeleton-${i}`} 
+          style={[styles.waterDrop, { backgroundColor: '#E5E5E5', borderColor: '#DADADA' }]} 
+        />
+      ))}
+    </View>
+    
+    <View style={[styles.skeletonBase, { width: 200, height: 14, alignSelf: 'center', marginTop: 16 }]} />
+    <View style={[styles.waterResetButton, { backgroundColor: '#E5E5E5', marginTop: 16 }]}>
+      <View style={[styles.skeletonBase, { width: 140, height: 16 }]} />
+    </View>
+  </View>
+);
+
+const BmrCardSkeleton = () => (
+  <View style={[styles.bmrCard, { backgroundColor: '#E0E0E0' }]}>
+    <View style={styles.bmrContent}>
+      <View style={[styles.bmrIcon, { backgroundColor: 'rgba(255, 255, 255, 0.1)' }]} />
+      <View style={styles.bmrInfo}>
+        <View style={[styles.skeletonBase, { width: 120, height: 18, marginBottom: 4, backgroundColor: '#DADADA' }]} />
+        <View style={[styles.skeletonBase, { width: 200, height: 14, backgroundColor: '#DADADA' }]} />
+      </View>
+    </View>
+    <View style={[styles.skeletonBase, { width: 24, height: 24, borderRadius: 12, backgroundColor: '#DADADA' }]} />
+  </View>
+);
+
+// Main component skeletons
+const NutritionSkeleton = () => (
+  <ScrollView style={styles.scrollContent} contentContainerStyle={styles.scrollContentContainer}>
+    <CalorieCardSkeleton />
+    <WeeklyChartSkeleton />
+    <MealsSectionSkeleton />
+    <WaterSectionSkeleton />
+    <BmrCardSkeleton />
+  </ScrollView>
+);
+
 interface Meal {
     id: string;
     name: string;
@@ -419,10 +535,24 @@ export default function NutritionScreen() {
 
     if (loading) {
         return (
-            <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color="#007AFF" />
-                <Text style={styles.loadingText}>Loading nutrition data...</Text>
-            </View>
+            <SafeAreaView style={[styles.container, Platform.OS === 'android' && { paddingTop: StatusBar.currentHeight }]}>
+                <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+                <View style={styles.fixedHeader}>
+                    <View style={styles.header}>
+                        <View>
+                            <Text style={styles.headerTitle}>Nutrition Tracking</Text>
+                            <Text style={styles.headerDate}>
+                                {format(new Date(), 'EEEE, d MMMM yyyy')}
+                            </Text>
+                        </View>
+                        <TouchableOpacity activeOpacity={0.7}>
+                            <Settings size={24} color="#007AFF" />
+                        </TouchableOpacity>
+                    </View>
+                </View>
+                
+                <NutritionSkeleton />
+            </SafeAreaView>
         );
     }
 
@@ -1209,5 +1339,9 @@ const styles = StyleSheet.create({
         marginTop: 16,
         fontSize: 16,
         color: '#8E8E93',
+    },
+    skeletonBase: {
+        backgroundColor: '#E5E5E5',
+        borderRadius: 4,
     },
 });

@@ -14,6 +14,67 @@ interface ExtendedExerciseStats extends ExerciseStats {
   progress?: number;
 }
 
+// Skeleton loader for categories
+const CategoriesSkeletonLoader = () => (
+  <View style={{ flexDirection: 'row', paddingLeft: 16, paddingRight: 16, paddingBottom: 16 }}>
+    {[1, 2, 3, 4].map((item) => (
+      <View 
+        key={`category-skeleton-${item}`}
+        style={[styles.categoryButton, { marginRight: 8, backgroundColor: '#E5E5E5' }]} 
+      />
+    ))}
+  </View>
+);
+
+// Skeleton loader for exercise cards
+const ExerciseCardSkeletonLoader = () => (
+  <View style={[styles.exerciseCard, { backgroundColor: '#F8F8F8' }]}>
+    <View style={styles.exerciseHeader}>
+      <View style={styles.exerciseInfo}>
+        <View style={[styles.skeletonBase, { width: 180, height: 22, marginBottom: 8 }]} />
+        <View style={[styles.skeletonBase, { width: 100, height: 16 }]} />
+      </View>
+      <View style={[styles.skeletonBase, { width: 60, height: 24, borderRadius: 8 }]} />
+    </View>
+
+    <View style={styles.statsGrid}>
+      <View style={styles.statItem}>
+        <View style={[styles.skeletonBase, { width: 20, height: 20, borderRadius: 10 }]} />
+        <View style={{ marginLeft: 12 }}>
+          <View style={[styles.skeletonBase, { width: 60, height: 18, marginBottom: 4 }]} />
+          <View style={[styles.skeletonBase, { width: 40, height: 12 }]} />
+        </View>
+      </View>
+
+      <View style={styles.statDivider} />
+
+      <View style={styles.statItem}>
+        <View style={[styles.skeletonBase, { width: 20, height: 20, borderRadius: 10 }]} />
+        <View style={{ marginLeft: 12 }}>
+          <View style={[styles.skeletonBase, { width: 60, height: 18, marginBottom: 4 }]} />
+          <View style={[styles.skeletonBase, { width: 40, height: 12 }]} />
+        </View>
+      </View>
+    </View>
+
+    <View style={[styles.skeletonBase, { 
+      height: 44, 
+      borderRadius: 12, 
+      marginTop: 16,
+      backgroundColor: '#EAEAEA'
+    }]} />
+  </View>
+);
+
+// Component to show multiple skeleton cards
+const SkeletonExercisesList = () => (
+  <View style={styles.exercisesContainer}>
+    {[1, 2, 3].map((item) => (
+      <ExerciseCardSkeletonLoader key={`exercise-skeleton-${item}`} />
+    ))}
+  </View>
+);
+
 export default function StatsScreen() {
   const router = useRouter();
   const { session } = useSession();
@@ -171,16 +232,16 @@ export default function StatsScreen() {
             <TouchableOpacity
               key={category}
               style={[
-                styles.categoryButton,
-                selectedCategory === category && styles.categoryButtonActive
+          styles.categoryButton,
+          selectedCategory === category && styles.categoryButtonActive
               ]}
               onPress={() => setSelectedCategory(category)}
             >
               <Text style={[
-                styles.categoryButtonText,
-                selectedCategory === category && styles.categoryButtonTextActive
+          styles.categoryButtonText,
+          selectedCategory === category && styles.categoryButtonTextActive
               ]}>
-                {category}
+          {category}
               </Text>
             </TouchableOpacity>
           ))}
@@ -193,9 +254,7 @@ export default function StatsScreen() {
         contentContainerStyle={styles.scrollableContentContainer}
       >
         {loading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#007AFF" />
-          </View>
+          <SkeletonExercisesList />
         ) : error ? (
           <View style={styles.errorContainer}>
             <Text style={styles.errorText}>{error}</Text>
@@ -507,5 +566,10 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#007AFF',
+  },
+  // Skeleton styles
+  skeletonBase: {
+    backgroundColor: '#E5E5E5',
+    borderRadius: 4,
   },
 });

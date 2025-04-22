@@ -20,6 +20,70 @@ const calculateSetVolume = (set: any) => {
   return weight * reps;
 };
 
+// Skeleton components
+const HeaderSkeleton = () => (
+  <View style={styles.header}>
+    <View style={[styles.skeletonBase, { width: 24, height: 24, borderRadius: 12 }]} />
+    <View style={{ flex: 1 }}>
+      <View style={[styles.skeletonBase, { width: 180, height: 22, marginBottom: 8 }]} />
+      <View style={[styles.skeletonBase, { width: 100, height: 16, alignSelf: 'flex-start' }]} />
+    </View>
+  </View>
+);
+
+const FiltersSkeleton = () => (
+  <ScrollView 
+    horizontal
+    showsHorizontalScrollIndicator={false}
+    contentContainerStyle={styles.filterContainer}
+  >
+    {[1, 2, 3, 4].map((item) => (
+      <View
+        key={`filter-skeleton-${item}`}
+        style={[styles.skeletonBase, { width: 85, height: 36, borderRadius: 16, marginRight: 8 }]}
+      />
+    ))}
+  </ScrollView>
+);
+
+const StatsGridSkeleton = () => (
+  <View style={styles.statsGrid}>
+    <View style={styles.statCard}>
+      <View style={[styles.skeletonBase, { width: 24, height: 24, borderRadius: 12, marginBottom: 8 }]} />
+      <View style={[styles.skeletonBase, { width: 80, height: 24, marginBottom: 4 }]} />
+      <View style={[styles.skeletonBase, { width: 40, height: 14 }]} />
+    </View>
+    
+    <View style={styles.statCard}>
+      <View style={[styles.skeletonBase, { width: 24, height: 24, borderRadius: 12, marginBottom: 8 }]} />
+      <View style={[styles.skeletonBase, { width: 80, height: 24, marginBottom: 4 }]} />
+      <View style={[styles.skeletonBase, { width: 40, height: 14 }]} />
+    </View>
+    
+    <View style={styles.statCard}>
+      <View style={[styles.skeletonBase, { width: 24, height: 24, borderRadius: 12, marginBottom: 8 }]} />
+      <View style={[styles.skeletonBase, { width: 80, height: 24, marginBottom: 4 }]} />
+      <View style={[styles.skeletonBase, { width: 40, height: 14 }]} />
+    </View>
+    
+    <View style={styles.statCard}>
+      <View style={[styles.skeletonBase, { width: 24, height: 24, borderRadius: 12, marginBottom: 8 }]} />
+      <View style={[styles.skeletonBase, { width: 80, height: 24, marginBottom: 4 }]} />
+      <View style={[styles.skeletonBase, { width: 40, height: 14 }]} />
+    </View>
+  </View>
+);
+
+const ChartSkeleton = () => (
+  <View style={styles.card}>
+    <View style={[styles.skeletonBase, { width: 180, height: 24, marginBottom: 16 }]} />
+    <View style={[
+      styles.skeletonBase, 
+      { width: Platform.OS === 'android' ? 280 : 320, height: 220, borderRadius: 16 }
+    ]} />
+  </View>
+);
+
 export default function ExerciseStatsScreen() {
   const { id, exerciseName, workoutId, returnPath } = useLocalSearchParams();
   const { session } = useSession();
@@ -312,9 +376,15 @@ export default function ExerciseStatsScreen() {
 
   if (loading) {
     return (
-      <View style={[styles.container, styles.loadingContainer]}>
-        <ActivityIndicator size="large" color="#007AFF" />
-      </View>
+      <ScrollView style={styles.container}>
+        <HeaderSkeleton />
+        <FiltersSkeleton />
+        <StatsGridSkeleton />
+        <ChartSkeleton />
+        <ChartSkeleton />
+        {/* Show one more chart skeleton for body weight exercises */}
+        <ChartSkeleton />
+      </ScrollView>
     );
   }
   
@@ -771,5 +841,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 2,
     width: '100%',
+  },
+  skeletonBase: {
+    backgroundColor: '#E5E5E5',
+    borderRadius: 4,
   },
 });
