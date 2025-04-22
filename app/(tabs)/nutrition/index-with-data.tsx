@@ -427,7 +427,7 @@ export default function NutritionScreen() {
     }
 
     return (
-        <SafeAreaView style={styles.container}>
+        <SafeAreaView style={[styles.container, Platform.OS === 'android' && { paddingTop: StatusBar.currentHeight }]}>
             <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
             <View style={styles.fixedHeader}>
                 <View style={styles.header}>

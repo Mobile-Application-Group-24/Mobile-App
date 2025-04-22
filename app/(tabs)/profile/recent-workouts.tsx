@@ -163,12 +163,22 @@ export default function RecentWorkoutsScreen() {
   }
 
   return (
-    <SafeAreaView style={[styles.safeAreaTop, { paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0 }]}>
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <ArrowLeft size={24} color="#007AFF" onPress={() => router.back()} />
-          <Text style={styles.sectionTitle}>Recent Activities</Text>
-        </View>
+    <>
+      <StatusBar 
+        barStyle="dark-content" 
+        backgroundColor="transparent" 
+        translucent={Platform.OS === 'android'} 
+      />
+      <SafeAreaView style={[styles.safeAreaTop, { paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0 }]} />
+      <View style={styles.header}>
+        <TouchableOpacity 
+          style={styles.backButton}
+          onPress={() => router.back()}
+        >
+          <ArrowLeft size={24} color="#007AFF" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Recent Activities</Text>
+        <View style={styles.spacer} />
       </View>
       
       <FlatList
@@ -196,7 +206,7 @@ export default function RecentWorkoutsScreen() {
         refreshing={loading}
         onRefresh={loadWorkoutsData}
       />
-    </SafeAreaView>
+    </>
   );
 }
 
@@ -204,24 +214,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F2F2F7',
-  },
-  section: {
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: Platform.OS === 'android' ? StatusBar.currentHeight || 0 : 16,
-  },
-  sectionTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#000000',
-    marginLeft: 16,
   },
   listContent: {
     padding: 16,
@@ -385,5 +377,25 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E5EA',
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  spacer: {
+    width: 24,
+  },
+  backButton: {
+    padding: 4,
   },
 });
